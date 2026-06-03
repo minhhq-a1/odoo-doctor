@@ -676,6 +676,11 @@ odoo-doctor install
 them: skills run `scan --diff --json`, and `install` sets up the skills and
 optional git hooks.
 
+Note: in the MVP, `--diff` only narrows *which files are scanned* (the changed
+ones). It does not compute a score delta. "Score delta against base branch" is a
+post-MVP surface because it requires scanning both branches and comparing scores,
+which belongs with the PR-comment/CI work.
+
 Post-MVP commands relate to CI/PR surfaces (emitting GitHub annotations, posting
 sticky comments, score delta against base branch), not new core analysis.
 
