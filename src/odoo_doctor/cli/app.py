@@ -47,6 +47,7 @@ def scan(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     fail_on: Optional[str] = typer.Option(None, "--fail-on", help="Fail if severity found (error|warning)"),
     diff: Optional[str] = typer.Option(None, "--diff", help="Only scan files changed vs this branch"),
+    min_score: Optional[int] = typer.Option(None, "--min-score", help="Exit 1 if any module scores below this (0-100)"),
 ) -> None:
     """Scan Odoo addons and report health score."""
     scan_path = Path(path).resolve()
@@ -124,10 +125,11 @@ def scan(
 
     # Filter by changed files if --diff
     if changed_files is not None:
+        # Normalize to absolute paths for reliable comparison
+        abs_changed = {str((scan_path / cf).resolve()) for cf in changed_files}
         all_diags = [
             d for d in all_diags
-            if d.file_path in changed_files
-            or any(d.file_path.endswith(cf) for cf in changed_files)
+            if str(Path(d.file_path).resolve()) in abs_changed
         ]
 
     # Collect suppressions
@@ -166,10 +168,28 @@ def scan(
     else:
         typer.echo(render_terminal(diags, scores))
 
-    # Fail on
+    # Fail on severity
     if fail_on:
         if any(d.severity == fail_on for d in diags):
             raise typer.Exit(code=1)
+
+    # Fail on min_score: CLI flag overrides config value
+    effective_min = min_score if min_score is not None else cfg.min_score
+    if effective_min > 0:
+        from odoo_doctor.core.scoring import ScoreResult
+        failed_modules = [
+            (name, score)
+            for name, score in scores.items()
+            if isinstance(score, ScoreResult) and score.overall < effective_min
+        ]
+        if failed_modules:
+            if not json_output:
+                for name, score in failed_modules:
+                    typer.echo(
+                        f"[FAIL] {name}: score {score.overall:.0f} < min {effective_min}",
+                        err=True,
+                    )
+            raise typer.Exit(code=2)
 
 
 @app.command("rules")

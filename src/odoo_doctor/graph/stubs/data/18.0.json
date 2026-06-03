@@ -1,0 +1,98 @@
+{
+    "version": "18.0",
+    "models": {
+        "res.partner": {
+            "fields": ["name", "email", "phone", "mobile", "street", "street2", "city", "zip", "state_id", "country_id", "company_id", "parent_id", "child_ids", "user_ids", "active", "display_name", "create_date", "write_date", "website", "vat", "lang", "tz", "category_id", "comment", "credit_limit", "supplier_rank", "customer_rank"],
+            "methods": ["name_get", "name_search", "create", "write", "unlink", "read", "copy", "default_get", "onchange", "action_archive", "action_unarchive", "_compute_display_name"]
+        },
+        "res.users": {
+            "fields": ["name", "login", "password", "partner_id", "company_id", "company_ids", "groups_id", "active", "email", "share", "signature", "action_id"],
+            "methods": ["name_get", "create", "write", "unlink", "read", "has_group", "action_reset_password", "_compute_share"]
+        },
+        "res.company": {
+            "fields": ["name", "partner_id", "currency_id", "logo", "street", "city", "country_id", "email", "website", "phone", "vat", "company_registry", "paperformat_id"],
+            "methods": ["name_get", "create", "write"]
+        },
+        "sale.order": {
+            "fields": ["name", "partner_id", "partner_invoice_id", "partner_shipping_id", "date_order", "validity_date", "state", "order_line", "amount_total", "amount_untaxed", "amount_tax", "company_id", "user_id", "pricelist_id", "currency_id", "invoice_status", "invoice_ids", "picking_ids", "delivery_count", "client_order_ref", "note", "tag_ids", "team_id"],
+            "methods": ["name_get", "create", "write", "unlink", "action_confirm", "action_cancel", "action_draft", "action_quotation_sent", "action_view_invoice", "action_view_delivery", "_compute_amount_all", "_compute_invoice_status"]
+        },
+        "sale.order.line": {
+            "fields": ["name", "order_id", "product_id", "product_uom", "product_uom_qty", "qty_delivered", "qty_invoiced", "price_unit", "price_subtotal", "price_total", "tax_id", "sequence", "discount", "margin", "margin_percent"],
+            "methods": ["create", "write", "unlink", "_compute_amount", "_compute_qty_delivered"]
+        },
+        "product.product": {
+            "fields": ["name", "default_code", "barcode", "list_price", "standard_price", "categ_id", "type", "active", "weight", "volume", "uom_id", "uom_po_id", "product_tmpl_id", "combination_indices", "product_template_attribute_value_ids"],
+            "methods": ["name_get", "name_search", "create", "write", "_compute_product_price"]
+        },
+        "product.template": {
+            "fields": ["name", "default_code", "list_price", "standard_price", "categ_id", "type", "active", "description", "description_sale", "description_purchase", "uom_id", "uom_po_id", "taxes_id", "supplier_taxes_id", "sale_ok", "purchase_ok", "image_1920"],
+            "methods": ["name_get", "create", "write", "action_open_quants"]
+        },
+        "account.move": {
+            "fields": ["name", "partner_id", "date", "invoice_date", "invoice_date_due", "state", "payment_state", "move_type", "amount_total", "amount_residual", "amount_untaxed", "journal_id", "company_id", "line_ids", "invoice_line_ids", "currency_id", "ref", "narration", "invoice_user_id", "team_id"],
+            "methods": ["name_get", "create", "write", "unlink", "action_post", "button_draft", "button_cancel", "button_set_checked", "_compute_payment_state"]
+        },
+        "account.move.line": {
+            "fields": ["move_id", "account_id", "partner_id", "name", "quantity", "price_unit", "price_subtotal", "price_total", "debit", "credit", "balance", "tax_ids", "tax_line_id", "analytic_account_id", "currency_id"],
+            "methods": ["create", "write", "unlink", "_compute_balance"]
+        },
+        "stock.picking": {
+            "fields": ["name", "partner_id", "location_id", "location_dest_id", "state", "move_ids", "move_line_ids", "picking_type_id", "scheduled_date", "date_done", "origin", "company_id", "backorder_id"],
+            "methods": ["name_get", "create", "write", "action_confirm", "action_assign", "button_validate", "do_unreserve"]
+        },
+        "purchase.order": {
+            "fields": ["name", "partner_id", "date_order", "date_planned", "state", "order_line", "amount_total", "amount_untaxed", "company_id", "currency_id", "invoice_ids", "invoice_count", "invoice_status"],
+            "methods": ["name_get", "create", "write", "button_confirm", "button_cancel", "button_draft", "action_view_invoice"]
+        },
+        "purchase.order.line": {
+            "fields": ["name", "order_id", "product_id", "product_uom", "product_qty", "qty_received", "qty_invoiced", "price_unit", "price_subtotal", "taxes_id", "date_planned"],
+            "methods": ["create", "write", "unlink", "_compute_qty_invoiced"]
+        },
+        "mail.thread": {
+            "fields": ["message_ids", "message_follower_ids", "message_partner_ids", "message_is_follower", "message_needaction", "message_needaction_counter"],
+            "methods": ["message_post", "message_subscribe", "message_unsubscribe", "message_get_suggested_recipients", "_message_auto_subscribe_notify"]
+        },
+        "mail.activity.mixin": {
+            "fields": ["activity_ids", "activity_state", "activity_user_id", "activity_type_id", "activity_date_deadline", "activity_summary"],
+            "methods": ["activity_schedule", "activity_feedback", "activity_unlink"]
+        },
+        "discuss.channel": {
+            "fields": ["name", "description", "channel_type", "channel_member_ids", "message_ids", "uuid", "group_public_id"],
+            "methods": ["create", "write", "action_open_channel", "message_post", "add_members"]
+        },
+        "ir.ui.view": {
+            "fields": ["name", "model", "type", "arch", "arch_base", "arch_db", "inherit_id", "priority", "active", "groups_id", "model_data_id"],
+            "methods": ["create", "write", "unlink", "_check_groups_fields"]
+        },
+        "ir.model": {
+            "fields": ["name", "model", "state", "field_id", "access_ids", "transient"],
+            "methods": ["create", "write", "unlink", "name_get"]
+        },
+        "ir.model.fields": {
+            "fields": ["name", "field_description", "model_id", "ttype", "required", "readonly", "store", "index", "help", "selection"],
+            "methods": ["create", "write", "unlink"]
+        }
+    },
+    "xml_ids": {
+        "base.main_company": "res.company",
+        "base.user_root": "res.users",
+        "base.user_admin": "res.users",
+        "base.partner_root": "res.partner",
+        "base.partner_admin": "res.partner",
+        "base.group_user": "res.groups",
+        "base.group_system": "res.groups",
+        "base.group_no_one": "res.groups",
+        "base.group_public": "res.groups",
+        "base.group_portal": "res.groups",
+        "base.group_erp_manager": "res.groups",
+        "base.group_multi_company": "res.groups",
+        "sale.sale_menu_root": "ir.ui.menu",
+        "sale.view_order_form": "ir.ui.view",
+        "sale.action_quotations_with_onboarding": "ir.actions.act_window",
+        "purchase.purchase_menu_action": "ir.ui.menu",
+        "account.action_move_in_invoice_type": "ir.actions.act_window",
+        "account.action_move_out_invoice_type": "ir.actions.act_window",
+        "stock.action_picking_tree_all": "ir.actions.act_window"
+    }
+}
