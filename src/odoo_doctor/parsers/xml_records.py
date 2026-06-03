@@ -131,6 +131,8 @@ def _extract_arch_refs(
 ) -> None:
     """Walk arch XML to find <field name="..."> and <button name="..." type="object">."""
     for elem in arch_elem.iter():
+        if elem is arch_elem:
+            continue  # Skip the arch element itself (it IS the <field name="arch"> tag)
         if elem.tag == "field":
             name = elem.get("name")
             if name and name not in field_refs:

@@ -38,11 +38,15 @@ class SymbolResolver:
         repo_xml_ids: dict[str, object],
         stub_version: str,
         source_path: str | None = None,
+        extended_fields: dict[str, dict] | None = None,
     ):
         self._repo_models = repo_models
         self._repo_xml_ids = repo_xml_ids
         self._stubs = load_stubs(stub_version)
         self._source_path = source_path
+        # extended_fields: {model_name: {field_name: FieldInfo}} from _inherit-only extensions
+        # These are fields added to stub-known models (e.g. custom_note on sale.order)
+        self._extended_fields: dict[str, dict] = extended_fields or {}
         # TODO: Phase for source_path parsing (post-MVP enhancement)
 
     def resolve_model(self, model_name: str) -> SymbolLookup:
@@ -60,13 +64,18 @@ class SymbolResolver:
         return SymbolLookup(ResolveResult.UNKNOWN)
 
     def resolve_field(self, model_name: str, field_name: str) -> SymbolLookup:
-        # 1. Repo
+        # 1. Repo (native model with _name)
         repo_model = self._repo_models.get(model_name)
         if repo_model is not None:
             if field_name in repo_model.fields:
                 return SymbolLookup(ResolveResult.FOUND, "repo")
             # Model known in repo but field not there — check stubs too
             # (model may inherit fields from core that aren't in the repo code)
+
+        # 1b. Extended fields from _inherit-only extensions in the repo
+        ext = self._extended_fields.get(model_name)
+        if ext and field_name in ext:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
 
         # 2. Stubs
         if self._stubs:

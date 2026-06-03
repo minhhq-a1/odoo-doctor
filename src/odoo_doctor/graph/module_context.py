@@ -55,6 +55,8 @@ def build_project_graph(
     all_models: dict[str, ModelInfo] = {}
     all_xml_ids: dict[str, XmlIdInfo] = {}
     module_data: dict[str, dict] = {}
+    # Fields extended via _inherit on stub-known models (e.g. custom_note on sale.order)
+    _inherit_extensions: dict[str, dict] = {}
 
     for addon in addons:
         manifest = parse_manifest(addon.path)
@@ -104,14 +106,20 @@ def build_project_graph(
         if csv_path.exists():
             access_rules = parse_access_csv(csv_path, module_name=addon.name)
 
-        # Only add models with a _name to the resolver repo (not inherit-only extensions)
+        # Add models with _name to resolver repo
         for key, m in models.items():
             if m.name is not None:
                 all_models[key] = m
-            elif key in all_models and m.name is None:
-                # Merge fields/methods from inherit-only models into existing repo model
-                all_models[key].fields.update(m.fields)
-                all_models[key].methods.update(m.methods)
+
+        # Track inherit-only extensions — we'll merge them after all modules are processed
+        for key, m in models.items():
+            if m.name is None and m.fields:
+                # key is the inherited model name (e.g. "sale.order")
+                # We store the extended fields so we can merge them later
+                if key not in _inherit_extensions:
+                    _inherit_extensions[key] = {}
+                _inherit_extensions[key].update(m.fields)
+
         all_xml_ids.update(xml_ids)
 
         module_data[addon.name] = {
@@ -125,6 +133,12 @@ def build_project_graph(
             "controllers": controllers,
             "access_rules": access_rules,
         }
+
+    # Post-loop: record all fields added to stub-known models via _inherit in the repo.
+    # We pass these as 'extended_fields' to the resolver so it can resolve them as FOUND
+    # WITHOUT treating the inherited model itself as a repo-defined model (which would
+    # break the missing-dependency rule's source='stub' check).
+    extended_fields: dict[str, dict] = _inherit_extensions
 
     # Use the detected module version for stubs when CLI/config did not provide one.
     resolver_version = odoo_version
@@ -142,6 +156,7 @@ def build_project_graph(
         repo_xml_ids=all_xml_ids,
         stub_version=resolver_version,
         source_path=odoo_source_path,
+        extended_fields=extended_fields,
     )
 
     # Build per-module contexts
