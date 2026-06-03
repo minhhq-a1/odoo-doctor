@@ -256,20 +256,29 @@ modules = []
 def install() -> None:
     """Install agent skills and optional git hooks."""
     import shutil
-    skills_src = Path(__file__).parent.parent.parent.parent / "skills"
-    if not skills_src.exists():
-        typer.echo("Skills directory not found in package. Reinstall odoo-doctor.")
+    from importlib.resources import files, as_file
+
+    try:
+        skills_traversable = files("odoo_doctor.skills")
+    except ModuleNotFoundError:
+        typer.echo("Skills package not found. Reinstall odoo-doctor.")
         raise typer.Exit(code=1)
 
     dest = Path.cwd() / ".odoo-doctor" / "skills"
     dest.mkdir(parents=True, exist_ok=True)
-    for skill_dir in skills_src.iterdir():
-        if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
-            target = dest / skill_dir.name
-            if target.exists():
-                shutil.rmtree(target)
-            shutil.copytree(skill_dir, target)
-            typer.echo(f"  Installed skill: {skill_dir.name}")
+
+    with as_file(skills_traversable) as skills_src:
+        if not skills_src.exists():
+            typer.echo("Skills directory not found in package. Reinstall odoo-doctor.")
+            raise typer.Exit(code=1)
+
+        for skill_dir in skills_src.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                target = dest / skill_dir.name
+                if target.exists():
+                    shutil.rmtree(target)
+                shutil.copytree(skill_dir, target)
+                typer.echo(f"  Installed skill: {skill_dir.name}")
 
     typer.echo(f"Skills installed to {dest}")
     typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")

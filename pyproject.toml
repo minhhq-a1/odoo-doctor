@@ -34,9 +34,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/odoo-doctor"
-Changelog = "https://github.com/your-org/odoo-doctor/blob/main/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/your-org/odoo-doctor/issues"
+Homepage = "https://github.com/minhhq-a1/odoo-doctor"
+Changelog = "https://github.com/minhhq-a1/odoo-doctor/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/minhhq-a1/odoo-doctor/issues"
 
 [project.scripts]
 odoo-doctor = "odoo_doctor.cli.app:app"

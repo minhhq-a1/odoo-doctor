@@ -57,3 +57,15 @@ def test_init_creates_config(tmp_path: Path):
     result = runner.invoke(app, ["init", "--path", str(tmp_path)])
     assert result.exit_code == 0
     assert (tmp_path / "odoo-doctor.toml").exists()
+
+
+def test_install(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(Path, "cwd", lambda: tmp_path)
+    result = runner.invoke(app, ["install"])
+    assert result.exit_code == 0
+    assert "Installed skill: odoo-doctor" in result.stdout
+    assert "Installed skill: odoo-doctor-explain" in result.stdout
+    skills_dir = tmp_path / ".odoo-doctor" / "skills"
+    assert (skills_dir / "odoo-doctor" / "SKILL.md").exists()
+    assert (skills_dir / "odoo-doctor-explain" / "SKILL.md").exists()
+
