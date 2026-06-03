@@ -1,0 +1,38 @@
+# tests/reporters/test_terminal.py
+"""Tests for terminal reporter."""
+
+from __future__ import annotations
+
+from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.scoring import CategoryScore, ScoreResult
+from odoo_doctor.reporters.terminal import render_terminal
+
+
+def _diag(**overrides) -> Diagnostic:
+    defaults = dict(
+        module="sale_custom", file_path="models/sale.py", line=42, column=0,
+        rule="raw-sql", category="Security", severity="error", tier="P0",
+        source="native", confidence="high", title="SQL injection",
+        message="cr.execute uses f-string", help="Use params", odoo_version="17.0",
+    )
+    defaults.update(overrides)
+    return Diagnostic(**defaults)
+
+
+def test_render_terminal_returns_string():
+    diags = [_diag()]
+    score = ScoreResult(
+        overall=75.0, label="Good",
+        categories=[CategoryScore("Security", 75, 1, 25.0)],
+        in_scope_categories=["Security"],
+        diagnostics_counted=1,
+    )
+    output = render_terminal(diags, {"sale_custom": score})
+    assert "sale_custom" in output
+    assert "75" in output
+    assert "SQL injection" in output
+
+
+def test_render_terminal_empty():
+    output = render_terminal([], {})
+    assert "No diagnostics" in output or "clean" in output.lower()
