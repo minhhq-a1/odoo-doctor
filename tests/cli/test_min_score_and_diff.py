@@ -73,10 +73,9 @@ def test_min_score_json_output_still_exits_2(bad_addon: Path):
 
 def test_diff_filters_by_absolute_path(tmp_path: Path, bad_addon: Path):
     """--diff only returns diags for the changed files (absolute path match)."""
-    # Simulate git returning a relative path to a file in bad_addon
-    changed_rel = "tests/fixtures/bad_addon/models/bad_model.py"
+    changed_file = bad_addon / "models" / "bad_model.py"
 
-    with patch("odoo_doctor.cli.app._get_changed_files", return_value={changed_rel}):
+    with patch("odoo_doctor.cli.app._get_changed_files", return_value={str(changed_file)}):
         result = runner.invoke(app, [
             "scan", str(bad_addon.parent),
             "--diff", "main",  # value doesn't matter, _get_changed_files is mocked
@@ -87,8 +86,27 @@ def test_diff_filters_by_absolute_path(tmp_path: Path, bad_addon: Path):
     parsed = json.loads(result.stdout)
     # All diags must come from the changed file
     bad_diags = parsed["modules"].get("bad_addon", {}).get("diagnostics", [])
+    assert bad_diags
     for d in bad_diags:
         assert "bad_model.py" in d["file_path"], f"Unexpected file in diff: {d['file_path']}"
+
+
+def test_diff_filters_when_scan_path_is_not_repo_root(bad_addon: Path):
+    """Absolute changed paths still match when scanning a subdirectory."""
+    changed_file = bad_addon / "models" / "bad_model.py"
+
+    with patch("odoo_doctor.cli.app._get_changed_files", return_value={str(changed_file)}):
+        result = runner.invoke(app, [
+            "scan", str(bad_addon.parent),
+            "--diff", "main",
+            "--json",
+        ])
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    bad_diags = parsed["modules"].get("bad_addon", {}).get("diagnostics", [])
+    assert bad_diags
+    assert all(Path(d["file_path"]).resolve() == changed_file.resolve() for d in bad_diags)
 
 
 def test_diff_empty_changed_files_returns_no_diags(bad_addon: Path):

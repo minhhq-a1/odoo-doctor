@@ -125,8 +125,8 @@ def scan(
 
     # Filter by changed files if --diff
     if changed_files is not None:
-        # Normalize to absolute paths for reliable comparison
-        abs_changed = {str((scan_path / cf).resolve()) for cf in changed_files}
+        # _get_changed_files returns absolute paths rooted at the Git worktree.
+        abs_changed = {str(Path(cf).resolve()) for cf in changed_files}
         all_diags = [
             d for d in all_diags
             if str(Path(d.file_path).resolve()) in abs_changed
@@ -277,11 +277,25 @@ def install() -> None:
 
 def _get_changed_files(repo_path: Path, base_branch: str) -> set[str]:
     try:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", base_branch],
+        root_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, cwd=repo_path, timeout=30,
         )
-        return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+        if root_result.returncode != 0:
+            return set()
+        git_root = Path(root_result.stdout.strip()).resolve()
+
+        result = subprocess.run(
+            ["git", "diff", "--name-only", base_branch],
+            capture_output=True, text=True, cwd=git_root, timeout=30,
+        )
+        if result.returncode != 0:
+            return set()
+        return {
+            str((git_root / line.strip()).resolve())
+            for line in result.stdout.splitlines()
+            if line.strip()
+        }
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return set()
 
