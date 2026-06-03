@@ -10,6 +10,15 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-03-odoo-doctor-design-v3.md`
 
+**Corrections from review:** This plan incorporates the final pre-implementation review findings:
+
+- Resolver `UNKNOWN` does not emit error diagnostics in normal scan mode. UNKNOWN may only appear as `info` diagnostics in a future verbose mode.
+- `unknown-model-in-access-csv` is high-confidence only when the CSV model external ID is owned by the scanned module and the corresponding model is absent from the project graph.
+- Duplicate XML ID detection uses a full XML record occurrence list, not the deduplicated `xml_ids` map.
+- Resolver stubs use the detected project Odoo version when CLI/config version is unknown.
+- CLI path precedence is explicit: positional `scan PATH` chooses the config root; config `addons_paths` are resolved from that root unless explicit CLI paths are added later; `--module` filters target modules.
+- Raw SQL detection handles direct interpolation and simple variable indirection inside the same function.
+
 ---
 
 ## File Structure
@@ -2221,11 +2230,12 @@ from odoo_doctor.parsers.security_csv import AccessRule, parse_access_csv
 
 def test_parse_access_csv(sample_addon: Path):
     csv_file = sample_addon / "security" / "ir.model.access.csv"
-    rules = parse_access_csv(csv_file)
+    rules = parse_access_csv(csv_file, module_name="sample_addon")
     assert len(rules) == 1
     r = rules[0]
     assert r.id == "access_sale_custom_wizard_user"
     assert r.model_external_id == "model_sale_custom_wizard"
+    assert r.model_external_id_module == "sample_addon"
     assert r.group_id == "base.group_user"
     assert r.perm_read is True
 
@@ -2240,11 +2250,11 @@ def test_parse_access_csv_model_name_extraction():
 def test_parse_empty_csv(tmp_path: Path):
     f = tmp_path / "ir.model.access.csv"
     f.write_text("id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\n")
-    assert parse_access_csv(f) == []
+    assert parse_access_csv(f, module_name="m") == []
 
 
 def test_parse_missing_file(tmp_path: Path):
-    assert parse_access_csv(tmp_path / "missing.csv") == []
+    assert parse_access_csv(tmp_path / "missing.csv", module_name="m") == []
 ```
 
 - [ ] **Step 3: Run test to verify it fails**
@@ -2270,6 +2280,7 @@ class AccessRule:
     id: str
     name: str
     model_external_id: str   # e.g. "model_sale_custom_wizard"
+    model_external_id_module: str  # e.g. "base" from "base.model_res_partner"; current module if unqualified
     group_id: str | None
     perm_read: bool
     perm_write: bool
@@ -2279,7 +2290,7 @@ class AccessRule:
     line: int
 
 
-def parse_access_csv(file_path: Path) -> list[AccessRule]:
+def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
     """Parse an ir.model.access.csv file into AccessRule objects."""
     if not file_path.exists():
         return []
@@ -2288,15 +2299,17 @@ def parse_access_csv(file_path: Path) -> list[AccessRule]:
     with open(file_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for lineno, row in enumerate(reader, start=2):
-            model_id = row.get("model_id:id", row.get("model_id/id", ""))
-            # Strip module prefix if present (e.g. "module.model_x" -> "model_x")
-            if "." in model_id:
-                model_id = model_id.split(".", 1)[1]
+            raw_model_id = row.get("model_id:id", row.get("model_id/id", ""))
+            model_id_module = module_name
+            model_id = raw_model_id
+            if "." in raw_model_id:
+                model_id_module, model_id = raw_model_id.split(".", 1)
 
             rules.append(AccessRule(
                 id=row.get("id", ""),
                 name=row.get("name", ""),
                 model_external_id=model_id,
+                model_external_id_module=model_id_module,
                 group_id=row.get("group_id:id", row.get("group_id/id")) or None,
                 perm_read=row.get("perm_read", "0") == "1",
                 perm_write=row.get("perm_write", "0") == "1",
@@ -2862,10 +2875,21 @@ def test_module_context_has_parsed_data(sample_addon: Path):
     assert len(ctx.models) > 0
     # Should have parsed XML IDs
     assert len(ctx.xml_ids) > 0
+    assert len(ctx.xml_records) >= len(ctx.xml_ids)
     # Should have parsed views
     assert len(ctx.views) > 0
     # Should have parsed access rules
     assert len(ctx.access_rules) > 0
+
+
+def test_resolver_uses_manifest_version_for_stubs_when_project_unknown(sample_addon: Path):
+    graph = build_project_graph(
+        addon_paths=[sample_addon.parent],
+        odoo_version="unknown",
+    )
+    result = graph.resolver.resolve_model("sale.order")
+    from odoo_doctor.graph.resolver import ResolveResult
+    assert result.status == ResolveResult.FOUND
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2906,7 +2930,8 @@ class ModuleContext:
     manifest: ManifestData
     depends: list[str]
     models: dict[str, ModelInfo]
-    xml_ids: dict[str, XmlIdInfo]
+    xml_ids: dict[str, XmlIdInfo]              # first definition per XML ID, for resolver lookup
+    xml_records: list[XmlIdInfo]               # all definitions, including duplicates
     views: list[ViewInfo]
     controllers: list[ControllerInfo]
     access_rules: list[AccessRule]
@@ -2965,19 +2990,21 @@ def build_project_graph(
 
         # Parse XML files
         xml_ids: dict[str, XmlIdInfo] = {}
+        xml_records: list[XmlIdInfo] = []
         views: list[ViewInfo] = []
         for data_file in manifest.data:
             xml_path = addon.path / data_file
             if xml_path.suffix == ".xml" and xml_path.exists():
                 for rec in parse_xml_records(xml_path, module_name=addon.name):
-                    xml_ids[rec.xml_id] = rec
+                    xml_records.append(rec)
+                    xml_ids.setdefault(rec.xml_id, rec)
                 views.extend(parse_views(xml_path, module_name=addon.name))
 
         # Parse security CSV
         access_rules: list[AccessRule] = []
         csv_path = addon.path / "security" / "ir.model.access.csv"
         if csv_path.exists():
-            access_rules = parse_access_csv(csv_path)
+            access_rules = parse_access_csv(csv_path, module_name=addon.name)
 
         all_models.update(models)
         all_xml_ids.update(xml_ids)
@@ -2988,16 +3015,27 @@ def build_project_graph(
             "version": mod_version,
             "models": models,
             "xml_ids": xml_ids,
+            "xml_records": xml_records,
             "views": views,
             "controllers": controllers,
             "access_rules": access_rules,
         }
 
+    # Use the detected module version for stubs when CLI/config did not provide one.
+    resolver_version = odoo_version
+    if resolver_version == "unknown":
+        detected_versions = {
+            data["version"] for data in module_data.values()
+            if data["version"] != "unknown"
+        }
+        if len(detected_versions) == 1:
+            resolver_version = next(iter(detected_versions))
+
     # Build shared resolver
     resolver = SymbolResolver(
         repo_models=all_models,
         repo_xml_ids=all_xml_ids,
-        stub_version=odoo_version,
+        stub_version=resolver_version,
         source_path=odoo_source_path,
     )
 
@@ -3012,6 +3050,7 @@ def build_project_graph(
             depends=data["manifest"].depends,
             models=data["models"],
             xml_ids=data["xml_ids"],
+            xml_records=data["xml_records"],
             views=data["views"],
             controllers=data["controllers"],
             access_rules=data["access_rules"],
@@ -3535,6 +3574,23 @@ def test_unknown_model_in_access_csv(bad_addon: Path):
     diags = check_unknown_model_in_access_csv(ctx)
     # CSV references model_nonexistent_model which doesn't exist
     assert any(d.rule == "unknown-model-in-access-csv" for d in diags)
+    assert all(d.confidence == "high" for d in diags)
+
+
+def test_unknown_model_in_access_csv_does_not_flag_external_unknown(tmp_path: Path):
+    """External/unscanned model references are UNKNOWN and must not emit by default."""
+    mod = tmp_path / "test_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text('{"name": "Test", "depends": [], "data": [], "license": "LGPL-3"}')
+    sec = mod / "security"
+    sec.mkdir()
+    (sec / "ir.model.access.csv").write_text(
+        "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\n"
+        "access_ext,external,other_module.model_missing,base.group_user,1,0,0,0\n"
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["test_mod"]
+    assert check_unknown_model_in_access_csv(ctx) == []
 
 
 def test_raw_sql_catches_fstring(bad_addon: Path):
@@ -3543,6 +3599,14 @@ def test_raw_sql_catches_fstring(bad_addon: Path):
     )
     assert len(diags) >= 1
     assert all(d.rule == "raw-sql-string-interpolation" for d in diags)
+
+
+def test_raw_sql_catches_variable_indirection(bad_addon: Path):
+    diags = check_raw_sql_interpolation(
+        bad_addon / "models" / "broken.py", "bad_addon", "17.0"
+    )
+    messages = " ".join(d.message for d in diags)
+    assert "variable interpolation" in messages
 
 
 def test_raw_sql_clean(sample_addon: Path):
@@ -3650,17 +3714,19 @@ if TYPE_CHECKING:
 )
 def check_unknown_model_in_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
+    local_model_names = {
+        m.name for m in ctx.models.values()
+        if m.name is not None
+    }
 
     for ar in ctx.access_rules:
         model_name = model_external_id_to_name(ar.model_external_id)
-        lookup = ctx.resolver.resolve_model(model_name)
+        if ctx.resolver.resolve_model(model_name).status == ResolveResult.FOUND:
+            continue
 
-        if lookup.status == ResolveResult.NOT_FOUND:
-            confidence = "high"
-        elif lookup.status == ResolveResult.UNKNOWN:
-            # Golden rule: do not flag UNKNOWN as score-impacting
-            confidence = "low"
-        else:
+        # High-confidence absence only for model external IDs owned by this scanned module.
+        # External/unscanned module references are UNKNOWN and must not emit by default.
+        if ar.model_external_id_module != ctx.name or model_name in local_model_names:
             continue
 
         diags.append(Diagnostic(
@@ -3673,7 +3739,7 @@ def check_unknown_model_in_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
             severity="error",
             tier="P1",
             source="native",
-            confidence=confidence,
+            confidence="high",
             title=f"Access CSV references unknown model '{model_name}'",
             message=f"ir.model.access.csv entry '{ar.id}' references model '{model_name}' which cannot be resolved.",
             help="Verify the model_id:id column matches an existing model external ID.",
@@ -3716,39 +3782,27 @@ def check_raw_sql_interpolation(
     except (SyntaxError, OSError):
         return []
 
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-
-        # Match *.cr.execute(...) or *.env.cr.execute(...)
-        if not _is_cr_execute(node.func):
-            continue
-
-        if not node.args:
-            continue
-
-        first_arg = node.args[0]
-
-        # Check for f-string
-        if isinstance(first_arg, ast.JoinedStr):
-            diags.append(_make_diag(file_path, module_name, odoo_version, node, "f-string"))
-            continue
-
-        # Check for % formatting: "..." % (...)
-        if isinstance(first_arg, ast.BinOp) and isinstance(first_arg.op, ast.Mod):
-            diags.append(_make_diag(file_path, module_name, odoo_version, node, "% formatting"))
-            continue
-
-        # Check for .format(): "...".format(...)
-        if isinstance(first_arg, ast.Call) and isinstance(first_arg.func, ast.Attribute):
-            if first_arg.func.attr == "format":
-                diags.append(_make_diag(file_path, module_name, odoo_version, node, ".format()"))
+    for func in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+        unsafe_vars = _find_unsafe_sql_assignments(func)
+        for node in ast.walk(func):
+            if not isinstance(node, ast.Call):
                 continue
 
-        # Check for string concatenation with +
-        if isinstance(first_arg, ast.BinOp) and isinstance(first_arg.op, ast.Add):
-            if _involves_non_literal(first_arg):
-                diags.append(_make_diag(file_path, module_name, odoo_version, node, "string concatenation"))
+            # Match *.cr.execute(...) or *.env.cr.execute(...)
+            if not _is_cr_execute(node.func):
+                continue
+
+            if not node.args:
+                continue
+
+            first_arg = node.args[0]
+            pattern = _unsafe_sql_pattern(first_arg)
+            if pattern:
+                diags.append(_make_diag(file_path, module_name, odoo_version, node, pattern))
+                continue
+
+            if isinstance(first_arg, ast.Name) and first_arg.id in unsafe_vars:
+                diags.append(_make_diag(file_path, module_name, odoo_version, node, "variable interpolation"))
 
     return diags
 
@@ -3770,6 +3824,33 @@ def _involves_non_literal(node: ast.BinOp) -> bool:
         if isinstance(child, ast.Name):
             return True
     return False
+
+
+def _unsafe_sql_pattern(node: ast.AST) -> str | None:
+    if isinstance(node, ast.JoinedStr):
+        return "f-string"
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+        return "% formatting"
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr == "format":
+            return ".format()"
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        if _involves_non_literal(node):
+            return "string concatenation"
+    return None
+
+
+def _find_unsafe_sql_assignments(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    unsafe: set[str] = set()
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Assign):
+            continue
+        if _unsafe_sql_pattern(node.value) is None:
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                unsafe.add(target.id)
+    return unsafe
 
 
 def _make_diag(
@@ -3796,7 +3877,7 @@ def _make_diag(
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `pytest tests/rules/test_security_rules.py -v`
-Expected: 5 passed
+Expected: 7 passed
 
 - [ ] **Step 6: Commit**
 
@@ -3876,6 +3957,7 @@ def test_duplicate_xml_id(bad_addon: Path):
     ctx = graph.modules["bad_addon"]
     diags = check_duplicate_xml_id(ctx)
     assert any(d.rule == "duplicate-xml-id" for d in diags)
+    assert len([r for r in ctx.xml_records if r.xml_id == "bad_addon.view_broken_form"]) == 2
 
 
 def test_duplicate_xml_id_clean(sample_addon: Path):
@@ -3911,6 +3993,32 @@ def test_button_method_clean(sample_addon: Path):
     ctx = graph.modules["sample_addon"]
     diags = check_button_method_not_found(ctx)
     assert len(diags) == 0
+
+
+def test_resolver_unknown_results_do_not_emit_default_errors(tmp_path: Path):
+    """UNKNOWN resolver results are omitted in normal mode, not emitted as low-confidence errors."""
+    mod = tmp_path / "unknown_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text('{"name": "Unknown", "depends": [], "data": ["views/views.xml"], "license": "LGPL-3"}')
+    views_dir = mod / "views"
+    views_dir.mkdir()
+    (views_dir / "views.xml").write_text("""\
+<odoo>
+  <record id="view_unknown_form" model="ir.ui.view">
+    <field name="model">external.unknown</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="x_name"/>
+        <button name="action_x" type="object"/>
+      </form>
+    </field>
+  </record>
+</odoo>
+""")
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["unknown_mod"]
+    assert check_view_field_not_in_model(ctx) == []
+    assert check_button_method_not_found(ctx) == []
 ```
 
 - [ ] **Step 3: Run test to verify it fails**
@@ -3950,8 +4058,8 @@ def check_duplicate_xml_id(ctx: ModuleContext) -> list[Diagnostic]:
 
     # Count occurrences by scanning all XML files again for raw IDs
     id_locations: dict[str, list[tuple[str, int]]] = {}
-    for xml_id, info in ctx.xml_ids.items():
-        id_locations.setdefault(xml_id, []).append((info.file_path, info.line))
+    for info in ctx.xml_records:
+        id_locations.setdefault(info.xml_id, []).append((info.file_path, info.line))
 
     for xml_id, locations in id_locations.items():
         if len(locations) <= 1:
@@ -4014,7 +4122,7 @@ def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
             if lookup.status == ResolveResult.NOT_FOUND:
                 confidence = "high"
             elif lookup.status == ResolveResult.UNKNOWN:
-                confidence = "low"
+                continue
             else:
                 continue
 
@@ -4042,7 +4150,9 @@ def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
             lookup = ctx.resolver.resolve_xml_id(qualified)
             if lookup.status == ResolveResult.FOUND:
                 continue
-            confidence = "high" if lookup.status == ResolveResult.NOT_FOUND else "low"
+            if lookup.status == ResolveResult.UNKNOWN:
+                continue
+            confidence = "high"
             diags.append(Diagnostic(
                 module=ctx.name,
                 file_path=view.file_path,
@@ -4104,7 +4214,7 @@ def check_view_field_not_in_model(ctx: ModuleContext) -> list[Diagnostic]:
             if lookup.status == ResolveResult.NOT_FOUND:
                 confidence = "high"
             else:
-                confidence = "low"
+                continue
 
             diags.append(Diagnostic(
                 module=ctx.name,
@@ -4167,7 +4277,7 @@ def check_button_method_not_found(ctx: ModuleContext) -> list[Diagnostic]:
             if lookup.status == ResolveResult.NOT_FOUND:
                 confidence = "high"
             else:
-                confidence = "low"
+                continue
 
             diags.append(Diagnostic(
                 module=ctx.name,
@@ -5292,6 +5402,20 @@ def test_scan_nonexistent_path():
     assert result.exit_code == 0  # no addons found, but doesn't crash
 
 
+def test_scan_uses_config_addons_paths(tmp_path: Path):
+    addons = tmp_path / "addons"
+    addons.mkdir()
+    mod = addons / "x_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text('{"name": "X", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}')
+    (tmp_path / "odoo-doctor.toml").write_text('[odoo-doctor]\naddons_paths = ["addons"]\n')
+    result = runner.invoke(app, ["scan", str(tmp_path), "--json"])
+    assert result.exit_code == 0
+    import json
+    parsed = json.loads(result.stdout)
+    assert "x_mod" in parsed["modules"]
+
+
 def test_rules_list():
     result = runner.invoke(app, ["rules", "list"])
     assert result.exit_code == 0
@@ -5371,6 +5495,7 @@ def scan(
     if odoo_version:
         cfg.odoo_version = odoo_version
     target = [module] if module else cfg.target_modules or None
+    addons_paths = [(scan_path / p).resolve() for p in cfg.addons_paths]
 
     # Determine changed files for --diff
     changed_files: set[str] | None = None
@@ -5380,7 +5505,7 @@ def scan(
     # Build project graph
     version = cfg.odoo_version or "unknown"
     graph = build_project_graph(
-        addon_paths=[scan_path],
+        addon_paths=addons_paths,
         odoo_version=version,
         target_modules=target,
         odoo_source_path=cfg.odoo_source_path or None,
@@ -5586,7 +5711,7 @@ def _in_scope_categories(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/cli/test_app.py -v`
-Expected: 5 passed
+Expected: 6 passed
 
 - [ ] **Step 5: Commit**
 
