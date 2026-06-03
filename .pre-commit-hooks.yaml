@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: odoo-doctor
+        name: Odoo Doctor — scan changed files
+        language: system
+        entry: odoo-doctor scan --diff HEAD --fail-on error
+        pass_filenames: false
+        types_or: [python, xml]
+        stages: [pre-commit]
