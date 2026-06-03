@@ -12,18 +12,20 @@ Combines confidence-aware static analysis with optional external linters (Ruff, 
 ## Quick Start
 
 ```bash
-pip install odoo-doctor
+# 1. Chạy ngay (không cần install)
+pipx run odoo-doctor scan .
 
-# Scan current directory
+# 2. Install global
+pip install odoo-doctor
 odoo-doctor scan .
 
-# JSON output for CI / agents
+# 3. JSON output cho CI / agents
 odoo-doctor scan . --json
 
-# Fail if score < 80
+# 4. Fail nếu score < 80
 odoo-doctor scan . --min-score 80
 
-# Only scan changed files (PR review)
+# 5. Chỉ scan file đã thay đổi (PR review)
 odoo-doctor scan . --diff main --json
 ```
 
