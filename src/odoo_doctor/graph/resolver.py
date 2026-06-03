@@ -1,0 +1,121 @@
+# src/odoo_doctor/graph/resolver.py
+"""Confidence-aware symbol resolver: repo -> stubs -> source_path -> UNKNOWN."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import TYPE_CHECKING
+
+from odoo_doctor.graph.stubs.loader import load_stubs
+
+if TYPE_CHECKING:
+    from odoo_doctor.parsers.python_models import ModelInfo
+    from odoo_doctor.parsers.xml_records import XmlIdInfo
+
+
+class ResolveResult(Enum):
+    FOUND = "found"
+    NOT_FOUND = "not_found"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class SymbolLookup:
+    status: ResolveResult
+    source: str | None = None  # "repo" | "stub" | "source_path"
+
+
+class SymbolResolver:
+    """Resolve models, fields, methods, and XML IDs across the project.
+
+    Resolution order: repo symbols -> packaged stubs -> optional source path -> UNKNOWN.
+    """
+
+    def __init__(
+        self,
+        repo_models: dict[str, ModelInfo],
+        repo_xml_ids: dict[str, object],
+        stub_version: str,
+        source_path: str | None = None,
+    ):
+        self._repo_models = repo_models
+        self._repo_xml_ids = repo_xml_ids
+        self._stubs = load_stubs(stub_version)
+        self._source_path = source_path
+        # TODO: Phase for source_path parsing (post-MVP enhancement)
+
+    def resolve_model(self, model_name: str) -> SymbolLookup:
+        # 1. Repo
+        if model_name in self._repo_models:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
+        # 2. Stubs
+        if self._stubs and model_name in self._stubs.models:
+            return SymbolLookup(ResolveResult.FOUND, "stub")
+
+        # 3. Source path (TODO: implement for post-MVP)
+
+        # 4. Unknown — we can't say it doesn't exist
+        return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def resolve_field(self, model_name: str, field_name: str) -> SymbolLookup:
+        # 1. Repo
+        repo_model = self._repo_models.get(model_name)
+        if repo_model is not None:
+            if field_name in repo_model.fields:
+                return SymbolLookup(ResolveResult.FOUND, "repo")
+            # Model known in repo but field not there — check stubs too
+            # (model may inherit fields from core that aren't in the repo code)
+
+        # 2. Stubs
+        if self._stubs:
+            stub_model = self._stubs.models.get(model_name)
+            if stub_model is not None:
+                if field_name in stub_model.get("fields", []):
+                    return SymbolLookup(ResolveResult.FOUND, "stub")
+                # Model is known (repo or stub) and field not found anywhere
+                if repo_model is not None or stub_model is not None:
+                    return SymbolLookup(ResolveResult.NOT_FOUND)
+
+        # If model found in repo only (no stub for it), field not in repo
+        if repo_model is not None:
+            # We know the model but stubs don't cover it — could have
+            # inherited fields we don't see. Be conservative.
+            return SymbolLookup(ResolveResult.UNKNOWN)
+
+        # Model not known at all
+        return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def resolve_method(self, model_name: str, method_name: str) -> SymbolLookup:
+        # 1. Repo
+        repo_model = self._repo_models.get(model_name)
+        if repo_model is not None and method_name in repo_model.methods:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
+        # 2. Stubs
+        if self._stubs:
+            stub_model = self._stubs.models.get(model_name)
+            if stub_model is not None:
+                if method_name in stub_model.get("methods", []):
+                    return SymbolLookup(ResolveResult.FOUND, "stub")
+                # Model known, method not found
+                if repo_model is not None or stub_model is not None:
+                    return SymbolLookup(ResolveResult.NOT_FOUND)
+
+        if repo_model is not None:
+            return SymbolLookup(ResolveResult.UNKNOWN)
+
+        return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def resolve_xml_id(self, xml_id: str) -> SymbolLookup:
+        # 1. Repo
+        if xml_id in self._repo_xml_ids:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
+        # 2. Stubs
+        if self._stubs and xml_id in self._stubs.xml_ids:
+            return SymbolLookup(ResolveResult.FOUND, "stub")
+
+        # XML IDs are module-scoped; we can't prove absence without full knowledge
+        return SymbolLookup(ResolveResult.UNKNOWN)

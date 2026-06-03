@@ -1,0 +1,66 @@
+{
+    "version": "17.0",
+    "models": {
+        "res.partner": {
+            "fields": ["name", "email", "phone", "street", "city", "country_id", "company_id", "parent_id", "child_ids", "user_ids", "active", "display_name", "create_date", "write_date"],
+            "methods": ["name_get", "name_search", "create", "write", "unlink", "read", "copy", "default_get", "onchange", "action_archive", "action_unarchive"]
+        },
+        "res.users": {
+            "fields": ["name", "login", "password", "partner_id", "company_id", "company_ids", "groups_id", "active"],
+            "methods": ["name_get", "create", "write", "unlink", "read", "has_group", "action_reset_password"]
+        },
+        "res.company": {
+            "fields": ["name", "partner_id", "currency_id", "logo", "street", "city", "country_id"],
+            "methods": ["name_get", "create", "write"]
+        },
+        "sale.order": {
+            "fields": ["name", "partner_id", "date_order", "state", "order_line", "amount_total", "amount_untaxed", "amount_tax", "company_id", "user_id", "pricelist_id", "currency_id"],
+            "methods": ["name_get", "create", "write", "unlink", "action_confirm", "action_cancel", "action_draft", "action_quotation_sent", "_compute_amount_all"]
+        },
+        "sale.order.line": {
+            "fields": ["name", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "price_total", "tax_id", "sequence"],
+            "methods": ["create", "write", "unlink", "_compute_amount"]
+        },
+        "product.product": {
+            "fields": ["name", "default_code", "barcode", "list_price", "standard_price", "categ_id", "type", "active", "weight", "volume"],
+            "methods": ["name_get", "name_search", "create", "write"]
+        },
+        "product.template": {
+            "fields": ["name", "default_code", "list_price", "standard_price", "categ_id", "type", "active", "description"],
+            "methods": ["name_get", "create", "write"]
+        },
+        "account.move": {
+            "fields": ["name", "partner_id", "date", "state", "move_type", "amount_total", "amount_residual", "journal_id", "company_id", "line_ids", "invoice_line_ids"],
+            "methods": ["name_get", "create", "write", "unlink", "action_post", "button_draft", "button_cancel"]
+        },
+        "stock.picking": {
+            "fields": ["name", "partner_id", "location_id", "location_dest_id", "state", "move_ids", "picking_type_id", "scheduled_date"],
+            "methods": ["name_get", "create", "write", "action_confirm", "action_assign", "button_validate"]
+        },
+        "purchase.order": {
+            "fields": ["name", "partner_id", "date_order", "state", "order_line", "amount_total", "company_id"],
+            "methods": ["name_get", "create", "write", "button_confirm", "button_cancel", "button_draft"]
+        },
+        "mail.thread": {
+            "fields": ["message_ids", "message_follower_ids", "message_partner_ids"],
+            "methods": ["message_post", "message_subscribe", "message_unsubscribe"]
+        },
+        "ir.ui.view": {
+            "fields": ["name", "model", "type", "arch", "inherit_id", "priority", "active"],
+            "methods": ["create", "write", "unlink"]
+        }
+    },
+    "xml_ids": {
+        "base.main_company": "res.company",
+        "base.user_root": "res.users",
+        "base.user_admin": "res.users",
+        "base.partner_root": "res.partner",
+        "base.partner_admin": "res.partner",
+        "base.group_user": "res.groups",
+        "base.group_system": "res.groups",
+        "base.group_no_one": "res.groups",
+        "base.group_public": "res.groups",
+        "sale.sale_menu_root": "ir.ui.menu",
+        "sale.view_order_form": "ir.ui.view"
+    }
+}
