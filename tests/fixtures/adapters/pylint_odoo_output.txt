@@ -1,0 +1,3 @@
+************* Module models.sale
+models/sale.py:10:0: W8120: Translation method is missing (translation-required)
+models/sale.py:25:0: E8102: Use of cr.execute with string interpolation (sql-injection)

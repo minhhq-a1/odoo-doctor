@@ -1,0 +1,16 @@
+[
+    {
+        "code": "E501",
+        "message": "Line too long (120 > 88)",
+        "filename": "models/sale.py",
+        "location": {"row": 15, "column": 1},
+        "end_location": {"row": 15, "column": 120}
+    },
+    {
+        "code": "F841",
+        "message": "Local variable 'x' is assigned to but never used",
+        "filename": "models/sale.py",
+        "location": {"row": 42, "column": 5},
+        "end_location": {"row": 42, "column": 6}
+    }
+]

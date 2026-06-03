@@ -1,0 +1,6 @@
+[rules]
+"E8102" = { category = "Security", tier = "P0", confidence = "high" }
+"W8120" = { category = "Maintainability", tier = "P3", confidence = "medium" }
+"C8101" = { category = "Module Hygiene", tier = "P3", confidence = "high" }
+"W8110" = { category = "Correctness", tier = "P2", confidence = "high" }
+"E8501" = { category = "Security", tier = "P1", confidence = "high" }

@@ -1,0 +1,7 @@
+[rules]
+"S608" = { category = "Security", tier = "P1", confidence = "high" }
+"S301" = { category = "Security", tier = "P0", confidence = "high" }
+"E501" = { category = "Maintainability", tier = "P3", confidence = "high" }
+"F841" = { category = "Correctness", tier = "P3", confidence = "high" }
+"F811" = { category = "Correctness", tier = "P2", confidence = "high" }
+"W605" = { category = "Correctness", tier = "P3", confidence = "high" }
