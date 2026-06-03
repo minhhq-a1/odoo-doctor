@@ -1,0 +1,33 @@
+# tests/discovery/test_addons.py
+"""Tests for addon discovery."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from odoo_doctor.discovery.addons import AddonInfo, discover_addons
+
+
+def test_discover_single_addon(sample_addon: Path):
+    addons = discover_addons([sample_addon.parent])
+    assert len(addons) == 1
+    assert addons[0].name == "sample_addon"
+    assert addons[0].path == sample_addon
+
+
+def test_discover_filters_by_target(sample_addon: Path):
+    addons = discover_addons([sample_addon.parent], target_modules=["nonexistent"])
+    assert len(addons) == 0
+
+
+def test_discover_empty_directory(tmp_path: Path):
+    addons = discover_addons([tmp_path])
+    assert addons == []
+
+
+def test_discover_skips_non_installable(tmp_path: Path):
+    mod = tmp_path / "disabled_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text('{"name": "Disabled", "installable": False}')
+    addons = discover_addons([tmp_path])
+    assert len(addons) == 0
