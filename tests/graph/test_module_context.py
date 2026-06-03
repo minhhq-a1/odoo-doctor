@@ -10,7 +10,7 @@ from odoo_doctor.graph.module_context import ModuleContext, ProjectGraph, build_
 
 def test_build_project_graph(sample_addon: Path):
     graph = build_project_graph(
-        addon_paths=[sample_addon.parent],
+        addon_paths=[sample_addon],
         odoo_version="17.0",
         odoo_source_path=None,
     )
@@ -23,7 +23,7 @@ def test_build_project_graph(sample_addon: Path):
 
 def test_module_context_has_parsed_data(sample_addon: Path):
     graph = build_project_graph(
-        addon_paths=[sample_addon.parent],
+        addon_paths=[sample_addon],
         odoo_version="17.0",
     )
     ctx = graph.modules["sample_addon"]
@@ -40,7 +40,7 @@ def test_module_context_has_parsed_data(sample_addon: Path):
 
 def test_resolver_uses_manifest_version_for_stubs_when_project_unknown(sample_addon: Path):
     graph = build_project_graph(
-        addon_paths=[sample_addon.parent],
+        addon_paths=[sample_addon],
         odoo_version="unknown",
     )
     result = graph.resolver.resolve_model("sale.order")

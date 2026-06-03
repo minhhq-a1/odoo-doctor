@@ -9,14 +9,14 @@ from odoo_doctor.discovery.addons import AddonInfo, discover_addons
 
 
 def test_discover_single_addon(sample_addon: Path):
-    addons = discover_addons([sample_addon.parent])
+    addons = discover_addons([sample_addon])
     assert len(addons) == 1
     assert addons[0].name == "sample_addon"
     assert addons[0].path == sample_addon
 
 
 def test_discover_filters_by_target(sample_addon: Path):
-    addons = discover_addons([sample_addon.parent], target_modules=["nonexistent"])
+    addons = discover_addons([sample_addon], target_modules=["nonexistent"])
     assert len(addons) == 0
 
 
