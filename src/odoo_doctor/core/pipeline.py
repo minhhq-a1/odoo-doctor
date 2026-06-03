@@ -1,0 +1,188 @@
+# src/odoo_doctor/core/pipeline.py
+"""Seven-stage diagnostic pipeline — pure transformations."""
+
+from __future__ import annotations
+
+import fnmatch
+from dataclasses import replace
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
+
+if TYPE_CHECKING:
+    from odoo_doctor.core.config import OdooDoctorConfig
+
+
+# Type aliases
+Suppressions = set[tuple[str, int, str]]  # (file_path, line, rule)
+ActiveRules = dict[str, str | None]       # rule_name -> min_version or None
+
+
+# --- Helpers ---
+
+_CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
+_SOURCE_RANK = {"native": 2, "pylint-odoo": 1, "ruff": 1, "oca": 1}
+
+
+def _version_gte(detected: str, minimum: str) -> bool:
+    """Return True if detected >= minimum using first segment (e.g. '17.0' >= '14.0')."""
+    try:
+        det = float(detected.split(".")[0])
+        mn = float(minimum.split(".")[0])
+        return det >= mn
+    except (ValueError, IndexError):
+        return False
+
+
+# --- Stage 1: Deduplicate ---
+
+def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+    """Group by (module, file_path, line, category). Keep highest confidence,
+    then prefer native source, then longest message.
+    Two diagnostics with different rules are always distinct."""
+    groups: dict[tuple[str, str, int, str, str], list[Diagnostic]] = {}
+    for d in diagnostics:
+        # Include rule in key so different rules at same location are kept
+        key = (d.module, d.file_path, d.line, d.category, d.rule)
+        groups.setdefault(key, []).append(d)
+
+    result: list[Diagnostic] = []
+    for group in groups.values():
+        best = max(
+            group,
+            key=lambda d: (
+                _CONFIDENCE_RANK.get(d.confidence, 0),
+                _SOURCE_RANK.get(d.source, 0),
+                len(d.message),
+            ),
+        )
+        result.append(best)
+    return result
+
+
+# --- Stage 2: Severity overrides ---
+
+def apply_severity_overrides(
+    diagnostics: list[Diagnostic], config: OdooDoctorConfig
+) -> list[Diagnostic]:
+    """Change severity per config. severity='off' removes the diagnostic."""
+    result: list[Diagnostic] = []
+    for d in diagnostics:
+        override = config.severity_overrides.get(d.rule)
+        if override is None:
+            result.append(d)
+        elif override == "off":
+            continue
+        else:
+            result.append(replace(d, severity=override))
+    return result
+
+
+# --- Stage 3: Ignore filters ---
+
+def apply_ignore_filters(
+    diagnostics: list[Diagnostic], config: OdooDoctorConfig
+) -> list[Diagnostic]:
+    """Remove diagnostics matching ignore rules, files, or modules."""
+    result: list[Diagnostic] = []
+    for d in diagnostics:
+        if d.rule in config.ignore_rules:
+            continue
+        if d.module in config.ignore_modules:
+            continue
+        if _matches_any_glob(d.file_path, config.ignore_files):
+            continue
+        result.append(d)
+    return result
+
+
+def _matches_any_glob(file_path: str, patterns: list[str]) -> bool:
+    """Check if file_path matches any glob pattern, supporting ** via pathlib."""
+    norm = file_path.replace("\\", "/")
+    p = Path(norm)
+    for pat in patterns:
+        # Try fnmatch directly
+        if fnmatch.fnmatch(norm, pat):
+            return True
+        # Try pathlib.match (supports **)
+        try:
+            if p.match(pat):
+                return True
+        except Exception:
+            pass
+        # Handle ** by checking if any sub-path matches
+        # e.g. "**/migrations/**" should match "migrations/17.0/pre.py"
+        if "**" in pat:
+            # Strip leading **/ and check if the path contains the pattern
+            pat_stripped = pat.strip("/").replace("**/", "").replace("/**", "")
+            if pat_stripped and pat_stripped in norm:
+                return True
+            # Also try: split the pattern and check each segment
+            parts = norm.split("/")
+            for i in range(len(parts)):
+                sub = "/".join(parts[i:])
+                if fnmatch.fnmatch(sub, pat.lstrip("*/")):
+                    return True
+    return False
+
+
+# --- Stage 4: Inline suppressions ---
+
+def apply_inline_suppressions(
+    diagnostics: list[Diagnostic], suppressions: Suppressions
+) -> list[Diagnostic]:
+    """Remove diagnostics covered by inline suppression comments."""
+    return [
+        d for d in diagnostics
+        if (d.file_path, d.line, d.rule) not in suppressions
+    ]
+
+
+# --- Stage 5: Version gates ---
+
+def apply_version_gates(
+    diagnostics: list[Diagnostic],
+    active_rules: ActiveRules,
+    detected_version: str,
+) -> list[Diagnostic]:
+    """Remove diagnostics whose rule requires a newer Odoo version."""
+    result: list[Diagnostic] = []
+    for d in diagnostics:
+        min_ver = active_rules.get(d.rule)
+        if min_ver is None:
+            result.append(d)
+        elif _version_gte(detected_version, min_ver):
+            result.append(d)
+    return result
+
+
+# --- Stage 6: Score eligibility ---
+
+def mark_score_eligibility(
+    diagnostics: list[Diagnostic],
+) -> list[bool]:
+    """Return parallel list of booleans — True if the diagnostic counts toward score."""
+    return [
+        d.confidence == "high" and d.category in CATEGORIES
+        for d in diagnostics
+    ]
+
+
+# --- Composed pipeline ---
+
+def run_pipeline(
+    diagnostics: list[Diagnostic],
+    config: OdooDoctorConfig,
+    suppressions: Suppressions,
+    active_rules: ActiveRules,
+    detected_version: str,
+) -> tuple[list[Diagnostic], list[bool]]:
+    """Run all 7 pipeline stages in order. Returns (diagnostics, eligibility)."""
+    diags = deduplicate(diagnostics)
+    diags = apply_severity_overrides(diags, config)
+    diags = apply_ignore_filters(diags, config)
+    diags = apply_inline_suppressions(diags, suppressions)
+    diags = apply_version_gates(diags, active_rules, detected_version)
+    eligible = mark_score_eligibility(diags)
+    return diags, eligible
