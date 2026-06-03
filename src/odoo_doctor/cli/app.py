@@ -47,7 +47,7 @@ def scan(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     fail_on: Optional[str] = typer.Option(None, "--fail-on", help="Fail if severity found (error|warning)"),
     diff: Optional[str] = typer.Option(None, "--diff", help="Only scan files changed vs this branch"),
-    min_score: Optional[int] = typer.Option(None, "--min-score", help="Exit 1 if any module scores below this (0-100)"),
+    min_score: Optional[int] = typer.Option(None, "--min-score", help="Exit 2 if any module scores below this (0-100)"),
 ) -> None:
     """Scan Odoo addons and report health score."""
     scan_path = Path(path).resolve()
