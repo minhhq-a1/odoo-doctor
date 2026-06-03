@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Duplicate XML ID will be: bad_addon.view_bad_form appears twice -->
+    <record id="view_bad_form" model="ir.ui.view">
+        <field name="name">bad.model.form</field>
+        <field name="model">bad.model</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <button name="bad_sql_method" type="object" string="Do SQL"/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Duplicate of view_bad_form — triggers duplicate-xml-id -->
+    <record id="view_bad_form" model="ir.ui.view">
+        <field name="name">bad.model.form.duplicate</field>
+        <field name="model">bad.model</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="name"/>
+            </form>
+        </field>
+    </record>
+</odoo>

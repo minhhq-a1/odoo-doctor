@@ -104,7 +104,14 @@ def build_project_graph(
         if csv_path.exists():
             access_rules = parse_access_csv(csv_path, module_name=addon.name)
 
-        all_models.update(models)
+        # Only add models with a _name to the resolver repo (not inherit-only extensions)
+        for key, m in models.items():
+            if m.name is not None:
+                all_models[key] = m
+            elif key in all_models and m.name is None:
+                # Merge fields/methods from inherit-only models into existing repo model
+                all_models[key].fields.update(m.fields)
+                all_models[key].methods.update(m.methods)
         all_xml_ids.update(xml_ids)
 
         module_data[addon.name] = {

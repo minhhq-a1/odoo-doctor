@@ -71,7 +71,7 @@ def rule(
             needs_context=needs_context,
             min_version=min_version,
         )
-        target = registry or default_registry
+        target = registry if registry is not None else default_registry
         target.register(meta, func)
         return func
     return decorator
