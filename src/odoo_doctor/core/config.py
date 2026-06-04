@@ -38,14 +38,57 @@ class OdooDoctorConfig:
 
 
 def load_config(directory: Path) -> OdooDoctorConfig:
-    """Load config from odoo-doctor.toml in *directory*. Returns defaults if missing."""
-    config_path = directory / "odoo-doctor.toml"
-    if not config_path.exists():
+    """Load config by walking up from *directory*, merging parent configs.
+
+    Closer configs override parent values. Walk stops at filesystem root or
+    after 20 levels to avoid infinite loops on symlink cycles.
+    """
+    chain = _find_config_chain(directory)
+    if not chain:
         return OdooDoctorConfig()
 
-    with open(config_path, "rb") as f:
-        raw = tomllib.load(f)
+    # Merge from outermost (parent) to innermost (child) so child wins
+    merged_raw: dict = {}
+    for config_path in chain:
+        with open(config_path, "rb") as f:
+            raw = tomllib.load(f)
+        _deep_merge(merged_raw, raw)
 
+    return _build_config(merged_raw)
+
+
+def _find_config_chain(directory: Path) -> list[Path]:
+    """Walk up from directory collecting odoo-doctor.toml files. Returns outermost first."""
+    chain: list[Path] = []
+    current = directory.resolve()
+    seen: set[str] = set()
+    for _ in range(20):
+        key = str(current)
+        if key in seen:
+            break
+        seen.add(key)
+        candidate = current / "odoo-doctor.toml"
+        if candidate.is_file():
+            chain.append(candidate)
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    chain.reverse()
+    return chain
+
+
+def _deep_merge(base: dict, override: dict) -> None:
+    """Merge override into base. Dict values are merged recursively; others are replaced."""
+    for key, val in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(val, dict):
+            _deep_merge(base[key], val)
+        else:
+            base[key] = val
+
+
+def _build_config(raw: dict) -> OdooDoctorConfig:
+    """Build OdooDoctorConfig from a merged raw TOML dict."""
     main = raw.get("odoo-doctor", {})
     adapters_raw = raw.get("adapters", {})
     severity_raw = raw.get("severity", {})
