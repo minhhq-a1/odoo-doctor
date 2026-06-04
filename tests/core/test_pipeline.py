@@ -190,6 +190,7 @@ def test_inline_suppression_removes_matching():
     result = apply_inline_suppressions([d], suppressions)
     assert len(result) == 0
 
+
 def test_inline_suppression_keeps_non_matching():
     d = normalize_diagnostics([
         _diag(file_path="models/sale.py", line=10, rule="search-in-loop")
@@ -197,6 +198,7 @@ def test_inline_suppression_keeps_non_matching():
     suppressions = {("models/sale.py", 10, "other-rule")}
     result = apply_inline_suppressions([d], suppressions)
     assert len(result) == 1
+
 
 def test_run_pipeline_suppression_matches_after_path_normalization(tmp_path):
     file_path = tmp_path / "models" / "sale.py"
