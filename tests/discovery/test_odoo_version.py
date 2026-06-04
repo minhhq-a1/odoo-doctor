@@ -29,3 +29,47 @@ def test_unknown():
 def test_non_standard_manifest_version():
     """Custom version strings should not be treated as Odoo version."""
     assert detect_odoo_version(cli_version=None, config_version=None, manifest_version="2.3.1") == "unknown"
+
+
+def test_package_metadata_fallback(monkeypatch):
+    """When CLI/config/manifest are all None, detect from installed odoo package."""
+    import importlib.metadata
+
+    monkeypatch.setattr(
+        importlib.metadata, "version",
+        lambda pkg: "17.0.20240101" if pkg == "odoo" else (_ for _ in ()).throw(
+            importlib.metadata.PackageNotFoundError(pkg)
+        ),
+    )
+    result = detect_odoo_version(cli_version=None, config_version=None, manifest_version=None)
+    assert result == "17.0"
+
+
+def test_package_metadata_not_installed(monkeypatch):
+    """When odoo package is not installed, fall through to unknown."""
+    import importlib.metadata
+
+    monkeypatch.setattr(
+        importlib.metadata, "version",
+        lambda pkg: (_ for _ in ()).throw(importlib.metadata.PackageNotFoundError(pkg)),
+    )
+    result = detect_odoo_version(cli_version=None, config_version=None, manifest_version=None)
+    assert result == "unknown"
+
+
+def test_package_metadata_non_standard_version(monkeypatch):
+    """odoo package with non-standard version should not match."""
+    import importlib.metadata
+
+    monkeypatch.setattr(importlib.metadata, "version", lambda pkg: "3.2.1")
+    result = detect_odoo_version(cli_version=None, config_version=None, manifest_version=None)
+    assert result == "unknown"
+
+
+def test_cli_still_wins_over_package(monkeypatch):
+    """CLI flag takes priority even when odoo package is installed."""
+    import importlib.metadata
+
+    monkeypatch.setattr(importlib.metadata, "version", lambda pkg: "17.0.20240101")
+    result = detect_odoo_version(cli_version="16.0", config_version=None, manifest_version=None)
+    assert result == "16.0"
