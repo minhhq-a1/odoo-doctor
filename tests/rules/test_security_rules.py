@@ -50,6 +50,7 @@ def test_missing_access_csv_catches_bad_addon(bad_addon: Path):
     diags = check_missing_access_csv(ctx)
     assert len(diags) >= 1
     assert all(d.rule == "missing-access-csv" for d in diags)
+    assert all(d.tier == "P0" for d in diags)
 
 
 def test_missing_access_csv_clean(sample_addon: Path):
@@ -90,6 +91,7 @@ def test_unknown_model_in_access_csv_flags_current_module_missing_model(tmp_path
 
     assert len(diags) == 1
     assert diags[0].rule == "unknown-model-in-access-csv"
+    assert diags[0].category == "Correctness"
     assert diags[0].confidence == "high"
     assert "x.missing" in diags[0].message
 

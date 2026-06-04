@@ -35,7 +35,18 @@ def _version_gte(detected: str, minimum: str) -> bool:
         return False
 
 
-# --- Stage 1: Deduplicate ---
+# --- Stage 1: Normalize ---
+
+def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+    """Normalize paths before downstream matching and deduplication."""
+    result: list[Diagnostic] = []
+    for d in diagnostics:
+        normalized_path = Path(d.file_path.replace("\\", "/")).resolve().as_posix()
+        result.append(replace(d, file_path=normalized_path))
+    return result
+
+
+# --- Stage 2: Deduplicate ---
 
 def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
     """Group by (module, file_path, line, category). Keep highest confidence,
@@ -61,7 +72,7 @@ def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
     return result
 
 
-# --- Stage 2: Severity overrides ---
+# --- Stage 3: Severity overrides ---
 
 def apply_severity_overrides(
     diagnostics: list[Diagnostic], config: OdooDoctorConfig
@@ -79,10 +90,10 @@ def apply_severity_overrides(
     return result
 
 
-# --- Stage 3: Ignore filters ---
+# --- Stage 4: Ignore filters ---
 
 def apply_ignore_filters(
-    diagnostics: list[Diagnostic], config: OdooDoctorConfig
+    diagnostics: list[Diagnostic], config: OdooDoctorConfig, base_path: Path | None = None
 ) -> list[Diagnostic]:
     """Remove diagnostics matching ignore rules, files, or modules."""
     result: list[Diagnostic] = []
@@ -91,55 +102,81 @@ def apply_ignore_filters(
             continue
         if d.module in config.ignore_modules:
             continue
-        if _matches_any_glob(d.file_path, config.ignore_files):
+        if _matches_any_glob(d.file_path, config.ignore_files, base_path=base_path):
             continue
         result.append(d)
     return result
 
 
-def _matches_any_glob(file_path: str, patterns: list[str]) -> bool:
+def _matches_any_glob(file_path: str, patterns: list[str], base_path: Path | None = None) -> bool:
     """Check if file_path matches any glob pattern, supporting ** via pathlib."""
     norm = file_path.replace("\\", "/")
     p = Path(norm)
+
+    # Try to extract a relative path relative to base_path or CWD if absolute
+    rel_path_str = None
+    if p.is_absolute():
+        bases = []
+        if base_path is not None:
+            bases.append(Path(base_path).resolve())
+        bases.append(Path.cwd().resolve())
+        for base in bases:
+            try:
+                rel_path_str = p.relative_to(base).as_posix()
+                break
+            except ValueError:
+                pass
+
+    paths_to_check = [norm]
+    if rel_path_str:
+        paths_to_check.append(rel_path_str)
+
     for pat in patterns:
-        # Try fnmatch directly
-        if fnmatch.fnmatch(norm, pat):
-            return True
-        # Try pathlib.match (supports **)
-        try:
-            if p.match(pat):
+        for path_str in paths_to_check:
+            curr_p = Path(path_str)
+            # Try fnmatch directly
+            if fnmatch.fnmatch(path_str, pat):
                 return True
-        except Exception:
-            pass
-        # Handle ** by checking if any sub-path matches
-        # e.g. "**/migrations/**" should match "migrations/17.0/pre.py"
-        if "**" in pat:
-            # Strip leading **/ and check if the path contains the pattern
-            pat_stripped = pat.strip("/").replace("**/", "").replace("/**", "")
-            if pat_stripped and pat_stripped in norm:
-                return True
-            # Also try: split the pattern and check each segment
-            parts = norm.split("/")
-            for i in range(len(parts)):
-                sub = "/".join(parts[i:])
-                if fnmatch.fnmatch(sub, pat.lstrip("*/")):
+            # Try pathlib.match (supports **)
+            try:
+                if curr_p.match(pat):
                     return True
+            except Exception:
+                pass
+            # Handle ** by checking if any sub-path matches
+            # e.g. "**/migrations/**" should match "migrations/17.0/pre.py"
+            if "**" in pat:
+                # Strip leading **/ and check if the path contains the pattern
+                pat_stripped = pat.strip("/").replace("**/", "").replace("/**", "")
+                if pat_stripped and pat_stripped in path_str:
+                    return True
+                # Also try: split the pattern and check each segment
+                parts = path_str.split("/")
+                for i in range(len(parts)):
+                    sub = "/".join(parts[i:])
+                    if fnmatch.fnmatch(sub, pat.lstrip("*/")):
+                        return True
     return False
 
 
-# --- Stage 4: Inline suppressions ---
+# --- Stage 5: Inline suppressions ---
 
 def apply_inline_suppressions(
     diagnostics: list[Diagnostic], suppressions: Suppressions
 ) -> list[Diagnostic]:
     """Remove diagnostics covered by inline suppression comments."""
+    normalized_suppressions = {
+        (Path(file_path.replace("\\", "/")).resolve().as_posix(), line, rule)
+        for file_path, line, rule in suppressions
+    }
     return [
         d for d in diagnostics
-        if (d.file_path, d.line, d.rule) not in suppressions
+        if (Path(d.file_path.replace("\\", "/")).resolve().as_posix(), d.line, d.rule)
+        not in normalized_suppressions
     ]
 
 
-# --- Stage 5: Version gates ---
+# --- Stage 6: Version gates ---
 
 def apply_version_gates(
     diagnostics: list[Diagnostic],
@@ -157,7 +194,7 @@ def apply_version_gates(
     return result
 
 
-# --- Stage 6: Score eligibility ---
+# --- Stage 7: Score eligibility ---
 
 def mark_score_eligibility(
     diagnostics: list[Diagnostic],
@@ -177,11 +214,15 @@ def run_pipeline(
     suppressions: Suppressions,
     active_rules: ActiveRules,
     detected_version: str,
+    base_path: Path | str | None = None,
 ) -> tuple[list[Diagnostic], list[bool]]:
     """Run all 7 pipeline stages in order. Returns (diagnostics, eligibility)."""
-    diags = deduplicate(diagnostics)
+    if base_path is not None:
+        base_path = Path(base_path).resolve()
+    diags = normalize_diagnostics(diagnostics)
+    diags = deduplicate(diags)
     diags = apply_severity_overrides(diags, config)
-    diags = apply_ignore_filters(diags, config)
+    diags = apply_ignore_filters(diags, config, base_path=base_path)
     diags = apply_inline_suppressions(diags, suppressions)
     diags = apply_version_gates(diags, active_rules, detected_version)
     eligible = mark_score_eligibility(diags)

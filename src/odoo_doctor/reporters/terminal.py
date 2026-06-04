@@ -72,4 +72,22 @@ def render_terminal(
             console.print(f"      {d.message}")
             console.print(f"      [dim]{d.help}[/dim]")
 
+    if len(scores) > 1:
+        overall = sum(score.overall for score in scores.values()) / len(scores)
+        label = _score_label(overall)
+        color = _LABEL_COLORS.get(label, "white")
+        console.print(
+            f"\n[bold]Project Score:[/bold] [{color}]{overall:.0f}/100 ({label})[/{color}]"
+        )
+
     return buf.getvalue()
+
+
+def _score_label(overall: float) -> str:
+    if overall >= 90:
+        return "Excellent"
+    if overall >= 75:
+        return "Good"
+    if overall >= 50:
+        return "Needs work"
+    return "Critical"

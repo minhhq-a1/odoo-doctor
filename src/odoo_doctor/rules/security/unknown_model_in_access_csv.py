@@ -1,5 +1,5 @@
 # src/odoo_doctor/rules/security/unknown_model_in_access_csv.py
-"""Rule: unknown-model-in-access-csv [Security, P1]."""
+"""Rule: unknown-model-in-access-csv [Correctness, P1]."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 @rule(
     name="unknown-model-in-access-csv",
-    category="Security",
+    category="Correctness",
     tier="P1",
     severity="error",
     default_confidence="high",
@@ -52,7 +52,7 @@ def check_unknown_model_in_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
             line=rule_row.line,
             column=0,
             rule="unknown-model-in-access-csv",
-            category="Security",
+            category="Correctness",
             severity="error",
             tier="P1",
             source="native",

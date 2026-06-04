@@ -36,3 +36,38 @@ def test_render_terminal_returns_string():
 def test_render_terminal_empty():
     output = render_terminal([], {})
     assert "No diagnostics" in output or "clean" in output.lower()
+
+
+def test_render_terminal_shows_project_score_for_multiple_modules():
+    clean = ScoreResult(
+        overall=100.0, label="Excellent",
+        categories=[],
+        in_scope_categories=[],
+        diagnostics_counted=0,
+    )
+    bad = ScoreResult(
+        overall=50.0, label="Needs work",
+        categories=[],
+        in_scope_categories=[],
+        diagnostics_counted=2,
+    )
+
+    output = render_terminal([], {"clean": clean, "bad": bad})
+
+    assert "Project Score:" in output
+    assert "75" in output
+    assert "100" in output
+    assert "Good" in output
+
+
+def test_render_terminal_omits_project_score_for_single_module():
+    score = ScoreResult(
+        overall=100.0, label="Excellent",
+        categories=[],
+        in_scope_categories=[],
+        diagnostics_counted=0,
+    )
+
+    output = render_terminal([], {"clean": score})
+
+    assert "Project Score:" not in output

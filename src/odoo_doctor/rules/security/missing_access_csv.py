@@ -1,5 +1,5 @@
 # src/odoo_doctor/rules/security/missing_access_csv.py
-"""Rule: missing-access-csv [Security, P1]."""
+"""Rule: missing-access-csv [Security, P0]."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 @rule(
     name="missing-access-csv",
     category="Security",
-    tier="P1",
+    tier="P0",
     severity="error",
     default_confidence="high",
     needs_context=True,
@@ -40,7 +40,7 @@ def check_missing_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
                 rule="missing-access-csv",
                 category="Security",
                 severity="error",
-                tier="P1",
+                tier="P0",
                 source="native",
                 confidence="high",
                 title=f"No access rules for model '{model_info.name}'",
@@ -73,7 +73,7 @@ def check_missing_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
                 rule="missing-access-csv",
                 category="Security",
                 severity="error",
-                tier="P1",
+                tier="P0",
                 source="native",
                 confidence="high",
                 title=f"No access rule for model '{model_info.name}'",

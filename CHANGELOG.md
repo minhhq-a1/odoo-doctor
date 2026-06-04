@@ -28,8 +28,8 @@ All notable changes to Odoo Doctor are documented here.
 
 **Rules (10 native)**
 - `raw-sql-string-interpolation` — P0, Security
-- `missing-access-csv` — P1, Security
-- `unknown-model-in-access-csv` — P1, Security (UNKNOWN→finding only for current-module models)
+- `missing-access-csv` — P0, Security
+- `unknown-model-in-access-csv` — P1, Correctness (UNKNOWN→finding only for current-module models)
 - `duplicate-xml-id` — P1, Correctness
 - `view-field-not-in-model` — P1, Correctness
 - `button-method-not-found` — P1, Correctness

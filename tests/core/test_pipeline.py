@@ -7,6 +7,7 @@ from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.pipeline import (
     deduplicate,
+    normalize_diagnostics,
     apply_severity_overrides,
     apply_ignore_filters,
     apply_inline_suppressions,
@@ -25,6 +26,38 @@ def _diag(**overrides) -> Diagnostic:
     )
     defaults.update(overrides)
     return Diagnostic(**defaults)
+
+
+# --- normalize ---
+
+def test_normalize_converts_paths_to_posix_absolute():
+    d = _diag(file_path="models\\sale.py")
+    result = normalize_diagnostics([d])
+    assert result[0].file_path.endswith("/models/sale.py")
+    assert "\\" not in result[0].file_path
+
+
+def test_run_pipeline_normalizes_before_dedup():
+    from pathlib import Path
+
+    file_path = Path("models") / "sale.py"
+    file_path.parent.mkdir()
+    file_path.touch()
+    native = _diag(file_path=str(file_path.resolve()), source="native", message="native")
+    adapter = _diag(file_path=str(file_path), source="ruff", message="adapter")
+    cfg = OdooDoctorConfig()
+
+    try:
+        result_diags, eligible = run_pipeline(
+            [native, adapter], cfg, suppressions=set(), active_rules={"r": None},
+            detected_version="17.0",
+        )
+
+        assert len(result_diags) == 1
+        assert len(eligible) == 1
+    finally:
+        file_path.unlink()
+        file_path.parent.rmdir()
 
 
 # --- deduplicate ---
@@ -91,6 +124,68 @@ def test_ignore_by_file_glob():
     assert len(result) == 0
 
 
+def test_ignore_by_file_glob_with_normalization_models():
+    from pathlib import Path
+    base_dir = Path("/tmp/fake_repo")
+    file_path = base_dir / "models" / "sale.py"
+    d = _diag(file_path=str(file_path))
+    
+    # Test relative pattern like models/*.py with base_path provided
+    cfg = OdooDoctorConfig(ignore_files=["models/*.py"])
+    normalized = normalize_diagnostics([d])
+    result = apply_ignore_filters(normalized, cfg, base_path=base_dir.resolve())
+    assert len(result) == 0
+
+
+def test_ignore_by_file_glob_with_normalization_migrations():
+    from pathlib import Path
+    base_dir = Path("/tmp/fake_repo")
+    file_path = base_dir / "migrations" / "17.0" / "pre.py"
+    d = _diag(file_path=str(file_path))
+    
+    # Test nested glob pattern like migrations/** with base_path
+    cfg = OdooDoctorConfig(ignore_files=["migrations/**"])
+    normalized = normalize_diagnostics([d])
+    result = apply_ignore_filters(normalized, cfg, base_path=base_dir.resolve())
+    assert len(result) == 0
+
+
+def test_run_pipeline_ignores_relative_patterns(tmp_path):
+    # Setup files in tmp_path
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    sale_file = models_dir / "sale.py"
+    sale_file.touch()
+    
+    d = _diag(file_path=str(sale_file))
+    cfg = OdooDoctorConfig(ignore_files=["models/*.py"])
+    
+    result_diags, eligible = run_pipeline(
+        [d], cfg, suppressions=set(), active_rules={"r": None},
+        detected_version="17.0",
+        base_path=tmp_path,
+    )
+    assert len(result_diags) == 0
+
+
+def test_run_pipeline_ignores_migrations_glob(tmp_path):
+    migrations_dir = tmp_path / "migrations" / "17.0"
+    migrations_dir.mkdir(parents=True)
+    pre_file = migrations_dir / "pre.py"
+    pre_file.touch()
+    
+    d = _diag(file_path=str(pre_file))
+    cfg = OdooDoctorConfig(ignore_files=["migrations/**"])
+    
+    result_diags, eligible = run_pipeline(
+        [d], cfg, suppressions=set(), active_rules={"r": None},
+        detected_version="17.0",
+        base_path=tmp_path,
+    )
+    assert len(result_diags) == 0
+
+
+
 # --- inline suppressions ---
 
 def test_inline_suppression_removes_matching():
@@ -105,6 +200,23 @@ def test_inline_suppression_keeps_non_matching():
     suppressions = {("models/sale.py", 10, "other-rule")}
     result = apply_inline_suppressions([d], suppressions)
     assert len(result) == 1
+
+
+def test_run_pipeline_suppression_matches_after_path_normalization(tmp_path):
+    file_path = tmp_path / "models" / "sale.py"
+    file_path.parent.mkdir()
+    file_path.write_text("")
+    d = _diag(file_path=str(file_path), line=10, rule="search-in-loop")
+
+    result_diags, eligible = run_pipeline(
+        [d], OdooDoctorConfig(),
+        suppressions={(str(file_path), 10, "search-in-loop")},
+        active_rules={"search-in-loop": None},
+        detected_version="17.0",
+    )
+
+    assert result_diags == []
+    assert eligible == []
 
 
 # --- version gates ---

@@ -146,6 +146,7 @@ def scan(
     active_rules = default_registry.active_rules_map()
     diags, eligible = run_pipeline(
         all_diags, cfg, suppressions, active_rules, version,
+        base_path=scan_path,
     )
 
     # Determine in-scope categories

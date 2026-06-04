@@ -27,6 +27,9 @@ def test_render_json_valid():
     output = render_json(diags, scores)
     parsed = json.loads(output)
     assert "modules" in parsed
+    assert parsed["project_score"]["overall"] == 75.0
+    assert parsed["project_score"]["label"] == "Good"
+    assert parsed["project_score"]["module_count"] == 1
     assert parsed["modules"]["m"]["score"]["overall"] == 75.0
     assert len(parsed["modules"]["m"]["diagnostics"]) == 1
 
@@ -35,3 +38,18 @@ def test_render_json_empty():
     output = render_json([], {})
     parsed = json.loads(output)
     assert parsed["modules"] == {}
+    assert parsed["project_score"]["overall"] == 100.0
+    assert parsed["project_score"]["label"] == "Excellent"
+    assert parsed["project_score"]["module_count"] == 0
+
+
+def test_render_json_project_score_aggregates_modules():
+    scores = {
+        "clean": ScoreResult(100.0, "Excellent", [], [], 0),
+        "bad": ScoreResult(50.0, "Needs work", [], [], 3),
+    }
+    output = render_json([], scores)
+    parsed = json.loads(output)
+    assert parsed["project_score"]["overall"] == 75.0
+    assert parsed["project_score"]["label"] == "Good"
+    assert parsed["project_score"]["module_count"] == 2

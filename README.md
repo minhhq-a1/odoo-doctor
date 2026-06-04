@@ -36,8 +36,8 @@ odoo-doctor scan . --diff main --json
 | Rule | Tier | Category |
 |------|------|----------|
 | `raw-sql-string-interpolation` | P0 | Security |
-| `missing-access-csv` | P1 | Security |
-| `unknown-model-in-access-csv` | P1 | Security |
+| `missing-access-csv` | P0 | Security |
+| `unknown-model-in-access-csv` | P1 | Correctness |
 | `duplicate-xml-id` | P1 | Correctness |
 | `view-field-not-in-model` | P1 | Correctness |
 | `button-method-not-found` | P1 | Correctness |

@@ -42,4 +42,32 @@ def render_json(
             "diagnostics": [asdict(d) for d in module_diags],
         }
 
-    return json.dumps({"version": "0.1.0", "modules": modules}, indent=2)
+    return json.dumps({
+        "version": "0.1.0",
+        "project_score": _project_score(scores),
+        "modules": modules,
+    }, indent=2)
+
+
+def _project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | int]:
+    """Aggregate module scores for project-level reporting."""
+    module_count = len(scores)
+    if module_count == 0:
+        overall = 100.0
+    else:
+        overall = sum(score.overall for score in scores.values()) / module_count
+    return {
+        "overall": overall,
+        "label": _score_label(overall),
+        "module_count": module_count,
+    }
+
+
+def _score_label(overall: float) -> str:
+    if overall >= 90:
+        return "Excellent"
+    if overall >= 75:
+        return "Good"
+    if overall >= 50:
+        return "Needs work"
+    return "Critical"
