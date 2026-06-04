@@ -163,14 +163,23 @@ def _matches_any_glob(file_path: str, patterns: list[str], base_path: Path | Non
 def apply_inline_suppressions(
     diagnostics: list[Diagnostic], suppressions: Suppressions
 ) -> list[Diagnostic]:
-    """Remove diagnostics covered by inline suppression comments."""
+    """Remove diagnostics covered by inline suppression comments.
+
+    Line 0 is a sentinel for file-wide suppressions: (file, 0, rule) suppresses
+    that rule on every line of the file.
+    """
     normalized_suppressions = {
         (Path(file_path.replace("\\", "/")).resolve().as_posix(), line, rule)
         for file_path, line, rule in suppressions
     }
+    # Pre-compute file-wide suppressions: {(file, rule)} for line==0 entries
+    file_wide = {
+        (fp, rule) for fp, line, rule in normalized_suppressions if line == 0
+    }
     return [
         d for d in diagnostics
         if (d.file_path, d.line, d.rule) not in normalized_suppressions
+        and (d.file_path, d.rule) not in file_wide
     ]
 
 
