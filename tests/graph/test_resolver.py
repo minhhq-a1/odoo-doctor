@@ -110,3 +110,61 @@ def test_golden_rule_unknown_is_not_not_found():
     field_result = r.resolve_field("unknown.model", "any_field")
     assert field_result.status != ResolveResult.NOT_FOUND
     assert field_result.status == ResolveResult.UNKNOWN
+
+
+def test_stubs_cover_spec_required_modules():
+    """Spec requires stubs for: base, web, mail, contacts, product, sale, purchase, stock, account."""
+    stubs = load_stubs("17.0")
+    assert stubs is not None
+
+    # base models
+    assert "res.partner" in stubs.models
+    assert "res.users" in stubs.models
+    assert "res.company" in stubs.models
+    assert "res.groups" in stubs.models
+    assert "res.config.settings" in stubs.models
+    assert "ir.model" in stubs.models
+    assert "ir.model.fields" in stubs.models
+    assert "ir.model.access" in stubs.models
+    assert "ir.rule" in stubs.models
+    assert "ir.actions.act_window" in stubs.models
+    assert "ir.cron" in stubs.models
+    assert "ir.sequence" in stubs.models
+    assert "ir.attachment" in stubs.models
+    assert "ir.ui.view" in stubs.models
+
+    # web
+    assert "ir.http" in stubs.models
+
+    # mail
+    assert "mail.thread" in stubs.models
+    assert "mail.message" in stubs.models
+    assert "mail.activity.mixin" in stubs.models
+    assert "mail.followers" in stubs.models
+
+    # contacts (res.partner already covered above)
+
+    # product
+    assert "product.product" in stubs.models
+    assert "product.template" in stubs.models
+    assert "product.category" in stubs.models
+
+    # sale
+    assert "sale.order" in stubs.models
+    assert "sale.order.line" in stubs.models
+
+    # purchase
+    assert "purchase.order" in stubs.models
+    assert "purchase.order.line" in stubs.models
+
+    # stock
+    assert "stock.picking" in stubs.models
+    assert "stock.move" in stubs.models
+    assert "stock.warehouse" in stubs.models
+    assert "stock.location" in stubs.models
+
+    # account
+    assert "account.move" in stubs.models
+    assert "account.move.line" in stubs.models
+    assert "account.journal" in stubs.models
+    assert "account.account" in stubs.models

@@ -48,6 +48,94 @@
         "ir.ui.view": {
             "fields": ["name", "model", "type", "arch", "inherit_id", "priority", "active"],
             "methods": ["create", "write", "unlink"]
+        },
+        "res.groups": {
+            "fields": ["name", "users", "implied_ids", "category_id", "comment"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "res.config.settings": {
+            "fields": ["company_id"],
+            "methods": ["create", "write", "execute", "set_values", "get_values"]
+        },
+        "ir.model": {
+            "fields": ["name", "model", "state", "field_id", "access_ids", "info"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "ir.model.fields": {
+            "fields": ["name", "model_id", "field_description", "ttype", "relation", "required", "readonly", "store"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "ir.model.access": {
+            "fields": ["name", "model_id", "group_id", "perm_read", "perm_write", "perm_create", "perm_unlink", "active"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "ir.rule": {
+            "fields": ["name", "model_id", "domain_force", "groups", "global", "active"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "ir.actions.act_window": {
+            "fields": ["name", "res_model", "view_mode", "domain", "context", "target", "type"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "ir.cron": {
+            "fields": ["name", "model_id", "state", "code", "interval_number", "interval_type", "numbercall", "active"],
+            "methods": ["create", "write", "unlink", "method_direct_trigger"]
+        },
+        "ir.sequence": {
+            "fields": ["name", "code", "prefix", "suffix", "padding", "number_next", "number_increment", "company_id"],
+            "methods": ["create", "write", "next_by_id", "next_by_code"]
+        },
+        "ir.attachment": {
+            "fields": ["name", "type", "url", "datas", "res_model", "res_id", "mimetype", "file_size"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "ir.http": {
+            "fields": [],
+            "methods": ["_authenticate", "_serve_attachment", "_get_record_and_check"]
+        },
+        "mail.message": {
+            "fields": ["subject", "body", "message_type", "subtype_id", "author_id", "model", "res_id", "date", "partner_ids"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "mail.activity.mixin": {
+            "fields": ["activity_ids", "activity_state", "activity_date_deadline", "activity_summary"],
+            "methods": ["activity_schedule", "activity_feedback", "activity_unlink"]
+        },
+        "mail.followers": {
+            "fields": ["res_model", "res_id", "partner_id", "subtype_ids"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "product.category": {
+            "fields": ["name", "parent_id", "child_id", "complete_name"],
+            "methods": ["name_get", "create", "write"]
+        },
+        "purchase.order.line": {
+            "fields": ["name", "order_id", "product_id", "product_qty", "price_unit", "price_subtotal", "taxes_id", "date_planned"],
+            "methods": ["create", "write", "unlink", "_compute_amount"]
+        },
+        "stock.move": {
+            "fields": ["name", "product_id", "product_uom_qty", "location_id", "location_dest_id", "state", "picking_id", "origin"],
+            "methods": ["create", "write", "unlink", "_action_confirm", "_action_assign", "_action_done"]
+        },
+        "stock.warehouse": {
+            "fields": ["name", "code", "company_id", "lot_stock_id", "view_location_id", "partner_id"],
+            "methods": ["create", "write"]
+        },
+        "stock.location": {
+            "fields": ["name", "complete_name", "usage", "location_id", "company_id", "active"],
+            "methods": ["create", "write"]
+        },
+        "account.move.line": {
+            "fields": ["name", "move_id", "account_id", "partner_id", "debit", "credit", "balance", "amount_currency", "currency_id", "product_id"],
+            "methods": ["create", "write", "unlink"]
+        },
+        "account.journal": {
+            "fields": ["name", "code", "type", "company_id", "default_account_id", "currency_id", "active"],
+            "methods": ["create", "write"]
+        },
+        "account.account": {
+            "fields": ["name", "code", "account_type", "company_id", "currency_id", "deprecated", "reconcile"],
+            "methods": ["create", "write", "name_get"]
         }
     },
     "xml_ids": {
