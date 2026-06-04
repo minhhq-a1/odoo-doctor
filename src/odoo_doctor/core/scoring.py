@@ -20,6 +20,15 @@ class CategoryScore:
     total_impact: float
 
 
+def score_label(overall: float) -> str:
+    if overall >= 90:
+        return "Excellent"
+    if overall >= 75:
+        return "Good"
+    if overall >= 50:
+        return "Needs work"
+    return "Critical"
+
 @dataclass
 class ScoreResult:
     overall: float
@@ -29,13 +38,7 @@ class ScoreResult:
     diagnostics_counted: int
 
     def compute_label(self) -> str:
-        if self.overall >= 90:
-            return "Excellent"
-        if self.overall >= 75:
-            return "Good"
-        if self.overall >= 50:
-            return "Needs work"
-        return "Critical"
+        return score_label(self.overall)
 
 
 def score_diagnostics(

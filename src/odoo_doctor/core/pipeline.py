@@ -113,7 +113,6 @@ def _matches_any_glob(file_path: str, patterns: list[str], base_path: Path | Non
     norm = file_path.replace("\\", "/")
     p = Path(norm)
 
-    # Try to extract a relative path relative to base_path or CWD if absolute
     rel_path_str = None
     if p.is_absolute():
         bases = []
@@ -141,7 +140,7 @@ def _matches_any_glob(file_path: str, patterns: list[str], base_path: Path | Non
             try:
                 if curr_p.match(pat):
                     return True
-            except Exception:
+            except ValueError:
                 pass
             # Handle ** by checking if any sub-path matches
             # e.g. "**/migrations/**" should match "migrations/17.0/pre.py"
@@ -171,8 +170,7 @@ def apply_inline_suppressions(
     }
     return [
         d for d in diagnostics
-        if (Path(d.file_path.replace("\\", "/")).resolve().as_posix(), d.line, d.rule)
-        not in normalized_suppressions
+        if (d.file_path, d.line, d.rule) not in normalized_suppressions
     ]
 
 

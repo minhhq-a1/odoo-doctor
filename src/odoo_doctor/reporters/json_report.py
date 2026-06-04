@@ -7,6 +7,8 @@ import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
+from odoo_doctor.core.scoring import score_label
+
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
     from odoo_doctor.core.scoring import ScoreResult
@@ -58,16 +60,6 @@ def _project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | in
         overall = sum(score.overall for score in scores.values()) / module_count
     return {
         "overall": overall,
-        "label": _score_label(overall),
+        "label": score_label(overall),
         "module_count": module_count,
     }
-
-
-def _score_label(overall: float) -> str:
-    if overall >= 90:
-        return "Excellent"
-    if overall >= 75:
-        return "Good"
-    if overall >= 50:
-        return "Needs work"
-    return "Critical"

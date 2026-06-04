@@ -10,6 +10,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
+from odoo_doctor.core.scoring import score_label
+
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
     from odoo_doctor.core.scoring import ScoreResult
@@ -74,20 +76,10 @@ def render_terminal(
 
     if len(scores) > 1:
         overall = sum(score.overall for score in scores.values()) / len(scores)
-        label = _score_label(overall)
+        label = score_label(overall)
         color = _LABEL_COLORS.get(label, "white")
         console.print(
             f"\n[bold]Project Score:[/bold] [{color}]{overall:.0f}/100 ({label})[/{color}]"
         )
 
     return buf.getvalue()
-
-
-def _score_label(overall: float) -> str:
-    if overall >= 90:
-        return "Excellent"
-    if overall >= 75:
-        return "Good"
-    if overall >= 50:
-        return "Needs work"
-    return "Critical"
