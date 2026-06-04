@@ -44,9 +44,22 @@ def render_json(
             "diagnostics": [asdict(d) for d in module_diags],
         }
 
+    top = sorted(diagnostics, key=lambda d: (d.tier, d.file_path, d.line))[:5]
+
     return json.dumps({
         "version": "0.1.0",
         "project_score": _project_score(scores),
+        "top_findings": [
+            {
+                "module": d.module,
+                "file_path": d.file_path,
+                "line": d.line,
+                "rule": d.rule,
+                "tier": d.tier,
+                "title": d.title,
+            }
+            for d in top
+        ],
         "modules": modules,
     }, indent=2)
 

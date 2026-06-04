@@ -53,3 +53,23 @@ def test_render_json_project_score_aggregates_modules():
     assert parsed["project_score"]["overall"] == 75.0
     assert parsed["project_score"]["label"] == "Good"
     assert parsed["project_score"]["module_count"] == 2
+
+
+def test_render_json_top_findings_multi_module():
+    d1 = _diag(module="mod_a", tier="P0", title="SQL injection")
+    d2 = _diag(module="mod_b", tier="P1", title="Missing access", line=2, rule="r2")
+    scores = {
+        "mod_a": ScoreResult(50.0, "Needs work", [], [], 1),
+        "mod_b": ScoreResult(70.0, "Needs work", [], [], 1),
+    }
+    output = render_json([d1, d2], scores)
+    parsed = json.loads(output)
+    assert "top_findings" in parsed
+    assert len(parsed["top_findings"]) == 2
+    assert parsed["top_findings"][0]["tier"] == "P0"
+
+
+def test_render_json_top_findings_empty():
+    output = render_json([], {})
+    parsed = json.loads(output)
+    assert parsed["top_findings"] == []

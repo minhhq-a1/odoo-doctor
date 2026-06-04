@@ -71,3 +71,22 @@ def test_render_terminal_omits_project_score_for_single_module():
     output = render_terminal([], {"clean": score})
 
     assert "Project Score:" not in output
+
+
+def test_render_terminal_shows_top_findings_multi_module():
+    d1 = _diag(module="mod_a", tier="P0", title="SQL injection in mod_a")
+    d2 = _diag(module="mod_b", tier="P1", title="Missing access in mod_b")
+    scores = {
+        "mod_a": ScoreResult(50.0, "Needs work", [], [], 1),
+        "mod_b": ScoreResult(70.0, "Needs work", [], [], 1),
+    }
+    output = render_terminal([d1, d2], scores)
+    assert "Top Findings" in output
+    assert "SQL injection in mod_a" in output
+
+
+def test_render_terminal_no_top_findings_single_module():
+    d1 = _diag(module="mod_a", tier="P0", title="SQL injection")
+    scores = {"mod_a": ScoreResult(50.0, "Needs work", [], [], 1)}
+    output = render_terminal([d1], scores)
+    assert "Top Findings" not in output

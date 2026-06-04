@@ -74,6 +74,18 @@ def render_terminal(
             console.print(f"      {d.message}")
             console.print(f"      [dim]{d.help}[/dim]")
 
+    # Top findings across project (multi-module only)
+    if len(scores) > 1 and diagnostics:
+        top = sorted(diagnostics, key=lambda d: (d.tier, d.file_path, d.line))[:5]
+        console.print("\n[bold underline]Top Findings[/bold underline]")
+        for d in top:
+            sev_color = "red" if d.severity == "error" else "yellow"
+            console.print(
+                f"  [{sev_color}]{d.tier}[/{sev_color}] "
+                f"[dim]{d.module}[/dim] {d.file_path}:{d.line} "
+                f"[bold]{d.title}[/bold]"
+            )
+
     if len(scores) > 1:
         overall = sum(score.overall for score in scores.values()) / len(scores)
         label = score_label(overall)
