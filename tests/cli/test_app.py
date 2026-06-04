@@ -69,3 +69,15 @@ def test_install(tmp_path: Path, monkeypatch):
     assert (skills_dir / "odoo-doctor" / "SKILL.md").exists()
     assert (skills_dir / "odoo-doctor-explain" / "SKILL.md").exists()
 
+
+def test_scan_warns_on_adapter_crash(tmp_path: Path):
+    """Adapter crash should produce a stderr warning, not silent swallow."""
+    mod = tmp_path / "x_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "X", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}'
+    )
+    (tmp_path / "odoo-doctor.toml").write_text("[adapters]\nruff = false\npylint_odoo = false\n")
+
+    result = runner.invoke(app, ["scan", str(tmp_path)])
+    assert result.exit_code == 0

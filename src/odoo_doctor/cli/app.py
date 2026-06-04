@@ -93,8 +93,11 @@ def scan(
         for ctx in graph.modules.values():
             try:
                 all_diags.extend(func(ctx))
-            except Exception:
-                pass
+            except Exception as exc:
+                typer.echo(
+                    f"[WARN] rule {meta.name} crashed on {ctx.name}: {exc}",
+                    err=True,
+                )
 
     # Run native file-based rules
     for meta, func in default_registry.get_rules(needs_context=False):
@@ -102,10 +105,15 @@ def scan(
             for py_file in ctx.path.rglob("*.py"):
                 if py_file.name.startswith("__"):
                     continue
+                if changed_files is not None and str(py_file.resolve()) not in changed_files:
+                    continue
                 try:
                     all_diags.extend(func(py_file, ctx.name, ctx.odoo_version))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    typer.echo(
+                        f"[WARN] rule {meta.name} crashed on {py_file.name}: {exc}",
+                        err=True,
+                    )
 
     # Run adapters
     adapters = []
@@ -120,12 +128,14 @@ def scan(
         for ctx in graph.modules.values():
             try:
                 all_diags.extend(adapter.run(ctx.path, ctx.odoo_version))
-            except Exception:
-                pass
+            except Exception as exc:
+                typer.echo(
+                    f"[WARN] {adapter.name} adapter crashed on {ctx.name}: {exc}",
+                    err=True,
+                )
 
-    # Filter by changed files if --diff
+    # Filter context-based and adapter diagnostics by changed files if --diff
     if changed_files is not None:
-        # _get_changed_files returns absolute paths rooted at the Git worktree.
         abs_changed = {str(Path(cf).resolve()) for cf in changed_files}
         all_diags = [
             d for d in all_diags
