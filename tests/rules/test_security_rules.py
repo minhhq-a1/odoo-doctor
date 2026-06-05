@@ -118,3 +118,39 @@ def test_unknown_model_in_access_csv_does_not_flag_external_unknown_module(tmp_p
     diags = check_unknown_model_in_access_csv(ctx)
 
     assert diags == []
+
+
+def test_raw_sql_safe_table_interpolation(tmp_path: Path):
+    # self._table in f-string is safe
+    code1 = dedent("""\
+        class M:
+            def init(self):
+                self.env.cr.execute(f"CREATE OR REPLACE VIEW {self._table} AS SELECT * FROM res_partner")
+    """)
+    f1 = tmp_path / "m1.py"
+    f1.write_text(code1)
+    diags1 = check_raw_sql_interpolation(f1, "m1", "17.0")
+    assert diags1 == []
+
+    # cls._table in f-string is safe
+    code2 = dedent("""\
+        class M:
+            @classmethod
+            def init(cls):
+                cls.env.cr.execute(f"CREATE OR REPLACE VIEW {cls._table} AS SELECT * FROM res_partner")
+    """)
+    f2 = tmp_path / "m2.py"
+    f2.write_text(code2)
+    diags2 = check_raw_sql_interpolation(f2, "m2", "17.0")
+    assert diags2 == []
+
+    # Other interpolation in f-string is unsafe
+    code3 = dedent("""\
+        class M:
+            def init(self, user_input):
+                self.env.cr.execute(f"CREATE OR REPLACE VIEW {self._table} WHERE name = {user_input}")
+    """)
+    f3 = tmp_path / "m3.py"
+    f3.write_text(code3)
+    diags3 = check_raw_sql_interpolation(f3, "m3", "17.0")
+    assert len(diags3) == 1

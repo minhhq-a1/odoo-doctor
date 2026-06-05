@@ -65,6 +65,10 @@ class RuffAdapter:
         diags: list[Diagnostic] = []
         for item in raw:
             code = item.get("code", "")
+            filename = item.get("filename", "")
+            if code == "F401" and filename.endswith("__init__.py"):
+                continue
+
             mapping = self._mapping.get(code, _UNMAPPED)
 
             diags.append(Diagnostic(

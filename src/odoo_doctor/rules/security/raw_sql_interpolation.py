@@ -54,7 +54,13 @@ def check_raw_sql_interpolation(
 
         sql_arg = node.args[0]
 
-        if _is_fstring(sql_arg) or _is_percent_format(sql_arg):
+        is_unsafe = False
+        if _is_fstring(sql_arg):
+            is_unsafe = not _is_safe_fstring(sql_arg)
+        elif _is_percent_format(sql_arg):
+            is_unsafe = True
+
+        if is_unsafe:
             diags.append(Diagnostic(
                 module=module_name,
                 file_path=str(file_path),
@@ -77,6 +83,22 @@ def check_raw_sql_interpolation(
 
 def _is_fstring(node: ast.expr) -> bool:
     return isinstance(node, ast.JoinedStr)
+
+
+def _is_safe_fstring(node: ast.JoinedStr) -> bool:
+    """Check if the f-string only interpolates self._table or cls._table."""
+    for val in node.values:
+        if isinstance(val, ast.FormattedValue):
+            expr = val.value
+            if not isinstance(expr, ast.Attribute):
+                return False
+            if not isinstance(expr.value, ast.Name):
+                return False
+            if expr.value.id not in {"self", "cls"}:
+                return False
+            if expr.attr != "_table":
+                return False
+    return True
 
 
 def _is_percent_format(node: ast.expr) -> bool:

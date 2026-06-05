@@ -41,3 +41,17 @@ def test_ruff_adapter_unmapped_rule():
     assert diags[0].category == "Uncategorized"
     assert diags[0].tier == "P3"
     assert diags[0].confidence == "low"
+
+
+def test_ruff_adapter_filters_f401_in_init():
+    adapter = RuffAdapter()
+    raw = [
+        {"code": "F401", "message": "unused import", "filename": "__init__.py",
+         "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 1}},
+        {"code": "F401", "message": "unused import", "filename": "models/res_partner.py",
+         "location": {"row": 5, "column": 1}, "end_location": {"row": 5, "column": 1}},
+    ]
+    diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
+    # F401 in __init__.py is filtered out, but the one in res_partner.py is kept
+    assert len(diags) == 1
+    assert diags[0].file_path == "models/res_partner.py"
