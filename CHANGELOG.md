@@ -4,6 +4,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- `missing-xml-ref` now reports missing local/current-module XML references, including view `inherit_id` refs.
+- `--diff` now preserves module context diagnostics when any file in that module changed, preventing missed findings such as missing ACLs after adding a model.
+- `--fail-on` now treats the selected severity as a threshold, so `--fail-on warning` also fails on errors.
+
+---
+
 ## [0.1.0] — 2026-06-03
 
 ### Added

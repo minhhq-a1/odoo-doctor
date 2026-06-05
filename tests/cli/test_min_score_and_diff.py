@@ -84,11 +84,11 @@ def test_diff_filters_by_absolute_path(tmp_path: Path, bad_addon: Path):
 
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    # All diags must come from the changed file
+    # File-based diags come from the changed file; context diags for the changed module are retained.
     bad_diags = parsed["modules"].get("bad_addon", {}).get("diagnostics", [])
     assert bad_diags
     for d in bad_diags:
-        assert "bad_model.py" in d["file_path"], f"Unexpected file in diff: {d['file_path']}"
+        assert "bad_model.py" in d["file_path"] or d["rule"] != "raw-sql-string-interpolation"
 
 
 def test_diff_filters_when_scan_path_is_not_repo_root(bad_addon: Path):
@@ -106,7 +106,12 @@ def test_diff_filters_when_scan_path_is_not_repo_root(bad_addon: Path):
     parsed = json.loads(result.stdout)
     bad_diags = parsed["modules"].get("bad_addon", {}).get("diagnostics", [])
     assert bad_diags
-    assert all(Path(d["file_path"]).resolve() == changed_file.resolve() for d in bad_diags)
+    assert any(Path(d["file_path"]).resolve() == changed_file.resolve() for d in bad_diags)
+    assert all(
+        Path(d["file_path"]).resolve() == changed_file.resolve()
+        or d["rule"] != "raw-sql-string-interpolation"
+        for d in bad_diags
+    )
 
 
 def test_diff_empty_changed_files_returns_no_diags(bad_addon: Path):
@@ -125,3 +130,30 @@ def test_diff_empty_changed_files_returns_no_diags(bad_addon: Path):
         for d in mod["diagnostics"]
     ]
     assert all_diags == []
+
+def test_diff_keeps_context_diagnostics_for_changed_module(tmp_path: Path):
+    """Changing a model file should keep context findings such as missing ACLs."""
+    mod = tmp_path / "acl_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "ACL Mod", "version": "17.0.1.0.0", "depends": ["base"], '
+        '"data": [], "license": "LGPL-3"}'
+    )
+    models_dir = mod / "models"
+    models_dir.mkdir()
+    model_file = models_dir / "m.py"
+    model_file.write_text(
+        'from odoo import models\nclass M(models.Model):\n    _name = "acl.mod"\n'
+    )
+
+    with patch("odoo_doctor.cli.app._get_changed_files", return_value={str(model_file)}):
+        result = runner.invoke(app, [
+            "scan", str(tmp_path),
+            "--diff", "main",
+            "--json",
+        ])
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    diags = parsed["modules"]["acl_mod"]["diagnostics"]
+    assert any(d["rule"] == "missing-access-csv" for d in diags)

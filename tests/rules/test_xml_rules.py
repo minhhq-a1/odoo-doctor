@@ -92,3 +92,51 @@ def test_button_method_found_in_model(tmp_path: Path):
     ctx = graph.modules["good_btn"]
     diags = check_button_method_not_found(ctx)
     assert diags == []
+
+def test_missing_xml_ref_reports_local_missing_ref(tmp_path: Path):
+    """A ref to the current module is provably missing after local XML parsing."""
+    mod = tmp_path / "bad_ref"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "Bad Ref", "depends": [], "data": ["views/views.xml"], "license": "LGPL-3"}'
+    )
+    views_dir = mod / "views"
+    views_dir.mkdir()
+    (views_dir / "views.xml").write_text("""\
+<odoo>
+  <record id="action_x" model="ir.actions.act_window">
+    <field name="view_id" ref="missing_view"/>
+  </record>
+</odoo>
+""")
+
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["bad_ref"]
+    diags = check_missing_xml_ref(ctx)
+    assert len(diags) == 1
+    assert diags[0].rule == "missing-xml-ref"
+
+def test_missing_xml_ref_reports_local_missing_inherit_id(tmp_path: Path):
+    """A view inheriting a missing current-module view should be reported."""
+    mod = tmp_path / "bad_inherit"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "Bad Inherit", "depends": [], "data": ["views/views.xml"], "license": "LGPL-3"}'
+    )
+    views_dir = mod / "views"
+    views_dir.mkdir()
+    (views_dir / "views.xml").write_text("""\
+<odoo>
+  <record id="view_child" model="ir.ui.view">
+    <field name="model">res.partner</field>
+    <field name="inherit_id" ref="missing_parent"/>
+    <field name="arch" type="xml"><form/></field>
+  </record>
+</odoo>
+""")
+
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["bad_inherit"]
+    diags = check_missing_xml_ref(ctx)
+    assert len(diags) == 1
+    assert diags[0].title.startswith("Unresolved inherit_id")

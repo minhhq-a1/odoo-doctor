@@ -87,12 +87,15 @@ def scan(
 
     # Collect all diagnostics
     all_diags: list[Diagnostic] = []
+    context_diags: list[Diagnostic] = []
 
     # Run native context-based rules
     for meta, func in default_registry.get_rules(needs_context=True):
         for ctx in graph.modules.values():
             try:
-                all_diags.extend(func(ctx))
+                produced = func(ctx)
+                context_diags.extend(produced)
+                all_diags.extend(produced)
             except Exception as exc:
                 typer.echo(
                     f"[WARN] rule {meta.name} crashed on {ctx.name}: {exc}",
@@ -137,9 +140,16 @@ def scan(
     # Filter context-based and adapter diagnostics by changed files if --diff
     if changed_files is not None:
         abs_changed = {str(Path(cf).resolve()) for cf in changed_files}
+        changed_modules = {
+            name
+            for name, ctx in graph.modules.items()
+            if any(_path_is_relative_to(Path(cf), ctx.path) for cf in abs_changed)
+        }
+        context_diag_ids = {id(d) for d in context_diags}
         all_diags = [
             d for d in all_diags
             if str(Path(d.file_path).resolve()) in abs_changed
+            or (id(d) in context_diag_ids and d.module in changed_modules)
         ]
 
     # Collect suppressions
@@ -181,7 +191,7 @@ def scan(
 
     # Fail on severity
     if fail_on:
-        if any(d.severity == fail_on for d in diags):
+        if _has_severity_at_or_above(diags, fail_on):
             raise typer.Exit(code=1)
 
     # Fail on min_score: CLI flag overrides config value
@@ -319,6 +329,19 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str]:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return set()
 
+def _path_is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.resolve().relative_to(base.resolve())
+        return True
+    except ValueError:
+        return False
+
+def _has_severity_at_or_above(diagnostics: list[Diagnostic], threshold: str) -> bool:
+    ranks = {"info": 1, "warning": 2, "error": 3}
+    threshold_rank = ranks.get(threshold)
+    if threshold_rank is None:
+        return False
+    return any(ranks.get(d.severity, 0) >= threshold_rank for d in diagnostics)
 
 def _in_scope_categories(
     active_rules: dict[str, str | None],

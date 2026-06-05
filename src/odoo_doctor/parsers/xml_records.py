@@ -60,6 +60,8 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
 
         # Collect ref attributes
         for child in elem.iter():
+            if child.tag == "field" and child.get("name") == "inherit_id":
+                continue  # View inherit_id is handled with view context.
             ref = child.get("ref")
             if ref:
                 refs.append(ref)

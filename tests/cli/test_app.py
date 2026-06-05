@@ -81,3 +81,8 @@ def test_scan_warns_on_adapter_crash(tmp_path: Path):
 
     result = runner.invoke(app, ["scan", str(tmp_path)])
     assert result.exit_code == 0
+
+def test_fail_on_warning_fails_for_errors(bad_addon: Path):
+    """--fail-on warning means warning or anything more severe."""
+    result = runner.invoke(app, ["scan", str(bad_addon.parent), "--fail-on", "warning"])
+    assert result.exit_code == 1
