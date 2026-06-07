@@ -34,3 +34,27 @@ def test_parse_minimal_manifest(tmp_path: Path):
 def test_parse_missing_manifest(tmp_path: Path):
     result = parse_manifest(tmp_path)
     assert result is None
+
+
+def test_parse_manifest_tolerates_non_utf8(tmp_path):
+    from odoo_doctor.parsers.manifest import parse_manifest
+
+    addon = tmp_path / "mod"
+    addon.mkdir()
+    # 0xE9 byte in the manifest → strict-UTF-8 read would raise UnicodeDecodeError
+    (addon / "__manifest__.py").write_bytes(b"{'name': '\xe9'}\n")
+    result = parse_manifest(addon)
+    # errors="replace" lets literal_eval still parse the dict; no crash
+    assert result is not None
+
+
+def test_parse_manifest_tolerates_pathological_nesting(tmp_path):
+    from odoo_doctor.parsers.manifest import parse_manifest
+
+    addon = tmp_path / "mod"
+    addon.mkdir()
+    deep = "[" * 1000 + "]" * 1000
+    (addon / "__manifest__.py").write_text("{'data': " + deep + "}")
+    # Deeply nested literal blows the parser stack → RecursionError, must be caught
+    assert parse_manifest(addon) is None
+

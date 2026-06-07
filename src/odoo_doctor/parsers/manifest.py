@@ -7,6 +7,9 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from odoo_doctor.core.source import read_source
+
+
 
 @dataclass
 class ManifestData:
@@ -25,9 +28,12 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
     if not manifest_file.exists():
         return None
 
+    source = read_source(manifest_file)
+    if source is None:
+        return None
     try:
-        raw = ast.literal_eval(manifest_file.read_text())
-    except (SyntaxError, ValueError):
+        raw = ast.literal_eval(source)
+    except (SyntaxError, ValueError, RecursionError):
         return None
 
     if not isinstance(raw, dict):

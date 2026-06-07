@@ -31,3 +31,15 @@ def test_discover_skips_non_installable(tmp_path: Path):
     (mod / "__manifest__.py").write_text('{"name": "Disabled", "installable": False}')
     addons = discover_addons([tmp_path])
     assert len(addons) == 0
+
+
+def test_discover_addons_tolerates_non_utf8_manifest(tmp_path):
+    from odoo_doctor.discovery.addons import discover_addons
+
+    addon = tmp_path / "mod"
+    addon.mkdir()
+    (addon / "__manifest__.py").write_bytes(b"{'name': '\xe9', 'installable': True}\n")
+    # Must not raise; the addon is discovered (replaced char) rather than crashing
+    result = discover_addons([tmp_path])
+    assert len(result) == 1
+

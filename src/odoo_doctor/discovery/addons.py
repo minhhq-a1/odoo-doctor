@@ -7,6 +7,9 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
+from odoo_doctor.core.source import read_source
+
+
 
 @dataclass
 class AddonInfo:
@@ -47,9 +50,12 @@ def _try_add(
     target_modules: list[str] | None,
     out: list[AddonInfo],
 ) -> None:
+    source = read_source(manifest_file)
+    if source is None:
+        return
     try:
-        manifest = ast.literal_eval(manifest_file.read_text())
-    except (SyntaxError, ValueError):
+        manifest = ast.literal_eval(source)
+    except (SyntaxError, ValueError, RecursionError):
         return
 
     if not isinstance(manifest, dict):
