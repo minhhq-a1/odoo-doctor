@@ -78,7 +78,14 @@ class RuffAdapter:
                 "Ruff JSON output did not match the expected list schema.",
             )]
 
-        return self._parse_output(raw, module_name=module_path.name, odoo_version=odoo_version)
+        diags = self._parse_output(raw, module_name=module_path.name, odoo_version=odoo_version)
+        if result.returncode != 0 and not diags:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "process error",
+                f"Ruff exited with status {result.returncode} but produced no findings; "
+                "the run may have failed (configuration or internal error).",
+            )]
+        return diags
 
     def _parse_output(
         self, raw: list[dict], module_name: str, odoo_version: str
