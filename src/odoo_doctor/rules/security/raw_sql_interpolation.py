@@ -6,6 +6,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from odoo_doctor.core.source import read_source
+
+
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
 
@@ -26,9 +29,12 @@ def check_raw_sql_interpolation(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
     """Find cr.execute() calls with dynamically interpolated SQL strings."""
+    source = read_source(file_path)
+    if source is None:
+        return []
     try:
-        tree = ast.parse(file_path.read_text())
-    except (SyntaxError, OSError):
+        tree = ast.parse(source)
+    except SyntaxError:
         return []
 
     visitor = _RawSqlVisitor(file_path, module_name, odoo_version)
