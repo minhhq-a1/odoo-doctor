@@ -299,7 +299,7 @@ def build_stubs_from_rpc(
     # Filter empty models
     result_models = {k: v for k, v in result_models.items() if v["fields"] or v["methods"]}
 
-    return {"version": version, "models": result_models, "xml_ids": xml_ids}
+    return {"version": version, "complete": True, "models": result_models, "xml_ids": xml_ids}
 
 
 # ─── CLI ───────────────────────────────────────────────────────────────────
@@ -338,7 +338,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Parsing Odoo source at {odoo_path} for version {args.version}...")
         models = parse_odoo_source(odoo_path)
         xml_ids = parse_odoo_xml_ids(odoo_path)
-        data = {"version": args.version, "models": models, "xml_ids": xml_ids}
+        data = {"version": args.version, "complete": True, "models": models, "xml_ids": xml_ids}
 
     elif args.mode == "rpc":
         data = build_stubs_from_rpc(

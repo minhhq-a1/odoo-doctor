@@ -139,16 +139,28 @@ def _extract_arch_refs(
     field_refs: list[str],
     button_methods: list[str],
 ) -> None:
-    """Walk arch XML to find <field name="..."> and <button name="..." type="object">."""
-    for elem in arch_elem.iter():
-        if elem is arch_elem:
-            continue  # Skip the arch element itself (it IS the <field name="arch"> tag)
-        if elem.tag == "field":
-            name = elem.get("name")
-            if name and name not in field_refs:
-                field_refs.append(name)
-        elif elem.tag == "button":
-            btn_name = elem.get("name")
-            btn_type = elem.get("type")
-            if btn_name and btn_type == "object" and btn_name not in button_methods:
-                button_methods.append(btn_name)
+    """Walk arch XML for <field name="..."> and <button ... type="object">.
+
+    A <field>/<button> nested inside another <field> belongs to a related
+    comodel (inline subview), not to this view's model, so it is not attributed
+    here. (Spec A5: never check a field against the wrong model.)
+    """
+    def walk(elem: etree._Element, inside_field: bool) -> None:
+        for child in elem:
+            if child.tag == "field":
+                if not inside_field:
+                    name = child.get("name")
+                    if name and name not in field_refs:
+                        field_refs.append(name)
+                walk(child, True)
+            elif child.tag == "button":
+                if not inside_field:
+                    btn_name = child.get("name")
+                    btn_type = child.get("type")
+                    if btn_name and btn_type == "object" and btn_name not in button_methods:
+                        button_methods.append(btn_name)
+                walk(child, inside_field)
+            else:
+                walk(child, inside_field)
+
+    walk(arch_elem, False)

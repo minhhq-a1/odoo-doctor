@@ -57,6 +57,8 @@ def build_project_graph(
     module_data: dict[str, dict] = {}
     # Fields extended via _inherit on stub-known models (e.g. custom_note on sale.order)
     _inherit_extensions: dict[str, dict] = {}
+    # Methods extended via _inherit on stub-known models (e.g. action_foo on sale.order)
+    _inherit_method_extensions: dict[str, dict] = {}
 
     for addon in addons:
         manifest = parse_manifest(addon.path)
@@ -120,6 +122,10 @@ def build_project_graph(
                 if key not in _inherit_extensions:
                     _inherit_extensions[key] = {}
                 _inherit_extensions[key].update(m.fields)
+            if m.name is None and m.methods:
+                if key not in _inherit_method_extensions:
+                    _inherit_method_extensions[key] = {}
+                _inherit_method_extensions[key].update(m.methods)
 
         all_xml_ids.update(xml_ids)
 
@@ -140,6 +146,7 @@ def build_project_graph(
     # WITHOUT treating the inherited model itself as a repo-defined model (which would
     # break the missing-dependency rule's source='stub' check).
     extended_fields: dict[str, dict] = _inherit_extensions
+    extended_methods: dict[str, dict] = _inherit_method_extensions
 
     # Use the detected module version for stubs when CLI/config did not provide one.
     resolver_version = odoo_version
@@ -158,6 +165,7 @@ def build_project_graph(
         stub_version=resolver_version,
         source_path=odoo_source_path,
         extended_fields=extended_fields,
+        extended_methods=extended_methods,
     )
 
     # Build per-module contexts
