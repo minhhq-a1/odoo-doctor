@@ -6,6 +6,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from odoo_doctor.core.source import read_source
+
+
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
 
@@ -26,10 +29,12 @@ def check_search_in_loop(
 ) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
 
+    source = read_source(file_path)
+    if source is None:
+        return []
     try:
-        source = file_path.read_text()
         tree = ast.parse(source)
-    except (SyntaxError, OSError):
+    except SyntaxError:
         return []
 
     _walk_for_loops(tree, diags, file_path, module_name, odoo_version)
