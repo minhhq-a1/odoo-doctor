@@ -140,3 +140,28 @@ def test_missing_xml_ref_reports_local_missing_inherit_id(tmp_path: Path):
     diags = check_missing_xml_ref(ctx)
     assert len(diags) == 1
     assert diags[0].title.startswith("Unresolved inherit_id")
+
+
+def test_missing_xml_ref_eval(tmp_path: Path):
+    mod = tmp_path / "bad_eval_ref"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "Bad Eval Ref", "depends": [], "data": ["views/views.xml"], "license": "LGPL-3"}'
+    )
+    views_dir = mod / "views"
+    views_dir.mkdir()
+    (views_dir / "views.xml").write_text("""\
+<odoo>
+  <record id="group_x" model="res.groups">
+    <field name="implied_ids" eval="[(4, ref('missing_local')), (4, ref('sale.group_sale_manager'))]"/>
+  </record>
+</odoo>
+""")
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["bad_eval_ref"]
+    diags = check_missing_xml_ref(ctx)
+    # missing_local is a local missing ref -> should be flagged
+    # sale.group_sale_manager is external unknown -> should NOT be flagged
+    assert len(diags) == 1
+    assert "missing_local" in diags[0].message
+    assert "sale.group_sale_manager" not in diags[0].message

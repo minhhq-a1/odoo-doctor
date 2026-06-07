@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.table import Table
-from rich.text import Text
 
 from odoo_doctor.core.scoring import score_label
 

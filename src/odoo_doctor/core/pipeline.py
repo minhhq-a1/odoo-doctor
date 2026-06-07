@@ -12,6 +12,7 @@ from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 
 if TYPE_CHECKING:
     from odoo_doctor.core.config import OdooDoctorConfig
+    from odoo_doctor.rules.registry import RuleMeta
 
 
 # Type aliases
@@ -35,6 +36,25 @@ def _version_gte(detected: str, minimum: str) -> bool:
         return False
 
 
+def derive_capabilities(detected_version: str, configured: list[str]) -> set[str]:
+    """Derive full capability set from configured list and detected version."""
+    caps = set(configured)
+    if detected_version and detected_version != "unknown":
+        caps.add(f"odoo:{detected_version.split('.')[0]}")
+    return caps
+
+
+def rule_is_enabled(meta: RuleMeta, detected_version: str, capabilities: set[str]) -> bool:
+    """Return True if the rule is enabled based on version and capabilities."""
+    if meta.min_version and not _version_gte(detected_version, meta.min_version):
+        return False
+    if not meta.requires_capabilities <= capabilities:
+        return False
+    if meta.excludes_capabilities & capabilities:
+        return False
+    return True
+
+
 # --- Stage 1: Normalize ---
 
 def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
@@ -49,7 +69,7 @@ def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
 # --- Stage 2: Deduplicate ---
 
 def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
-    """Group by (module, file_path, line, category). Keep highest confidence,
+    """Group by (module, file_path, line, category, rule). Keep highest confidence,
     then prefer native source, then longest message.
     Two diagnostics with different rules are always distinct."""
     groups: dict[tuple[str, str, int, str, str], list[Diagnostic]] = {}
@@ -201,6 +221,25 @@ def apply_version_gates(
     return result
 
 
+def apply_capability_gates(
+    diagnostics: list[Diagnostic],
+    config: OdooDoctorConfig,
+    detected_version: str,
+) -> list[Diagnostic]:
+    """Remove diagnostics whose rules are gated out by capabilities/versions."""
+    from odoo_doctor.rules.registry import default_registry
+    derived_caps = derive_capabilities(detected_version, config.capabilities)
+    result: list[Diagnostic] = []
+    for d in diagnostics:
+        meta_func = default_registry.get(d.rule)
+        if meta_func is not None:
+            meta, _ = meta_func
+            if not rule_is_enabled(meta, detected_version, derived_caps):
+                continue
+        result.append(d)
+    return result
+
+
 # --- Stage 7: Score eligibility ---
 
 def mark_score_eligibility(
@@ -232,5 +271,6 @@ def run_pipeline(
     diags = apply_ignore_filters(diags, config, base_path=base_path)
     diags = apply_inline_suppressions(diags, suppressions)
     diags = apply_version_gates(diags, active_rules, detected_version)
+    diags = apply_capability_gates(diags, config, detected_version)
     eligible = mark_score_eligibility(diags)
     return diags, eligible

@@ -31,7 +31,24 @@ def test_scan_nonexistent_path():
     assert result.exit_code == 0  # no addons found, but doesn't crash
 
 
-def test_scan_uses_config_addons_paths(tmp_path: Path):
+def test_scan_uses_config_addons_paths_when_path_omitted(tmp_path: Path, monkeypatch):
+    addons = tmp_path / "addons"
+    addons.mkdir()
+    mod = addons / "x_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "X", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}'
+    )
+    (tmp_path / "odoo-doctor.toml").write_text('[odoo-doctor]\naddons_paths = ["addons"]\n')
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["scan", "--json"])
+    assert result.exit_code == 0
+    import json
+    parsed = json.loads(result.stdout)
+    assert "x_mod" in parsed["modules"]
+
+
+def test_scan_explicit_path_ignores_config_addons_paths(tmp_path: Path):
     addons = tmp_path / "addons"
     addons.mkdir()
     mod = addons / "x_mod"
@@ -44,7 +61,7 @@ def test_scan_uses_config_addons_paths(tmp_path: Path):
     assert result.exit_code == 0
     import json
     parsed = json.loads(result.stdout)
-    assert "x_mod" in parsed["modules"]
+    assert parsed["modules"] == {}
 
 
 def test_rules_list():

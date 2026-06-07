@@ -24,7 +24,6 @@ import ast
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 from collections import defaultdict
 
 
@@ -271,23 +270,6 @@ def build_stubs_from_rpc(
         result_models[model_name] = {"fields": [], "methods": []}
 
     print(f"Found {len(ir_models)} models. Fetching fields...")
-    ir_fields = call(
-        "ir.model.fields", "search_read",
-        [[("store", "=", True), ("ttype", "not in", ["one2many"])]],
-        fields=["model_id", "name", "ttype"],
-        limit=0,
-    )
-
-    for ir_f in ir_fields:
-        model_name_pair = ir_f.get("model_id")
-        if not model_name_pair:
-            continue
-        # model_id is [id, display_name] — we need the actual model technical name
-        # Fetch via a join isn't possible directly, so we stored model names above
-        # Use the already-known models list
-        field_name = ir_f["name"]
-        # We need to find the model technical name; ir.model.fields has model field
-    
     # Better approach: fetch fields per model in one batch call
     ir_fields2 = call(
         "ir.model.fields", "search_read",

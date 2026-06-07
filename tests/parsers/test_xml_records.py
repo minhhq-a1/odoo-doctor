@@ -7,8 +7,6 @@ from pathlib import Path
 from textwrap import dedent
 
 from odoo_doctor.parsers.xml_records import (
-    ViewInfo,
-    XmlIdInfo,
     parse_views,
     parse_xml_records,
 )
@@ -76,3 +74,21 @@ def test_ref_extraction(tmp_path: Path):
     records = parse_xml_records(f, module_name="mymod")
     assert records[0].xml_id == "mymod.rec1"
     assert records[0].model == "ir.actions.act_window"
+
+
+def test_eval_ref_extraction(tmp_path: Path):
+    xml = dedent("""\
+        <?xml version="1.0"?>
+        <odoo>
+            <record id="rec1" model="res.groups">
+                <field name="implied_ids" eval="[(4, ref('sale.group_sale_manager')), (4, ref('missing_local')), (4, ref('sale.view.order.form'))]"/>
+            </record>
+        </odoo>
+    """)
+    f = tmp_path / "data.xml"
+    f.write_text(xml)
+    records = parse_xml_records(f, module_name="mymod")
+    assert len(records) == 1
+    assert "sale.group_sale_manager" in records[0].refs
+    assert "missing_local" in records[0].refs
+    assert "sale.view.order.form" in records[0].refs

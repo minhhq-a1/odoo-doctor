@@ -7,10 +7,6 @@ from pathlib import Path
 from textwrap import dedent
 
 from odoo_doctor.parsers.python_models import (
-    ControllerInfo,
-    FieldInfo,
-    MethodInfo,
-    ModelInfo,
     parse_controllers,
     parse_models,
 )

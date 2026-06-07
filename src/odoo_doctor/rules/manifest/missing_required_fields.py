@@ -11,7 +11,7 @@ from odoo_doctor.rules.registry import rule
 if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
 
-_REQUIRED_FIELDS = ["name", "version", "depends", "license"]
+_REQUIRED_FIELDS = ["name", "version", "depends", "data", "installable", "license"]
 
 
 @rule(

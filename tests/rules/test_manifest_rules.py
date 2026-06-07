@@ -27,8 +27,8 @@ def test_missing_required_fields_catches(tmp_path: Path):
     diags = check_missing_required_fields(ctx)
     rule_names = [d.rule for d in diags]
     assert all(r == "manifest-missing-required-fields" for r in rule_names)
-    # Should flag: version, depends, license (name is present)
-    assert len(diags) >= 2
+    missing = {d.title.rsplit(": ", 1)[-1].strip("'") for d in diags}
+    assert missing == {"version", "depends", "data", "installable", "license"}
 
 
 def test_missing_dependency_catches_sale(tmp_path: Path):
@@ -72,3 +72,37 @@ def test_missing_dependency_clean_when_sale_in_depends(tmp_path: Path):
     ctx = graph.modules["ok_dep"]
     diags = check_missing_dependency(ctx)
     assert diags == []
+
+
+def test_missing_dependency_from_xml_ref(tmp_path: Path):
+    from odoo_doctor.rules.manifest.missing_dependency import check_missing_dependency
+    mod = tmp_path / "xml_dep"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "XML Dep", "version": "17.0.1.0.0", "depends": ["base"], "data": ["views.xml"], "license": "LGPL-3"}'
+    )
+    (mod / "views.xml").write_text(dedent("""\
+        <odoo>
+            <record id="view_test" model="ir.ui.view">
+                <field name="name">test</field>
+                <field name="model">sale.order</field>
+                <field name="inherit_id" ref="sale.view_order_form"/>
+            </record>
+            <record id="another_test" model="ir.ui.view">
+                <field name="name">another</field>
+                <!-- direct ref to sale -->
+                <field name="model" ref="sale.model_sale_order"/>
+            </record>
+        </odoo>
+    """))
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["xml_dep"]
+    diags = check_missing_dependency(ctx)
+    # Check that 'sale' is detected as missing
+    diag_rules = [d.rule for d in diags]
+    assert "manifest-missing-dependency" in diag_rules
+    # Verify aggregation
+    diag_sale = [d for d in diags if d.rule == "manifest-missing-dependency" and "sale" in d.message]
+    assert len(diag_sale) == 1
+    assert "sale.view_order_form" in diag_sale[0].message
+    assert "sale.model_sale_order" in diag_sale[0].message

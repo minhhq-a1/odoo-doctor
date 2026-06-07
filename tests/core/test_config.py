@@ -31,6 +31,7 @@ def test_load_config_from_toml(tmp_path: Path):
         addons_paths = ["addons"]
         min_score = 60
         odoo_source_path = "/opt/odoo/src"
+        capabilities = ["enterprise", "owl"]
 
         [adapters]
         ruff = true
@@ -57,7 +58,9 @@ def test_load_config_from_toml(tmp_path: Path):
     assert cfg.addons_paths == ["addons"]
     assert cfg.min_score == 60
     assert cfg.odoo_source_path == "/opt/odoo/src"
+    assert cfg.capabilities == ["enterprise", "owl"]
     assert cfg.adapters["pylint_odoo"] is False
+    assert cfg.explicit_adapters == {"ruff", "pylint_odoo", "oca"}
     assert cfg.severity_overrides == {"search-in-loop": "warning"}
     assert cfg.ignore_rules == ["deprecated-api"]
     assert cfg.ignore_files == ["**/migrations/**"]

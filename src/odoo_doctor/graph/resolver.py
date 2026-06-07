@@ -8,15 +8,16 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from odoo_doctor.graph.stubs.loader import load_stubs
+from odoo_doctor.graph.source_index import build_source_index
 
 if TYPE_CHECKING:
     from odoo_doctor.parsers.python_models import ModelInfo
-    from odoo_doctor.parsers.xml_records import XmlIdInfo
 
 
 class ResolveResult(Enum):
     FOUND = "found"
     NOT_FOUND = "not_found"
+    LOCAL_NOT_FOUND = "local_not_found"
     UNKNOWN = "unknown"
 
 
@@ -24,6 +25,18 @@ class ResolveResult(Enum):
 class SymbolLookup:
     status: ResolveResult
     source: str | None = None  # "repo" | "stub" | "source_path"
+
+
+_MODEL_OWNER_OVERRIDES = {
+    "sale.order": "sale",
+    "sale.order.line": "sale",
+    "purchase.order": "purchase",
+    "stock.picking": "stock",
+    "account.move": "account",
+    "product.template": "product",
+    "product.product": "product",
+    "mail.thread": "mail",
+}
 
 
 class SymbolResolver:
@@ -47,7 +60,7 @@ class SymbolResolver:
         # extended_fields: {model_name: {field_name: FieldInfo}} from _inherit-only extensions
         # These are fields added to stub-known models (e.g. custom_note on sale.order)
         self._extended_fields: dict[str, dict] = extended_fields or {}
-        # TODO: Phase for source_path parsing (post-MVP enhancement)
+        self._source_index = build_source_index(source_path)
 
     def resolve_model(self, model_name: str) -> SymbolLookup:
         # 1. Repo
@@ -58,9 +71,30 @@ class SymbolResolver:
         if self._stubs and model_name in self._stubs.models:
             return SymbolLookup(ResolveResult.FOUND, "stub")
 
-        # 3. Source path (TODO: implement for post-MVP)
+        # 3. Source path
+        if self._source_index and model_name in self._source_index.model_owners:
+            return SymbolLookup(ResolveResult.FOUND, "source_path")
 
         # 4. Unknown — we can't say it doesn't exist
+        return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def owner_module_for_model(self, model_name: str) -> SymbolLookup:
+        # 1. Repo
+        if model_name in self._repo_models:
+            model_info = self._repo_models[model_name]
+            if model_info.module:
+                return SymbolLookup(ResolveResult.FOUND, model_info.module)
+
+        # 2. Source index
+        if hasattr(self, "_source_index") and self._source_index:
+            owner = self._source_index.model_owners.get(model_name)
+            if owner:
+                return SymbolLookup(ResolveResult.FOUND, owner)
+
+        # 3. Fallback overrides
+        if model_name in _MODEL_OWNER_OVERRIDES:
+            return SymbolLookup(ResolveResult.FOUND, _MODEL_OWNER_OVERRIDES[model_name])
+
         return SymbolLookup(ResolveResult.UNKNOWN)
 
     def resolve_field(self, model_name: str, field_name: str) -> SymbolLookup:
@@ -128,3 +162,11 @@ class SymbolResolver:
 
         # XML IDs are module-scoped; we can't prove absence without full knowledge
         return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def resolve_xml_id_for_module(self, xml_id: str, current_module: str) -> SymbolLookup:
+        lookup = self.resolve_xml_id(xml_id)
+        if lookup.status != ResolveResult.UNKNOWN:
+            return lookup
+        if "." not in xml_id or xml_id.split(".", 1)[0] == current_module:
+            return SymbolLookup(ResolveResult.LOCAL_NOT_FOUND)
+        return lookup

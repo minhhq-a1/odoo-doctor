@@ -25,10 +25,12 @@ class OdooDoctorConfig:
     target_modules: list[str] = field(default_factory=list)
     odoo_source_path: str = ""
     min_score: int = 0
+    capabilities: list[str] = field(default_factory=list)
 
     adapters: dict[str, bool] = field(
         default_factory=lambda: {"ruff": True, "pylint_odoo": True, "oca": False}
     )
+    explicit_adapters: set[str] = field(default_factory=set)
 
     severity_overrides: dict[str, str] = field(default_factory=dict)
     ignore_rules: list[str] = field(default_factory=list)
@@ -106,7 +108,9 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
         target_modules=main.get("target_modules", defaults.target_modules),
         odoo_source_path=main.get("odoo_source_path", defaults.odoo_source_path),
         min_score=main.get("min_score", defaults.min_score),
+        capabilities=main.get("capabilities", defaults.capabilities),
         adapters=adapters,
+        explicit_adapters=set(adapters_raw.keys()),
         severity_overrides=dict(severity_raw),
         ignore_rules=ignore_raw.get("rules", []),
         ignore_files=ignore_raw.get("files", []),
