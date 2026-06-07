@@ -79,9 +79,16 @@ class PylintOdooAdapter:
                 "Pylint-Odoo plugin is not installed or cannot be imported.",
             )]
 
-        return self._parse_output(
+        diags = self._parse_output(
             result.stdout or "", module_name=module_path.name, odoo_version=odoo_version
         )
+        if result.returncode != 0 and not diags:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "process error",
+                f"Pylint exited with status {result.returncode} but produced no findings; "
+                "the run may have failed (configuration or internal error).",
+            )]
+        return diags
 
     def _parse_output(
         self, raw_text: str, module_name: str, odoo_version: str
