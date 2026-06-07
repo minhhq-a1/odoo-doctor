@@ -58,3 +58,18 @@ def test_parse_empty_file(tmp_path: Path):
     f.write_text("")
     assert parse_models(f) == []
     assert parse_controllers(f) == []
+
+
+def test_parse_models_tolerates_non_utf8(tmp_path):
+    f = tmp_path / "latin1.py"
+    # 0xE9 ('é' in latin-1) makes strict-UTF-8 read_text() raise UnicodeDecodeError
+    f.write_bytes(b"# -*- coding: latin-1 -*-\nNAME = '\xe9'\n")
+    # Must not raise; no Odoo model defined → empty list
+    assert parse_models(f) == []
+
+
+def test_parse_controllers_tolerates_non_utf8(tmp_path):
+    f = tmp_path / "latin1_ctrl.py"
+    f.write_bytes(b"# -*- coding: latin-1 -*-\nNAME = '\xe9'\n")
+    assert parse_controllers(f) == []
+
