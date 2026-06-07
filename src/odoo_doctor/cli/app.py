@@ -131,7 +131,7 @@ def scan(
         adapters.append(PylintOdooAdapter())
 
     for adapter in adapters:
-        if not adapter.is_available() and adapter.name not in cfg.explicit_adapters:
+        if not adapter.is_available() and adapter.config_key not in cfg.explicit_adapters:
             continue
         for ctx in graph.modules.values():
             try:

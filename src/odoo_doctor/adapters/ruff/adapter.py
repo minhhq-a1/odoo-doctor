@@ -33,6 +33,7 @@ _UNMAPPED = _RuleMapping(category="Uncategorized", tier="P3", confidence="low")
 
 class RuffAdapter:
     name = "ruff"
+    config_key = "ruff"
 
     def __init__(self) -> None:
         self._mapping = self._load_mapping()

@@ -37,6 +37,7 @@ _UNMAPPED = _RuleMapping(category="Uncategorized", tier="P3", confidence="low")
 
 class PylintOdooAdapter:
     name = "pylint-odoo"
+    config_key = "pylint_odoo"
 
     def __init__(self) -> None:
         self._mapping = self._load_mapping()

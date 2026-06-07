@@ -11,6 +11,7 @@ from odoo_doctor.core.diagnostics import Diagnostic
 
 class BackendAdapter(Protocol):
     name: str
+    config_key: str
 
     def is_available(self) -> bool:
         """Check if the external tool is installed."""
