@@ -116,3 +116,37 @@ def test_ruff_adapter_skips_non_dict_record():
     assert len(diags) == 1
     assert diags[0].rule == "E501"
 
+
+def test_ruff_adapter_warns_on_nonzero_exit_with_no_findings(monkeypatch, tmp_path: Path):
+    adapter = RuffAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: True)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 2, stdout="", stderr="boom"),
+    )
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "adapter-ruff-warning"
+    assert "process error" in diags[0].title
+    assert diags[0].severity == "warning"
+
+
+def test_ruff_adapter_keeps_findings_on_exit_1(monkeypatch, tmp_path: Path):
+    # Ruff exits 1 when violations exist — this is success, not failure
+    adapter = RuffAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: True)
+    payload = json.dumps([{
+        "code": "E501", "message": "long", "filename": "a.py",
+        "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 2},
+    }])
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 1, stdout=payload, stderr=""),
+    )
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "E501"
+
+
