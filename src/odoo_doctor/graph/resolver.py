@@ -27,6 +27,19 @@ class SymbolLookup:
     source: str | None = None  # "repo" | "stub" | "source_path"
 
 
+# Fields implicitly present on every Odoo model (ORM-injected). Always FOUND,
+# regardless of stub contents — they never appear in curated stubs.
+ORM_MAGIC_FIELDS = frozenset({
+    "id",
+    "display_name",
+    "create_uid",
+    "create_date",
+    "write_uid",
+    "write_date",
+    "__last_update",
+})
+
+
 _MODEL_OWNER_OVERRIDES = {
     "sale.order": "sale",
     "sale.order.line": "sale",
@@ -52,6 +65,7 @@ class SymbolResolver:
         stub_version: str,
         source_path: str | None = None,
         extended_fields: dict[str, dict] | None = None,
+        extended_methods: dict[str, dict] | None = None,
     ):
         self._repo_models = repo_models
         self._repo_xml_ids = repo_xml_ids
@@ -60,6 +74,9 @@ class SymbolResolver:
         # extended_fields: {model_name: {field_name: FieldInfo}} from _inherit-only extensions
         # These are fields added to stub-known models (e.g. custom_note on sale.order)
         self._extended_fields: dict[str, dict] = extended_fields or {}
+        # extended_methods: {model_name: {method_name: MethodInfo}} — symmetric with fields,
+        # so an action_* button added to sale.order via _inherit resolves FOUND.
+        self._extended_methods: dict[str, dict] = extended_methods or {}
         self._source_index = build_source_index(source_path)
 
     def resolve_model(self, model_name: str) -> SymbolLookup:
@@ -98,58 +115,82 @@ class SymbolResolver:
         return SymbolLookup(ResolveResult.UNKNOWN)
 
     def resolve_field(self, model_name: str, field_name: str) -> SymbolLookup:
-        # 1. Repo (native model with _name)
+        # 1. Repo model's own fields
         repo_model = self._repo_models.get(model_name)
-        if repo_model is not None:
-            if field_name in repo_model.fields:
-                return SymbolLookup(ResolveResult.FOUND, "repo")
-            # Model known in repo but field not there — check stubs too
-            # (model may inherit fields from core that aren't in the repo code)
+        if repo_model is not None and field_name in repo_model.fields:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
 
-        # 1b. Extended fields from _inherit-only extensions in the repo
+        # 2. Fields added to the model via _inherit elsewhere in the repo
         ext = self._extended_fields.get(model_name)
         if ext and field_name in ext:
             return SymbolLookup(ResolveResult.FOUND, "repo")
 
-        # 2. Stubs
+        # 3. ORM-injected magic fields (id, create_uid, ...)
+        if field_name in ORM_MAGIC_FIELDS:
+            return SymbolLookup(ResolveResult.FOUND, "builtin")
+
+        # 4. Stub fields (presence only)
         if self._stubs:
             stub_model = self._stubs.models.get(model_name)
-            if stub_model is not None:
-                if field_name in stub_model.get("fields", []):
-                    return SymbolLookup(ResolveResult.FOUND, "stub")
-                # Model is known (repo or stub) and field not found anywhere
-                if repo_model is not None or stub_model is not None:
-                    return SymbolLookup(ResolveResult.NOT_FOUND)
+            if stub_model is not None and field_name in stub_model.get("fields", []):
+                return SymbolLookup(ResolveResult.FOUND, "stub")
 
-        # If model found in repo only (no stub for it), field not in repo
-        if repo_model is not None:
-            # We know the model but stubs don't cover it — could have
-            # inherited fields we don't see. Be conservative.
-            return SymbolLookup(ResolveResult.UNKNOWN)
+        # 5. Provable absence: only when the model is genuinely complete.
+        if self._model_is_complete(model_name):
+            return SymbolLookup(ResolveResult.NOT_FOUND)
 
-        # Model not known at all
+        # 6. Otherwise we cannot prove absence.
         return SymbolLookup(ResolveResult.UNKNOWN)
 
     def resolve_method(self, model_name: str, method_name: str) -> SymbolLookup:
-        # 1. Repo
+        # 1. Repo model's own methods
         repo_model = self._repo_models.get(model_name)
         if repo_model is not None and method_name in repo_model.methods:
             return SymbolLookup(ResolveResult.FOUND, "repo")
 
-        # 2. Stubs
+        # 2. Methods added to the model via _inherit elsewhere in the repo
+        ext = self._extended_methods.get(model_name)
+        if ext and method_name in ext:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
+        # 3. Stub methods (presence only)
         if self._stubs:
             stub_model = self._stubs.models.get(model_name)
-            if stub_model is not None:
-                if method_name in stub_model.get("methods", []):
-                    return SymbolLookup(ResolveResult.FOUND, "stub")
-                # Model known, method not found
-                if repo_model is not None or stub_model is not None:
-                    return SymbolLookup(ResolveResult.NOT_FOUND)
+            if stub_model is not None and method_name in stub_model.get("methods", []):
+                return SymbolLookup(ResolveResult.FOUND, "stub")
 
-        if repo_model is not None:
-            return SymbolLookup(ResolveResult.UNKNOWN)
+        # 4. Provable absence: only when the model is genuinely complete.
+        if self._model_is_complete(model_name):
+            return SymbolLookup(ResolveResult.NOT_FOUND)
 
+        # 5. Otherwise we cannot prove absence.
         return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def _model_is_complete(self, model_name: str, _seen: set[str] | None = None) -> bool:
+        """A model's symbol set is provably complete (absence ⇒ NOT_FOUND) when it is
+        repo-defined with every _inherit/_inherits ancestor itself complete, or it is
+        backed by a stub file flagged `complete`. Partial stubs and unknown models are
+        never complete."""
+        if _seen is None:
+            _seen = set()
+        if model_name in _seen:
+            return False  # cycle guard — be conservative
+        _seen.add(model_name)
+
+        repo_model = self._repo_models.get(model_name)
+        if repo_model is not None:
+            ancestors = list(repo_model.inherit) + list(repo_model.inherits.keys())
+            for anc in ancestors:
+                if anc == model_name:
+                    continue
+                if not self._model_is_complete(anc, _seen):
+                    return False
+            return True
+
+        if self._stubs and model_name in self._stubs.models:
+            return self._stubs.complete
+
+        return False
 
     def resolve_xml_id(self, xml_id: str) -> SymbolLookup:
         # 1. Repo

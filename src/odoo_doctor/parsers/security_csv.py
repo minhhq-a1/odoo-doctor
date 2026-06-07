@@ -60,3 +60,35 @@ def model_external_id_to_name(external_id: str) -> str:
     if external_id.startswith("model_"):
         return external_id[len("model_"):].replace("_", ".")
     return external_id.replace("_", ".")
+
+
+def candidate_model_names(external_id: str):
+    """Yield candidate dotted model names for a 'model_xxx' access-CSV external id.
+
+    The external id replaces every '.' in the model name with '_', but model
+    name segments may themselves contain '_', so the inverse is ambiguous
+    (e.g. 'model_ir_actions_act_window' -> 'ir.actions.act_window'). We yield the
+    all-dots candidate first (the common case), then every other partition, so a
+    caller can accept the first that the resolver actually knows.
+    """
+    name = external_id
+    if name.startswith("model_"):
+        name = name[len("model_"):]
+    parts = name.split("_")
+    n = len(parts)
+
+    # all-dots first (matches the majority of Odoo model names)
+    yield ".".join(parts)
+    if n <= 1:
+        return
+
+    sep_count = n - 1
+    if sep_count > 8:
+        return  # too ambiguous to enumerate; the naive candidate is all we offer
+
+    # bit set => keep '_', bit unset => '.'; skip mask 0 (already yielded)
+    for mask in range(1, 1 << sep_count):
+        out = parts[0]
+        for i in range(sep_count):
+            out += ("_" if (mask >> i) & 1 else ".") + parts[i + 1]
+        yield out

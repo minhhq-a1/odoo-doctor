@@ -51,12 +51,11 @@ def check_missing_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
         return diags
 
     # Collect models that have access rules
-    from odoo_doctor.parsers.security_csv import model_external_id_to_name
+    from odoo_doctor.parsers.security_csv import candidate_model_names
     covered_models: set[str] = set()
     for rule_row in ctx.access_rules:
-        # Only look at rules defined in this module's CSV
-        model_name = model_external_id_to_name(rule_row.model_external_id)
-        covered_models.add(model_name)
+        for candidate in candidate_model_names(rule_row.model_external_id):
+            covered_models.add(candidate)
 
     # Flag new models not covered
     for model_info in ctx.models.values():

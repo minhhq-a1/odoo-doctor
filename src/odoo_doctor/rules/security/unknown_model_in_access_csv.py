@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.graph.resolver import ResolveResult
-from odoo_doctor.parsers.security_csv import model_external_id_to_name
+from odoo_doctor.parsers.security_csv import candidate_model_names, model_external_id_to_name
 from odoo_doctor.rules.registry import rule
 
 if TYPE_CHECKING:
@@ -28,18 +28,20 @@ def check_unknown_model_in_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
 
     for rule_row in ctx.access_rules:
-        model_name = model_external_id_to_name(rule_row.model_external_id)
-        result = ctx.resolver.resolve_model(model_name)
-        status = result.status
-
-        if status == ResolveResult.UNKNOWN and rule_row.model_external_id_module == ctx.name:
-            status = ResolveResult.LOCAL_NOT_FOUND
-
-        if status in (ResolveResult.NOT_FOUND, ResolveResult.LOCAL_NOT_FOUND):
-            confidence = "high"
-        else:
+        resolved = False
+        for candidate in candidate_model_names(rule_row.model_external_id):
+            if ctx.resolver.resolve_model(candidate).status == ResolveResult.FOUND:
+                resolved = True
+                break
+        if resolved:
             continue
 
+        # No candidate resolves. Only assert "unknown" for a model the row claims
+        # belongs to THIS module (provable local absence); stay silent otherwise.
+        if rule_row.model_external_id_module != ctx.name:
+            continue
+
+        model_name = model_external_id_to_name(rule_row.model_external_id)
         diags.append(Diagnostic(
             module=ctx.name,
             file_path=rule_row.file_path,
@@ -50,7 +52,7 @@ def check_unknown_model_in_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
             severity="error",
             tier="P1",
             source="native",
-            confidence=confidence,
+            confidence="high",
             title=f"Access rule references unknown model: {model_name}",
             message=f"The access rule '{rule_row.id}' references model '{model_name}' which cannot be found.",
             help="Verify the model name in ir.model.access.csv matches the actual model _name.",

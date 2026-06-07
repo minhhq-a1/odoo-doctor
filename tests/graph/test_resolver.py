@@ -53,11 +53,45 @@ def test_resolve_field_from_stub():
     assert result.source == "stub"
 
 
-def test_resolve_field_not_found():
-    """Field proven to not exist on a known model."""
+def test_resolve_field_partial_stub_is_unknown():
+    """Field absent from a PARTIAL stub model is UNKNOWN, never NOT_FOUND (golden rule)."""
     r = _make_resolver()
     result = r.resolve_field("res.partner", "zzz_nonexistent_field")
-    assert result.status == ResolveResult.NOT_FOUND
+    assert result.status == ResolveResult.UNKNOWN
+
+
+def test_resolve_field_repo_model_provable_not_found():
+    """A repo-defined model with no _inherit has fully-known fields -> absence provable."""
+    models = {
+        "my.model": ModelInfo(
+            name="my.model", file_path="f.py", line=1,
+            fields={"foo": FieldInfo(name="foo", field_type="Char")},
+        )
+    }
+    r = _make_resolver(repo_models=models)
+    assert r.resolve_field("my.model", "foo").status == ResolveResult.FOUND
+    assert r.resolve_field("my.model", "bar").status == ResolveResult.NOT_FOUND
+
+
+def test_resolve_field_repo_model_inheriting_core_is_unknown():
+    """Repo model that _inherits a partial-stub core model cannot prove absence."""
+    models = {
+        "my.order": ModelInfo(
+            name="my.order", file_path="f.py", line=1,
+            inherit=["sale.order"],
+            fields={"foo": FieldInfo(name="foo", field_type="Char")},
+        )
+    }
+    r = _make_resolver(repo_models=models)
+    assert r.resolve_field("my.order", "foo").status == ResolveResult.FOUND
+    assert r.resolve_field("my.order", "bar").status == ResolveResult.UNKNOWN
+
+
+def test_resolve_field_magic_field_always_found():
+    r = _make_resolver()
+    for f in ("id", "create_uid", "write_date", "display_name"):
+        res = r.resolve_field("sale.order", f)
+        assert res.status == ResolveResult.FOUND, f
 
 
 def test_resolve_field_unknown_model():
@@ -85,10 +119,10 @@ def test_resolve_method_found():
     assert result.status == ResolveResult.FOUND
 
 
-def test_resolve_method_not_found():
+def test_resolve_method_partial_stub_is_unknown():
     r = _make_resolver()
     result = r.resolve_method("sale.order", "zzz_method")
-    assert result.status == ResolveResult.NOT_FOUND
+    assert result.status == ResolveResult.UNKNOWN
 
 
 def test_resolve_xml_id_found():
@@ -219,3 +253,31 @@ def test_owner_module_for_model():
     # 3. Unknown model owner
     lookup3 = r.owner_module_for_model("unknown.model")
     assert lookup3.status == ResolveResult.UNKNOWN
+
+
+def test_magic_fields_constant_exists():
+    from odoo_doctor.graph.resolver import ORM_MAGIC_FIELDS
+    for f in ("id", "display_name", "create_uid", "create_date",
+              "write_uid", "write_date", "__last_update"):
+        assert f in ORM_MAGIC_FIELDS
+
+
+def test_resolver_accepts_extended_methods_param():
+    from odoo_doctor.parsers.python_models import MethodInfo
+    r = SymbolResolver(
+        repo_models={},
+        repo_xml_ids={},
+        stub_version="17.0",
+        extended_methods={"sale.order": {"action_foo": MethodInfo(name="action_foo")}},
+    )
+    # Stored and queryable; resolve_method behavior is verified in Task 4.
+    assert r._extended_methods["sale.order"]["action_foo"].name == "action_foo"
+
+
+def test_resolve_method_extended_via_inherit_found():
+    from odoo_doctor.parsers.python_models import MethodInfo
+    r = SymbolResolver(
+        repo_models={}, repo_xml_ids={}, stub_version="17.0",
+        extended_methods={"sale.order": {"action_foo": MethodInfo(name="action_foo")}},
+    )
+    assert r.resolve_method("sale.order", "action_foo").status == ResolveResult.FOUND
