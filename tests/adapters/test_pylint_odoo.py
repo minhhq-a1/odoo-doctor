@@ -72,3 +72,34 @@ def test_pylint_adapter_warns_on_missing_plugin(monkeypatch, tmp_path: Path):
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
     assert "missing plugin" in diags[0].title
+
+
+def test_pylint_adapter_warns_on_nonzero_exit_with_no_findings(monkeypatch, tmp_path: Path):
+    adapter = PylintOdooAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: True)
+    # Exit 32 = pylint usage error; stdout has nothing parseable
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 32, stdout="", stderr="usage error"),
+    )
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "adapter-pylint-odoo-warning"
+    assert "process error" in diags[0].title
+
+
+def test_pylint_adapter_keeps_findings_on_nonzero_exit(monkeypatch, tmp_path: Path):
+    # Pylint exits non-zero (bitmask) when it reports messages — that is success
+    adapter = PylintOdooAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: True)
+    stdout = "models/sale.py:10:0: E8102: Use of cr.commit() (invalid-commit)\n"
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 2, stdout=stdout, stderr=""),
+    )
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "E8102"
+
