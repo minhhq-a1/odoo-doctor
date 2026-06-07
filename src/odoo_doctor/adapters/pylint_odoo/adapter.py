@@ -46,7 +46,10 @@ class PylintOdooAdapter:
 
     def run(self, module_path: Path, odoo_version: str) -> list[Diagnostic]:
         if not self.is_available():
-            return []
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "missing executable",
+                "Pylint executable was not found on PATH.",
+            )]
 
         try:
             result = subprocess.run(
@@ -58,8 +61,22 @@ class PylintOdooAdapter:
                 ],
                 capture_output=True, text=True, timeout=120,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return []
+        except subprocess.TimeoutExpired:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "timeout",
+                "Pylint-Odoo did not finish within 120 seconds.",
+            )]
+        except FileNotFoundError:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "missing executable",
+                "Pylint executable was not found on PATH.",
+            )]
+
+        if result.stderr and "No module named pylint_odoo" in result.stderr:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "missing plugin",
+                "Pylint-Odoo plugin is not installed or cannot be imported.",
+            )]
 
         return self._parse_output(
             result.stdout or "", module_name=module_path.name, odoo_version=odoo_version
@@ -111,3 +128,28 @@ class PylintOdooAdapter:
                 confidence=info.get("confidence", "high"),
             )
         return result
+
+
+def _adapter_warning(
+    tool: str,
+    module_path: Path,
+    odoo_version: str,
+    reason: str,
+    detail: str,
+) -> Diagnostic:
+    return Diagnostic(
+        module=module_path.name,
+        file_path=str(module_path),
+        line=1,
+        column=0,
+        rule=f"adapter-{tool}-warning",
+        category="Maintainability",
+        severity="warning",
+        tier="P3",
+        source=tool,
+        confidence="low",
+        title=f"{tool} adapter warning: {reason}",
+        message=detail,
+        help=f"Install or configure {tool}, or disable the adapter in odoo-doctor.toml.",
+        odoo_version=odoo_version,
+    )

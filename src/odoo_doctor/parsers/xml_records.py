@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 
 from lxml import etree
 
@@ -29,6 +30,9 @@ class ViewInfo:
     button_methods: list[str] = field(default_factory=list)
     file_path: str = ""
     line: int = 0
+
+
+_REF_CALL_RE = re.compile(r"\bref\(['\"]([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)['\"]\)")
 
 
 def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
@@ -58,13 +62,17 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
         elif elem.tag == "template":
             model = "ir.ui.view"
 
-        # Collect ref attributes
+        # Collect ref attributes and eval ref patterns
         for child in elem.iter():
             if child.tag == "field" and child.get("name") == "inherit_id":
                 continue  # View inherit_id is handled with view context.
             ref = child.get("ref")
             if ref:
                 refs.append(ref)
+            eval_attr = child.get("eval")
+            if eval_attr:
+                for match in _REF_CALL_RE.findall(eval_attr):
+                    refs.append(match)
 
         records.append(XmlIdInfo(
             xml_id=full_id,

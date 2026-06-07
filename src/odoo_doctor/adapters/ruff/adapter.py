@@ -42,20 +42,40 @@ class RuffAdapter:
 
     def run(self, module_path: Path, odoo_version: str) -> list[Diagnostic]:
         if not self.is_available():
-            return []
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "missing executable",
+                "Ruff executable was not found on PATH.",
+            )]
 
         try:
             result = subprocess.run(
                 ["ruff", "check", "--output-format=json", str(module_path)],
                 capture_output=True, text=True, timeout=60,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return []
+        except subprocess.TimeoutExpired:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "timeout",
+                "Ruff did not finish within 60 seconds.",
+            )]
+        except FileNotFoundError:
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "missing executable",
+                "Ruff executable was not found on PATH.",
+            )]
 
         try:
             raw = json.loads(result.stdout) if result.stdout else []
         except json.JSONDecodeError:
-            return []
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "parse failure",
+                "Ruff returned invalid JSON output.",
+            )]
+
+        if not isinstance(raw, list):
+            return [_adapter_warning(
+                self.name, module_path, odoo_version, "parse failure",
+                "Ruff JSON output did not match the expected list schema.",
+            )]
 
         return self._parse_output(raw, module_name=module_path.name, odoo_version=odoo_version)
 
@@ -104,3 +124,28 @@ class RuffAdapter:
                 confidence=info.get("confidence", "high"),
             )
         return result
+
+
+def _adapter_warning(
+    tool: str,
+    module_path: Path,
+    odoo_version: str,
+    reason: str,
+    detail: str,
+) -> Diagnostic:
+    return Diagnostic(
+        module=module_path.name,
+        file_path=str(module_path),
+        line=1,
+        column=0,
+        rule=f"adapter-{tool}-warning",
+        category="Maintainability",
+        severity="warning",
+        tier="P3",
+        source=tool,
+        confidence="low",
+        title=f"{tool} adapter warning: {reason}",
+        message=detail,
+        help=f"Install or configure {tool}, or disable the adapter in odoo-doctor.toml.",
+        odoo_version=odoo_version,
+    )

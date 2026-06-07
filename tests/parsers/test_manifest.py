@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from odoo_doctor.parsers.manifest import ManifestData, parse_manifest
+from odoo_doctor.parsers.manifest import parse_manifest
 
 
 def test_parse_valid_manifest(sample_addon: Path):

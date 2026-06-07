@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
-from odoo_doctor.adapters.base import BackendAdapter
 from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 
 
@@ -55,3 +55,38 @@ def test_ruff_adapter_filters_f401_in_init():
     # F401 in __init__.py is filtered out, but the one in res_partner.py is kept
     assert len(diags) == 1
     assert diags[0].file_path == "models/res_partner.py"
+
+
+def test_ruff_adapter_warns_when_missing(monkeypatch, tmp_path: Path):
+    adapter = RuffAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: False)
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "adapter-ruff-warning"
+    assert "not found" in diags[0].message
+
+
+def test_ruff_adapter_warns_on_timeout(monkeypatch, tmp_path: Path):
+    adapter = RuffAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: True)
+
+    def raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="ruff", timeout=60)
+
+    monkeypatch.setattr(subprocess, "run", raise_timeout)
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert "timeout" in diags[0].title
+
+
+def test_ruff_adapter_warns_on_invalid_json(monkeypatch, tmp_path: Path):
+    adapter = RuffAdapter()
+    monkeypatch.setattr(adapter, "is_available", lambda: True)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, stdout="not-json", stderr=""),
+    )
+    diags = adapter.run(tmp_path, "17.0")
+    assert len(diags) == 1
+    assert "parse failure" in diags[0].title

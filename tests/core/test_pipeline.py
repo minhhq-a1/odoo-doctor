@@ -79,6 +79,20 @@ def test_dedup_same_confidence_prefers_native():
     assert result[0].source == "native"
 
 
+def test_dedup_different_rules_same_location_kept():
+    d1 = _diag(rule="rule-one", line=10)
+    d2 = _diag(rule="rule-two", line=10)
+    result = deduplicate([d1, d2])
+    assert len(result) == 2
+
+
+def test_dedup_same_rule_same_location_collapsed():
+    d1 = _diag(rule="rule-one", line=10, message="msg 1")
+    d2 = _diag(rule="rule-one", line=10, message="msg 2")
+    result = deduplicate([d1, d2])
+    assert len(result) == 1
+
+
 # --- severity overrides ---
 
 def test_severity_override_changes_severity():
@@ -273,3 +287,42 @@ def test_run_pipeline_smoke():
     assert len(result_diags) == 2
     assert eligible[0] is True   # r1: high confidence
     assert eligible[1] is False  # r2: low confidence
+
+
+def test_derive_capabilities():
+    from odoo_doctor.core.pipeline import derive_capabilities
+    caps = derive_capabilities("17.0.1.0", ["enterprise"])
+    assert caps == {"enterprise", "odoo:17"}
+
+    caps2 = derive_capabilities("unknown", ["owl"])
+    assert caps2 == {"owl"}
+
+
+def test_rule_is_enabled():
+    from odoo_doctor.rules.registry import RuleMeta
+    from odoo_doctor.core.pipeline import rule_is_enabled
+
+    meta = RuleMeta(
+        name="test-rule",
+        category="Security",
+        tier="P1",
+        severity="error",
+        default_confidence="high",
+        needs_context=True,
+        min_version="16.0",
+        requires_capabilities={"enterprise"},
+        excludes_capabilities={"legacy"},
+    )
+
+    # All match
+    assert rule_is_enabled(meta, "17.0", {"enterprise", "odoo:17"}) is True
+
+    # Version too low
+    assert rule_is_enabled(meta, "15.0", {"enterprise", "odoo:15"}) is False
+
+    # Missing capability
+    assert rule_is_enabled(meta, "17.0", {"odoo:17"}) is False
+
+    # Excluded capability present
+    assert rule_is_enabled(meta, "17.0", {"enterprise", "odoo:17", "legacy"}) is False
+

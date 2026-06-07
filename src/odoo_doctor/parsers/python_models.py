@@ -38,6 +38,7 @@ class ModelInfo:
     is_abstract: bool = False
     file_path: str = ""
     line: int = 0
+    module: str = ""
 
 
 @dataclass

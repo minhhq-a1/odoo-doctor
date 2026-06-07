@@ -78,6 +78,8 @@ odoo-doctor init   # creates odoo-doctor.toml
 [odoo-doctor]
 odoo_version = "17.0"
 addons_paths = ["."]
+odoo_source_path = "/path/to/odoo/source"
+capabilities = ["enterprise", "owl"]
 min_score = 75
 
 [adapters]

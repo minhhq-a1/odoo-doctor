@@ -4,9 +4,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from textwrap import dedent
 
-from odoo_doctor.parsers.security_csv import AccessRule, parse_access_csv
+from odoo_doctor.parsers.security_csv import parse_access_csv
 
 
 def test_parse_access_csv(sample_addon: Path):

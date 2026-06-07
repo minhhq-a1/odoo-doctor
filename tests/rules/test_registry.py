@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from odoo_doctor.rules.registry import RuleMeta, RuleRegistry, rule
+from odoo_doctor.rules.registry import RuleRegistry, rule
 
 
 def test_register_rule():
@@ -59,3 +59,24 @@ def test_active_rules_map():
 
     rules_map = reg.active_rules_map()
     assert rules_map["ver-rule"] == "16.0"
+
+
+def test_rule_capabilities():
+    reg = RuleRegistry()
+
+    @rule(
+        name="cap-rule",
+        category="Security",
+        tier="P1",
+        severity="error",
+        default_confidence="high",
+        needs_context=True,
+        requires_capabilities={"enterprise"},
+        excludes_capabilities={"legacy-web"},
+        registry=reg,
+    )
+    def cr(ctx): return []
+
+    meta, _ = reg.get("cap-rule")
+    assert meta.requires_capabilities == {"enterprise"}
+    assert meta.excludes_capabilities == {"legacy-web"}

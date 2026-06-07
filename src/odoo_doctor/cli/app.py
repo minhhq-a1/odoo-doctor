@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -12,7 +11,7 @@ import typer
 
 from odoo_doctor.core.config import OdooDoctorConfig, load_config
 from odoo_doctor.core.diagnostics import CATEGORIES
-from odoo_doctor.core.pipeline import run_pipeline
+from odoo_doctor.core.pipeline import run_pipeline, derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scoring import score_diagnostics
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.reporters.json_report import render_json
@@ -41,7 +40,7 @@ app = typer.Typer(name="odoo-doctor", help="Unified health scoring for Odoo cust
 
 @app.command()
 def scan(
-    path: str = typer.Argument(".", help="Path to scan for addons"),
+    path: Optional[str] = typer.Argument(None, help="Path to scan for addons; omit to use config addons_paths"),
     odoo_version: Optional[str] = typer.Option(None, "--odoo-version", help="Target Odoo version"),
     module: Optional[str] = typer.Option(None, "--module", help="Scan only this module"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -50,19 +49,19 @@ def scan(
     min_score: Optional[int] = typer.Option(None, "--min-score", help="Exit 2 if any module scores below this (0-100)"),
 ) -> None:
     """Scan Odoo addons and report health score."""
-    scan_path = Path(path).resolve()
+    config_root = (Path(path) if path is not None else Path.cwd()).resolve()
 
     # Load config
-    cfg = load_config(scan_path)
+    cfg = load_config(config_root)
     if odoo_version:
         cfg.odoo_version = odoo_version
     target = [module] if module else cfg.target_modules or None
-    addons_paths = [(scan_path / p).resolve() for p in cfg.addons_paths]
+    addons_paths = _resolve_addons_paths(path, config_root, cfg)
 
     # Determine changed files for --diff
     changed_files: set[str] | None = None
     if diff:
-        changed_files = _get_changed_files(scan_path, diff)
+        changed_files = _get_changed_files(config_root, diff)
 
     # Build project graph
     version = cfg.odoo_version or "unknown"
@@ -92,6 +91,9 @@ def scan(
     # Run native context-based rules
     for meta, func in default_registry.get_rules(needs_context=True):
         for ctx in graph.modules.values():
+            derived_caps = derive_capabilities(ctx.odoo_version, cfg.capabilities)
+            if not rule_is_enabled(meta, ctx.odoo_version, derived_caps):
+                continue
             try:
                 produced = func(ctx)
                 context_diags.extend(produced)
@@ -105,6 +107,9 @@ def scan(
     # Run native file-based rules
     for meta, func in default_registry.get_rules(needs_context=False):
         for ctx in graph.modules.values():
+            derived_caps = derive_capabilities(ctx.odoo_version, cfg.capabilities)
+            if not rule_is_enabled(meta, ctx.odoo_version, derived_caps):
+                continue
             for py_file in ctx.path.rglob("*.py"):
                 if py_file.name.startswith("__"):
                     continue
@@ -126,8 +131,6 @@ def scan(
         adapters.append(PylintOdooAdapter())
 
     for adapter in adapters:
-        if not adapter.is_available():
-            continue
         for ctx in graph.modules.values():
             try:
                 all_diags.extend(adapter.run(ctx.path, ctx.odoo_version))
@@ -166,11 +169,11 @@ def scan(
     active_rules = default_registry.active_rules_map()
     diags, eligible = run_pipeline(
         all_diags, cfg, suppressions, active_rules, version,
-        base_path=scan_path,
+        base_path=config_root,
     )
 
     # Determine in-scope categories
-    in_scope = _in_scope_categories(active_rules, cfg)
+    in_scope = _in_scope_categories(version, cfg)
 
     # Score per module
     scores: dict[str, object] = {}
@@ -305,6 +308,21 @@ def install() -> None:
     typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")
 
 
+def _resolve_addons_paths(
+    path_arg: str | None,
+    config_root: Path,
+    cfg: OdooDoctorConfig,
+) -> list[Path]:
+    """Resolve scan roots.
+
+    An omitted CLI path means "use configured addons_paths". An explicit path
+    means "scan exactly this target", even when the target is '.'.
+    """
+    if path_arg is not None:
+        return [Path(path_arg).resolve()]
+    return [(config_root / p).resolve() for p in cfg.addons_paths]
+
+
 def _get_changed_files(repo_path: Path, base_branch: str) -> set[str]:
     try:
         root_result = subprocess.run(
@@ -344,11 +362,17 @@ def _has_severity_at_or_above(diagnostics: list[Diagnostic], threshold: str) -> 
     return any(ranks.get(d.severity, 0) >= threshold_rank for d in diagnostics)
 
 def _in_scope_categories(
-    active_rules: dict[str, str | None],
+    detected_version: str,
     cfg: OdooDoctorConfig,
 ) -> list[str]:
     """Determine which categories have at least one active rule."""
+    derived_caps = derive_capabilities(detected_version, cfg.capabilities)
     rule_categories: set[str] = set()
     for meta, _ in default_registry.get_rules():
-        rule_categories.add(meta.category)
+        if rule_is_enabled(meta, detected_version, derived_caps):
+            rule_categories.add(meta.category)
     return [c for c in CATEGORIES if c in rule_categories]
+
+
+if __name__ == "__main__":
+    app()

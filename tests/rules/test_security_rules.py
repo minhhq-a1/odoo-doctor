@@ -31,16 +31,80 @@ def test_raw_sql_percent_format(tmp_path: Path):
     assert len(diags) >= 1
 
 
-def test_raw_sql_safe_parameterized(tmp_path: Path):
+def test_raw_sql_format_concat_and_variable_indirection(tmp_path: Path):
+    cases = [
+        dedent("""\
+            class M:
+                def m(self, name):
+                    self.env.cr.execute("SELECT * FROM res_partner WHERE name = {}".format(name))
+        """),
+        dedent("""\
+            class M:
+                def m(self, name):
+                    self.env.cr.execute("SELECT * FROM res_partner WHERE name = " + name)
+        """),
+        dedent("""\
+            class M:
+                def m(self, name):
+                    query = f"SELECT * FROM res_partner WHERE name = {name}"
+                    self.env.cr.execute(query)
+        """),
+    ]
+    for idx, code in enumerate(cases):
+        f = tmp_path / f"m{idx}.py"
+        f.write_text(code)
+        diags = check_raw_sql_interpolation(f, "m", "17.0")
+        assert len(diags) == 1
+
+
+def test_raw_sql_constant_concatenation_is_safe(tmp_path: Path):
     code = dedent("""\
         class M:
             def m(self):
-                self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))
+                query = "SELECT " + "1"
+                self.env.cr.execute(query)
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_raw_sql_interpolation(f, "m", "17.0") == []
+
+
+def test_raw_sql_safe_reassignment_clears_unsafe_variable(tmp_path: Path):
+    code = dedent("""\
+        class M:
+            def m(self, name):
+                query = f"SELECT * FROM res_partner WHERE name = {name}"
+                query = "SELECT 1"
+                self.env.cr.execute(query)
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_raw_sql_interpolation(f, "m", "17.0") == []
+
+
+def test_raw_sql_augassign_dynamic_query_is_unsafe(tmp_path: Path):
+    code = dedent("""\
+        class M:
+            def m(self, name):
+                query = "SELECT * FROM res_partner WHERE name = "
+                query += name
+                self.env.cr.execute(query)
     """)
     f = tmp_path / "m.py"
     f.write_text(code)
     diags = check_raw_sql_interpolation(f, "m", "17.0")
-    assert diags == []
+    assert len(diags) == 1
+
+
+def test_raw_sql_safe_parameterized(tmp_path: Path):
+    code = dedent("""\
+        class M:
+            def m(self, name):
+                self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_raw_sql_interpolation(f, "m", "17.0") == []
 
 
 def test_missing_access_csv_catches_bad_addon(bad_addon: Path):

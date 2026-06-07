@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable
+from dataclasses import dataclass, field
+from typing import Callable
 
 
 @dataclass
@@ -16,6 +16,8 @@ class RuleMeta:
     default_confidence: str    # "high" | "medium" | "low"
     needs_context: bool        # True: func(ctx) | False: func(file, module, version)
     min_version: str | None    # minimum Odoo version, or None for all
+    requires_capabilities: set[str] = field(default_factory=set)
+    excludes_capabilities: set[str] = field(default_factory=set)
 
 
 class RuleRegistry:
@@ -58,6 +60,8 @@ def rule(
     default_confidence: str,
     needs_context: bool,
     min_version: str | None = None,
+    requires_capabilities: set[str] | list[str] | None = None,
+    excludes_capabilities: set[str] | list[str] | None = None,
     registry: RuleRegistry | None = None,
 ) -> Callable[[Callable], Callable]:
     """Decorator that registers a rule function in the registry."""
@@ -70,6 +74,8 @@ def rule(
             default_confidence=default_confidence,
             needs_context=needs_context,
             min_version=min_version,
+            requires_capabilities=set(requires_capabilities or []),
+            excludes_capabilities=set(excludes_capabilities or []),
         )
         target = registry if registry is not None else default_registry
         target.register(meta, func)
