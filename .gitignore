@@ -33,3 +33,4 @@ env/
 # Environment files
 .env
 .env.*
+.worktrees/

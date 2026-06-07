@@ -30,19 +30,13 @@ def check_unknown_model_in_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
     for rule_row in ctx.access_rules:
         model_name = model_external_id_to_name(rule_row.model_external_id)
         result = ctx.resolver.resolve_model(model_name)
+        status = result.status
 
-        if result.status == ResolveResult.NOT_FOUND:
+        if status == ResolveResult.UNKNOWN and rule_row.model_external_id_module == ctx.name:
+            status = ResolveResult.LOCAL_NOT_FOUND
+
+        if status in (ResolveResult.NOT_FOUND, ResolveResult.LOCAL_NOT_FOUND):
             confidence = "high"
-        elif (
-            result.status == ResolveResult.UNKNOWN
-            and rule_row.model_external_id_module == ctx.name
-        ):
-            # The CSV points at an ir.model external ID in the current module.
-            # The project graph has already parsed every local model, so absence
-            # here is actionable even though the generic resolver is conservative.
-            confidence = "high"
-        elif result.status == ResolveResult.UNKNOWN:
-            continue  # Don't emit for UNKNOWN — could be from an unscanned dependency.
         else:
             continue
 

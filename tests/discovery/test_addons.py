@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from odoo_doctor.discovery.addons import AddonInfo, discover_addons
+from odoo_doctor.discovery.addons import discover_addons
 
 
 def test_discover_single_addon(sample_addon: Path):

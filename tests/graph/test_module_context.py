@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from odoo_doctor.graph.module_context import ModuleContext, ProjectGraph, build_project_graph
+from odoo_doctor.graph.module_context import build_project_graph
 
 
 def test_build_project_graph(sample_addon: Path):

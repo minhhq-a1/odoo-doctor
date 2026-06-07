@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.scoring import CategoryScore, ScoreResult, score_diagnostics
+from odoo_doctor.core.scoring import ScoreResult, score_diagnostics
 
 
 def _diag(**overrides) -> Diagnostic:

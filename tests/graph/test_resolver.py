@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from odoo_doctor.graph.stubs.loader import StubData, load_stubs
+from odoo_doctor.graph.stubs.loader import load_stubs
+from odoo_doctor.graph.resolver import ResolveResult, SymbolResolver
+from odoo_doctor.parsers.python_models import FieldInfo, ModelInfo
 
 
 def test_load_stubs_17():
@@ -20,9 +22,6 @@ def test_load_stubs_unknown_version():
 
 
 # --- Resolver tests ---
-
-from odoo_doctor.graph.resolver import ResolveResult, SymbolLookup, SymbolResolver
-from odoo_doctor.parsers.python_models import FieldInfo, ModelInfo
 
 
 def _make_resolver(repo_models=None, stub_version="17.0", source_path=None):
@@ -168,3 +167,55 @@ def test_stubs_cover_spec_required_modules():
     assert "account.move.line" in stubs.models
     assert "account.journal" in stubs.models
     assert "account.account" in stubs.models
+
+
+def test_resolve_xml_id_for_module():
+    r = SymbolResolver(
+        repo_models={},
+        repo_xml_ids={"sale_custom.my_record": object()},
+        stub_version="17.0",
+    )
+    # Found in repo
+    res1 = r.resolve_xml_id_for_module("sale_custom.my_record", "sale_custom")
+    assert res1.status == ResolveResult.FOUND
+
+    # Local unknown -> LOCAL_NOT_FOUND (no dot)
+    res2 = r.resolve_xml_id_for_module("my_missing_record", "sale_custom")
+    assert res2.status == ResolveResult.LOCAL_NOT_FOUND
+
+    # Local unknown -> LOCAL_NOT_FOUND (with dot matching current module)
+    res3 = r.resolve_xml_id_for_module("sale_custom.my_missing_record", "sale_custom")
+    assert res3.status == ResolveResult.LOCAL_NOT_FOUND
+
+    # External unknown -> UNKNOWN
+    res4 = r.resolve_xml_id_for_module("other_module.my_missing_record", "sale_custom")
+    assert res4.status == ResolveResult.UNKNOWN
+
+
+def test_owner_module_for_model():
+    repo_models = {
+        "custom.model": ModelInfo(
+            name="custom.model",
+            file_path="custom_addon/models/custom.py",
+            line=10,
+            module="custom_addon",
+        )
+    }
+    r = SymbolResolver(
+        repo_models=repo_models,
+        repo_xml_ids={},
+        stub_version="17.0",
+    )
+    # 1. Repo owned model
+    lookup1 = r.owner_module_for_model("custom.model")
+    assert lookup1.status == ResolveResult.FOUND
+    assert lookup1.source == "custom_addon"
+
+    # 2. Overrides owned model
+    lookup2 = r.owner_module_for_model("sale.order")
+    assert lookup2.status == ResolveResult.FOUND
+    assert lookup2.source == "sale"
+
+    # 3. Unknown model owner
+    lookup3 = r.owner_module_for_model("unknown.model")
+    assert lookup3.status == ResolveResult.UNKNOWN

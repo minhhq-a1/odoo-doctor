@@ -28,12 +28,9 @@ def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
     for xml_id, info in ctx.xml_ids.items():
         for ref in info.refs:
             qualified = ref if "." in ref else f"{ctx.name}.{ref}"
-            lookup = ctx.resolver.resolve_xml_id(qualified)
+            lookup = ctx.resolver.resolve_xml_id_for_module(qualified, ctx.name)
 
-            if lookup.status == ResolveResult.NOT_FOUND:
-                confidence = "high"
-            elif lookup.status == ResolveResult.UNKNOWN and _is_local_ref(ref, ctx.name):
-                # All XML records for this module were parsed, so a missing local ref is actionable.
+            if lookup.status in (ResolveResult.NOT_FOUND, ResolveResult.LOCAL_NOT_FOUND):
                 confidence = "high"
             else:
                 continue
@@ -59,10 +56,8 @@ def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
     for view in ctx.views:
         if view.inherit_id:
             qualified = view.inherit_id if "." in view.inherit_id else f"{ctx.name}.{view.inherit_id}"
-            lookup = ctx.resolver.resolve_xml_id(qualified)
-            if lookup.status == ResolveResult.FOUND:
-                continue
-            if lookup.status == ResolveResult.UNKNOWN and not _is_local_ref(view.inherit_id, ctx.name):
+            lookup = ctx.resolver.resolve_xml_id_for_module(qualified, ctx.name)
+            if lookup.status not in (ResolveResult.NOT_FOUND, ResolveResult.LOCAL_NOT_FOUND):
                 continue
             diags.append(Diagnostic(
                 module=ctx.name,
@@ -83,6 +78,3 @@ def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
 
     return diags
 
-def _is_local_ref(ref: str, module_name: str) -> bool:
-    """Return True for unqualified refs or refs explicitly pointing at this module."""
-    return "." not in ref or ref.split(".", 1)[0] == module_name

@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from odoo_doctor.discovery.addons import AddonInfo, discover_addons
+from odoo_doctor.discovery.addons import discover_addons
 from odoo_doctor.discovery.odoo_version import detect_odoo_version
 from odoo_doctor.graph.resolver import SymbolResolver
 from odoo_doctor.parsers.manifest import ManifestData, parse_manifest
@@ -77,6 +77,7 @@ def build_project_graph(
             if py_file.name.startswith("__"):
                 continue
             for m in parse_models(py_file):
+                m.module = addon.name
                 key = m.name or (m.inherit[0] if m.inherit else None)
                 if key:
                     if key in models:
