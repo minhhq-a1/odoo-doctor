@@ -90,3 +90,29 @@ def test_ruff_adapter_warns_on_invalid_json(monkeypatch, tmp_path: Path):
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
     assert "parse failure" in diags[0].title
+
+
+def test_ruff_adapter_tolerates_null_fields(fixtures_dir: Path):
+    adapter = RuffAdapter()
+    raw = json.loads((fixtures_dir / "adapters" / "ruff_output_null_fields.json").read_text())
+    diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
+    # Both records survive — the null-field one degrades to defaults, no crash
+    assert len(diags) == 2
+    null_diag = next(d for d in diags if d.rule == "")
+    assert null_diag.file_path == ""
+    assert null_diag.line == 0
+    assert null_diag.column == 0
+    assert null_diag.message == ""
+    valid = next(d for d in diags if d.rule == "E501")
+    assert valid.line == 15
+
+
+def test_ruff_adapter_skips_non_dict_record():
+    adapter = RuffAdapter()
+    raw = [None, {"code": "E501", "message": "x", "filename": "a.py",
+                  "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 2}}]
+    diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
+    # The null record is dropped; the valid one is kept
+    assert len(diags) == 1
+    assert diags[0].rule == "E501"
+

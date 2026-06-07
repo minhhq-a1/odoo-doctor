@@ -85,18 +85,21 @@ class RuffAdapter:
     ) -> list[Diagnostic]:
         diags: list[Diagnostic] = []
         for item in raw:
-            code = item.get("code", "")
-            filename = item.get("filename", "")
+            if not isinstance(item, dict):
+                continue
+            code = item.get("code") or ""
+            filename = item.get("filename") or ""
             if code == "F401" and filename.endswith("__init__.py"):
                 continue
 
             mapping = self._mapping.get(code, _UNMAPPED)
+            location = item.get("location") or {}
 
             diags.append(Diagnostic(
                 module=module_name,
-                file_path=item.get("filename", ""),
-                line=item.get("location", {}).get("row", 0),
-                column=item.get("location", {}).get("column", 0),
+                file_path=filename,
+                line=location.get("row", 0) or 0,
+                column=location.get("column", 0) or 0,
                 rule=code,
                 category=mapping.category,
                 severity="warning" if mapping.tier in ("P2", "P3") else "error",
@@ -104,12 +107,13 @@ class RuffAdapter:
                 source="ruff",
                 confidence=mapping.confidence,
                 title=f"Ruff {code}",
-                message=item.get("message", ""),
+                message=item.get("message") or "",
                 help=f"See Ruff docs for rule {code}.",
                 url=f"https://docs.astral.sh/ruff/rules/{code}",
                 odoo_version=odoo_version,
             ))
         return diags
+
 
     def _load_mapping(self) -> dict[str, _RuleMapping]:
         mapping_file = Path(__file__).parent / "rule_mapping.toml"
