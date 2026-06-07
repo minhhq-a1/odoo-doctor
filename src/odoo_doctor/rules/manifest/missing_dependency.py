@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.graph.resolver import ResolveResult
 from odoo_doctor.rules.registry import rule
 
 if TYPE_CHECKING:
@@ -42,15 +43,6 @@ def check_missing_dependency(ctx: ModuleContext) -> list[Diagnostic]:
     # 1. Check Python model inherits
     for model_info in ctx.models.values():
         for inherited in model_info.inherit:
-            inherited_in_repo = any(
-                m.name == inherited
-                for m in ctx.models.values()
-                if m.name is not None
-            )
-            if inherited_in_repo:
-                continue
-
-            from odoo_doctor.graph.resolver import ResolveResult
             lookup = ctx.resolver.owner_module_for_model(inherited)
             if lookup.status == ResolveResult.FOUND:
                 owner_mod = lookup.source

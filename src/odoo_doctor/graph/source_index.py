@@ -46,11 +46,11 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
         manifest_file = addon_dir / "__manifest__.py"
 
         try:
-            manifest = ast.literal_eval(manifest_file.read_text(encoding="utf-8"))
+            _manifest = ast.literal_eval(manifest_file.read_text(encoding="utf-8"))
         except Exception:
             continue
 
-        if not isinstance(manifest, dict):
+        if not isinstance(_manifest, dict):
             continue
 
         # 1. Parse models
@@ -61,7 +61,8 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
                 for m in parse_models(py_file):
                     if m.name:
                         model_owners[m.name] = module_name
-            except Exception:
+            except (OSError, UnicodeDecodeError):
+                # Best-effort scanning: tolerate unreadable or non-UTF-8 files in configured source path
                 pass
 
         # 2. XML ID indexing is deferred for odoo_source_path (model-only in spec v3)
