@@ -258,3 +258,82 @@ def test_raw_sql_constant_format_is_safe(tmp_path):
     f = tmp_path / "m.py"
     f.write_text(code)
     assert check_raw_sql_interpolation(f, "m", "17.0") == []
+
+
+def test_public_controller_sudo_catches(tmp_path: Path):
+    from odoo_doctor.rules.security.public_controller_sudo import (
+        check_public_controller_sudo,
+    )
+
+    code = dedent("""\
+        from odoo import http
+
+        class MyController(http.Controller):
+            @http.route("/x", auth="public")
+            def handler(self):
+                return http.request.env["res.users"].sudo().search([])
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_public_controller_sudo(f, "test_mod", "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "public-controller-sudo-risk"
+    assert diags[0].severity == "error"
+
+
+def test_public_controller_none_auth_catches(tmp_path: Path):
+    from odoo_doctor.rules.security.public_controller_sudo import (
+        check_public_controller_sudo,
+    )
+
+    code = dedent("""\
+        from odoo import http
+
+        class MyController(http.Controller):
+            @http.route("/y", auth="none")
+            def handler(self):
+                return http.request.env["res.users"].sudo().search([])
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_public_controller_sudo(f, "test_mod", "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "public-controller-sudo-risk"
+
+
+def test_public_controller_sudo_silent_when_auth_user(tmp_path: Path):
+    from odoo_doctor.rules.security.public_controller_sudo import (
+        check_public_controller_sudo,
+    )
+
+    code = dedent("""\
+        from odoo import http
+
+        class MyController(http.Controller):
+            @http.route("/z", auth="user")
+            def handler(self):
+                return http.request.env["res.users"].sudo().search([])
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_public_controller_sudo(f, "test_mod", "17.0")
+    assert len(diags) == 0
+
+
+def test_public_controller_silent_without_sudo(tmp_path: Path):
+    from odoo_doctor.rules.security.public_controller_sudo import (
+        check_public_controller_sudo,
+    )
+
+    code = dedent("""\
+        from odoo import http
+
+        class MyController(http.Controller):
+            @http.route("/w", auth="public")
+            def handler(self):
+                return http.request.env["res.users"].search([])
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_public_controller_sudo(f, "test_mod", "17.0")
+    assert len(diags) == 0

@@ -86,3 +86,96 @@ def test_search_in_loop_ignores_file_read(tmp_path):
     f = tmp_path / "m.py"
     f.write_text(code)
     assert check_search_in_loop(f, "m", "17.0") == []
+
+
+def test_unbounded_search_in_controller_catches(tmp_path: Path):
+    from odoo_doctor.rules.performance.unbounded_search import check_unbounded_search
+
+    code = dedent("""\
+        from odoo import http
+
+        class MyCtrl(http.Controller):
+            @http.route("/all")
+            def get_all(self):
+                return http.request.env["res.partner"].search([])
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_unbounded_search(f, "test_mod", "17.0")
+    assert len(diags) == 1
+    assert diags[0].rule == "unbounded-search"
+    assert diags[0].severity == "warning"
+
+
+def test_unbounded_search_in_compute_catches(tmp_path: Path):
+    from odoo_doctor.rules.performance.unbounded_search import check_unbounded_search
+
+    code = dedent("""\
+        from odoo import models, api
+
+        class MyModel(models.Model):
+            _name = "my.model"
+
+            @api.depends("name")
+            def _compute_foo(self):
+                for rec in self:
+                    rec.foo = self.env["res.partner"].search([])
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    diags = check_unbounded_search(f, "test_mod", "17.0")
+    assert len(diags) == 1
+
+
+def test_unbounded_search_with_limit_silent(tmp_path: Path):
+    from odoo_doctor.rules.performance.unbounded_search import check_unbounded_search
+
+    code = dedent("""\
+        from odoo import http
+
+        class MyCtrl(http.Controller):
+            @http.route("/some")
+            def get_some(self):
+                return http.request.env["res.partner"].search([], limit=10)
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_unbounded_search(f, "test_mod", "17.0")
+    assert len(diags) == 0
+
+
+def test_unbounded_search_outside_risky_context_silent(tmp_path: Path):
+    from odoo_doctor.rules.performance.unbounded_search import check_unbounded_search
+
+    code = dedent("""\
+        from odoo import models
+
+        class MyModel(models.Model):
+            _name = "my.model"
+
+            def ordinary_method(self):
+                return self.env["res.partner"].search([])
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    diags = check_unbounded_search(f, "test_mod", "17.0")
+    assert len(diags) == 0
+
+
+def test_unbounded_search_ignores_re_search(tmp_path: Path):
+    from odoo_doctor.rules.performance.unbounded_search import check_unbounded_search
+
+    code = dedent("""\
+        from odoo import http
+        import re
+
+        class MyCtrl(http.Controller):
+            @http.route("/match")
+            def get_match(self):
+                re.search([], "abc")
+                return ""
+    """)
+    f = tmp_path / "c.py"
+    f.write_text(code)
+    diags = check_unbounded_search(f, "test_mod", "17.0")
+    assert len(diags) == 0

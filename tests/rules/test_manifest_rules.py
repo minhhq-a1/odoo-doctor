@@ -143,3 +143,60 @@ def test_missing_dependency_ignores_unknown_module_ref(tmp_path):
     ctx = graph.modules["typo_dep"]
     diags = check_missing_dependency(ctx)
     assert all("nonexistent_module_xyz" not in d.message for d in diags)
+
+
+def test_data_order_risk_catches(tmp_path: Path):
+    from odoo_doctor.rules.manifest.data_order_risk import check_data_order_risk
+
+    mod = tmp_path / "order_risk"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "M", "version": "1.0", "data": ["views/v.xml", "security/ir.model.access.csv"]}'
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["order_risk"]
+    diags = check_data_order_risk(ctx)
+    assert len(diags) == 1
+    assert diags[0].rule == "manifest-data-order-risk"
+    assert diags[0].severity == "error"
+    assert "security/ir.model.access.csv" in diags[0].message
+    assert "views/v.xml" in diags[0].message
+
+
+def test_data_order_risk_correct_order_silent(tmp_path: Path):
+    from odoo_doctor.rules.manifest.data_order_risk import check_data_order_risk
+
+    mod = tmp_path / "order_ok"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "M", "version": "1.0", "data": ["security/ir.model.access.csv", "views/v.xml"]}'
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["order_ok"]
+    assert check_data_order_risk(ctx) == []
+
+
+def test_data_order_risk_no_security_silent(tmp_path: Path):
+    from odoo_doctor.rules.manifest.data_order_risk import check_data_order_risk
+
+    mod = tmp_path / "no_sec"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "M", "version": "1.0", "data": ["views/v.xml", "views/v2.xml"]}'
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["no_sec"]
+    assert check_data_order_risk(ctx) == []
+
+
+def test_data_order_risk_security_only_silent(tmp_path: Path):
+    from odoo_doctor.rules.manifest.data_order_risk import check_data_order_risk
+
+    mod = tmp_path / "sec_only"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "M", "version": "1.0", "data": ["security/ir.model.access.csv"]}'
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["sec_only"]
+    assert check_data_order_risk(ctx) == []

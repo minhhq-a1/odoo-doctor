@@ -27,6 +27,7 @@ class MethodInfo:
     depends: list[str] = field(default_factory=list)
     is_override: bool = False
     calls_super: bool = False
+    line: int = 0
 
 
 @dataclass
@@ -266,6 +267,7 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
         depends=depends,
         is_override=is_override,
         calls_super=calls_super,
+        line=func.lineno,
     )
 
 

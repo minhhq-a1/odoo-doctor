@@ -100,3 +100,12 @@ def test_rule_capabilities():
     meta, _ = reg.get("cap-rule")
     assert meta.requires_capabilities == {"enterprise"}
     assert meta.excludes_capabilities == {"legacy-web"}
+
+
+def test_default_registry_count():
+    # Force imports from cli.app to register all active rules
+    import odoo_doctor.cli.app  # noqa: F401
+    from odoo_doctor.rules.registry import default_registry
+
+    # 10 original + 5 new (D1-D5)
+    assert len(default_registry) == 15
