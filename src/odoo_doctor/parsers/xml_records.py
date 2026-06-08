@@ -18,6 +18,7 @@ class XmlIdInfo:
     file_path: str
     line: int
     refs: list[str] = field(default_factory=list)  # referenced xml IDs
+    ref_lines: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -30,6 +31,8 @@ class ViewInfo:
     button_methods: list[str] = field(default_factory=list)
     file_path: str = ""
     line: int = 0
+    field_ref_lines: dict[str, int] = field(default_factory=dict)
+    button_method_lines: dict[str, int] = field(default_factory=dict)
 
 
 _REF_CALL_RE = re.compile(r"\bref\(['\"]([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)['\"]\)")
@@ -62,6 +65,7 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
         elif elem.tag == "template":
             model = "ir.ui.view"
 
+        ref_lines: dict[str, int] = {}
         # Collect ref attributes and eval ref patterns
         for child in elem.iter():
             if child.tag == "field" and child.get("name") == "inherit_id":
@@ -69,10 +73,12 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
             ref = child.get("ref")
             if ref:
                 refs.append(ref)
+                ref_lines.setdefault(ref, child.sourceline or 0)
             eval_attr = child.get("eval")
             if eval_attr:
                 for match in _REF_CALL_RE.findall(eval_attr):
                     refs.append(match)
+                    ref_lines.setdefault(match, child.sourceline or 0)
 
         records.append(
             XmlIdInfo(
@@ -82,6 +88,7 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
                 file_path=str(file_path),
                 line=elem.sourceline or 0,
                 refs=refs,
+                ref_lines=ref_lines,
             )
         )
 
@@ -109,6 +116,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
         inherit_id = None
         field_refs: list[str] = []
         button_methods: list[str] = []
+        field_ref_lines: dict[str, int] = {}
+        button_method_lines: dict[str, int] = {}
 
         for field_elem in record.findall("field"):
             fname = field_elem.get("name")
@@ -118,7 +127,13 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
                 inherit_id = field_elem.get("ref")
             elif fname == "arch":
                 # Parse the arch content for field/button refs
-                _extract_arch_refs(field_elem, field_refs, button_methods)
+                _extract_arch_refs(
+                    field_elem,
+                    field_refs,
+                    button_methods,
+                    field_ref_lines,
+                    button_method_lines,
+                )
 
         if not model:
             continue
@@ -132,6 +147,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
                 button_methods=button_methods,
                 file_path=str(file_path),
                 line=record.sourceline or 0,
+                field_ref_lines=field_ref_lines,
+                button_method_lines=button_method_lines,
             )
         )
 
@@ -142,6 +159,8 @@ def _extract_arch_refs(
     arch_elem: etree._Element,
     field_refs: list[str],
     button_methods: list[str],
+    field_ref_lines: dict[str, int],
+    button_method_lines: dict[str, int],
 ) -> None:
     """Walk arch XML for <field name="..."> and <button ... type="object">.
 
@@ -155,19 +174,19 @@ def _extract_arch_refs(
             if child.tag == "field":
                 if not inside_field:
                     name = child.get("name")
-                    if name and name not in field_refs:
-                        field_refs.append(name)
+                    if name:
+                        if name not in field_refs:
+                            field_refs.append(name)
+                        field_ref_lines.setdefault(name, child.sourceline or 0)
                 walk(child, True)
             elif child.tag == "button":
                 if not inside_field:
                     btn_name = child.get("name")
                     btn_type = child.get("type")
-                    if (
-                        btn_name
-                        and btn_type == "object"
-                        and btn_name not in button_methods
-                    ):
-                        button_methods.append(btn_name)
+                    if btn_name and btn_type == "object":
+                        if btn_name not in button_methods:
+                            button_methods.append(btn_name)
+                        button_method_lines.setdefault(btn_name, child.sourceline or 0)
                 walk(child, inside_field)
             else:
                 walk(child, inside_field)

@@ -192,3 +192,33 @@ def test_missing_xml_ref_checks_all_record_definitions(tmp_path):
     ctx = graph.modules["dup_ref"]
     diags = check_missing_xml_ref(ctx)
     assert any("missing_second" in d.message for d in diags)
+
+
+def test_view_field_line_points_at_field(tmp_path):
+    mod = tmp_path / "lined"
+    (mod / "models").mkdir(parents=True)
+    (mod / "views").mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name":"Lined","depends":[],"data":["views/v.xml"],"license":"LGPL-3"}'
+    )
+    (mod / "models" / "m.py").write_text(
+        "from odoo import models\nclass M(models.Model):\n    _name='lined.m'\n"
+    )
+    # model defines no 'ghost' field -> NOT_FOUND (repo model is complete)
+    (mod / "views" / "v.xml").write_text("""\
+<odoo>
+  <record id="v" model="ir.ui.view">
+    <field name="model">lined.m</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="ghost"/>
+      </form>
+    </field>
+  </record>
+</odoo>
+""")
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["lined"]
+    diags = check_view_field_not_in_model(ctx)
+    assert len(diags) == 1
+    assert diags[0].line == 6  # the <field name="ghost"/> line, not 2 (the <record>)

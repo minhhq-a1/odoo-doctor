@@ -43,7 +43,7 @@ def check_button_method_not_found(ctx: ModuleContext) -> list[Diagnostic]:
                 Diagnostic(
                     module=ctx.name,
                     file_path=view.file_path,
-                    line=view.line,
+                    line=view.button_method_lines.get(method_name, view.line),
                     column=0,
                     rule="button-method-not-found",
                     category="Correctness",
