@@ -116,6 +116,14 @@ def _is_cursor_execute(node: ast.Call) -> bool:
     return _dotted_name(node.func.value) in _CR_OBJECTS
 
 
+def _all_constants(node: ast.expr) -> bool:
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, (ast.Tuple, ast.List)):
+        return all(_all_constants(elt) for elt in node.elts)
+    return False
+
+
 def _is_unsafe_sql_expr(node: ast.expr, unsafe_names: set[str]) -> bool:
     if isinstance(node, ast.Name):
         return node.id in unsafe_names
@@ -123,14 +131,18 @@ def _is_unsafe_sql_expr(node: ast.expr, unsafe_names: set[str]) -> bool:
         return not _is_safe_fstring(node)
     if isinstance(node, ast.BinOp):
         if isinstance(node.op, ast.Mod):
-            return True
+            return not _all_constants(node.right)
         if isinstance(node.op, ast.Add):
             return _is_dynamic_expr(node.left, unsafe_names) or _is_dynamic_expr(
                 node.right, unsafe_names
             )
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
         if node.func.attr == "format" and _looks_like_sql(node.func.value):
-            return True
+            has_dynamic_arg = any(not _all_constants(arg) for arg in node.args)
+            has_dynamic_kwarg = any(
+                not _all_constants(kw.value) for kw in node.keywords
+            )
+            return has_dynamic_arg or has_dynamic_kwarg
     return False
 
 
