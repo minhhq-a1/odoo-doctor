@@ -156,3 +156,38 @@ def test_diff_keeps_context_diagnostics_for_changed_module(tmp_path: Path):
     parsed = json.loads(result.stdout)
     diags = parsed["modules"]["acl_mod"]["diagnostics"]
     assert any(d["rule"] == "missing-access-csv" for d in diags)
+
+
+# ─── Part C / C1: --diff failure semantics ──────────────────────────────────
+
+import subprocess
+import odoo_doctor.cli.app as appmod
+
+
+def test_get_changed_files_returns_none_on_git_failure(tmp_path: Path, monkeypatch):
+    """git rev-parse failing (not a repo / unknown ref) → None, not empty set."""
+    monkeypatch.setattr(
+        appmod.subprocess, "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 128, stdout="", stderr="fatal"),
+    )
+    assert appmod._get_changed_files(tmp_path, "nope") is None
+
+
+def test_get_changed_files_empty_diff_returns_empty_set(tmp_path: Path, monkeypatch):
+    """git succeeds but nothing changed → empty set (a valid 'scan nothing' run)."""
+    calls = iter([
+        subprocess.CompletedProcess([], 0, stdout=str(tmp_path), stderr=""),  # rev-parse
+        subprocess.CompletedProcess([], 0, stdout="", stderr=""),             # diff (empty)
+    ])
+    monkeypatch.setattr(appmod.subprocess, "run", lambda *a, **k: next(calls))
+    assert appmod._get_changed_files(tmp_path, "main") == set()
+
+
+def test_diff_git_failure_exits_3(bad_addon: Path):
+    """A --diff git failure must error out (exit 3), never a clean exit 0."""
+    with patch("odoo_doctor.cli.app._get_changed_files", return_value=None):
+        result = runner.invoke(app, [
+            "scan", str(bad_addon.parent), "--diff", "does-not-exist", "--json",
+        ])
+    assert result.exit_code == 3
+

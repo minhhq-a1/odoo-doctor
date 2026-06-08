@@ -62,6 +62,13 @@ def scan(
     changed_files: set[str] | None = None
     if diff:
         changed_files = _get_changed_files(config_root, diff)
+        if changed_files is None:
+            typer.echo(
+                f"[ERROR] --diff: could not resolve changed files for ref '{diff}'. "
+                "Ensure this is a git repository and the ref exists.",
+                err=True,
+            )
+            raise typer.Exit(code=3)
 
     # Build project graph
     version = cfg.odoo_version or "unknown"
@@ -325,14 +332,14 @@ def _resolve_addons_paths(
     return [(config_root / p).resolve() for p in cfg.addons_paths]
 
 
-def _get_changed_files(repo_path: Path, base_branch: str) -> set[str]:
+def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
     try:
         root_result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, cwd=repo_path, timeout=30,
         )
         if root_result.returncode != 0:
-            return set()
+            return None
         git_root = Path(root_result.stdout.strip()).resolve()
 
         result = subprocess.run(
@@ -340,14 +347,14 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str]:
             capture_output=True, text=True, cwd=git_root, timeout=30,
         )
         if result.returncode != 0:
-            return set()
+            return None
         return {
             str((git_root / line.strip()).resolve())
             for line in result.stdout.splitlines()
             if line.strip()
         }
     except (subprocess.TimeoutExpired, FileNotFoundError):
-        return set()
+        return None
 
 def _path_is_relative_to(path: Path, base: Path) -> bool:
     try:
