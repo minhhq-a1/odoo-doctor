@@ -18,15 +18,38 @@ def test_pylint_parse_output(fixtures_dir: Path):
     adapter = PylintOdooAdapter()
     raw_text = (fixtures_dir / "adapters" / "pylint_odoo_output.txt").read_text()
     diags = adapter._parse_output(raw_text, module_name="test_mod", odoo_version="17.0")
-    assert len(diags) == 2
+    assert len(diags) == 3
     assert all(d.source == "pylint-odoo" for d in diags)
 
-    sql = next(d for d in diags if d.rule == "E8102")
+    commit = next(d for d in diags if d.rule == "E8102")
+    assert commit.category == "Correctness"
+    assert commit.tier == "P2"
+
+    sql = next(d for d in diags if d.rule == "E8103")
     assert sql.category == "Security"
     assert sql.tier == "P0"
 
     trans = next(d for d in diags if d.rule == "W8120")
     assert trans.category == "Maintainability"
+
+
+def test_pylint_e8102_is_invalid_commit_not_security():
+    adapter = PylintOdooAdapter()
+    raw = "models/sale.py:25:0: E8102: Use of cr.commit() (invalid-commit)\n"
+    d = adapter._parse_output(raw, module_name="m", odoo_version="17.0")[0]
+    assert d.rule == "E8102"
+    assert d.category == "Correctness"
+    assert d.tier == "P2"
+
+
+def test_pylint_e8103_is_sql_injection_p0():
+    adapter = PylintOdooAdapter()
+    raw = "models/sale.py:30:0: E8103: SQL injection risk (sql-injection)\n"
+    d = adapter._parse_output(raw, module_name="m", odoo_version="17.0")[0]
+    assert d.rule == "E8103"
+    assert d.category == "Security"
+    assert d.tier == "P0"
+    assert d.confidence == "high"
 
 
 def test_pylint_unmapped_rule():
