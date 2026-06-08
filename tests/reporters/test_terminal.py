@@ -90,3 +90,10 @@ def test_render_terminal_no_top_findings_single_module():
     scores = {"mod_a": ScoreResult(50.0, "Needs work", [], [], 1)}
     output = render_terminal([d1], scores)
     assert "Top Findings" not in output
+
+
+def test_render_terminal_shows_one_decimal_score():
+    score = ScoreResult(99.5, "Excellent", [], [], 0)
+    output = render_terminal([], {"m": score})
+    assert "99.5" in output
+
