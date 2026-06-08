@@ -43,7 +43,7 @@ def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
                 Diagnostic(
                     module=ctx.name,
                     file_path=info.file_path,
-                    line=info.line,
+                    line=info.ref_lines.get(ref, info.line),
                     column=0,
                     rule="missing-xml-ref",
                     category="Correctness",

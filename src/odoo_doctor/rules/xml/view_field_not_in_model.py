@@ -43,7 +43,7 @@ def check_view_field_not_in_model(ctx: ModuleContext) -> list[Diagnostic]:
                 Diagnostic(
                     module=ctx.name,
                     file_path=view.file_path,
-                    line=view.line,
+                    line=view.field_ref_lines.get(field_name, view.line),
                     column=0,
                     rule="view-field-not-in-model",
                     category="Correctness",
