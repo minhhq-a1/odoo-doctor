@@ -61,3 +61,28 @@ def test_search_in_loop_nested(tmp_path: Path):
     f.write_text(code)
     diags = check_search_in_loop(f, "test_mod", "17.0")
     assert len(diags) >= 1
+
+
+def test_search_in_loop_ignores_re_search(tmp_path):
+    code = dedent("""\
+        import re
+        class X:
+            def m(self, items):
+                for s in items:
+                    re.search(r"\\d+", s)
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_search_in_loop(f, "m", "17.0") == []
+
+
+def test_search_in_loop_ignores_file_read(tmp_path):
+    code = dedent("""\
+        class X:
+            def m(self, paths):
+                for p in paths:
+                    data = open(p).read()
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_search_in_loop(f, "m", "17.0") == []
