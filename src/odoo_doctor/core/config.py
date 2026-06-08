@@ -27,6 +27,8 @@ class OdooDoctorConfig:
     min_score: int = 0
     capabilities: list[str] = field(default_factory=list)
 
+    # 'oca' is reserved: the OCA pre-commit adapter is not implemented yet, so
+    # the key is accepted (tolerated-but-inert) but never instantiates an adapter.
     adapters: dict[str, bool] = field(
         default_factory=lambda: {"ruff": True, "pylint_odoo": True, "oca": False}
     )
