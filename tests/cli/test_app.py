@@ -103,3 +103,19 @@ def test_fail_on_warning_fails_for_errors(bad_addon: Path):
     """--fail-on warning means warning or anything more severe."""
     result = runner.invoke(app, ["scan", str(bad_addon.parent), "--fail-on", "warning"])
     assert result.exit_code == 1
+
+
+def test_init_template_excludes_oca(tmp_path: Path):
+    """The generated template no longer advertises the non-existent 'oca' adapter."""
+    runner.invoke(app, ["init", "--path", str(tmp_path)])
+    content = (tmp_path / "odoo-doctor.toml").read_text()
+    assert "oca" not in content
+
+
+def test_config_tolerates_oca_key(tmp_path: Path):
+    """An existing config with an 'oca' key still loads (tolerated-but-inert)."""
+    from odoo_doctor.core.config import load_config
+    (tmp_path / "odoo-doctor.toml").write_text("[adapters]\noca = true\n")
+    cfg = load_config(tmp_path)
+    assert cfg.adapters.get("oca") is True  # accepted, never crashes
+

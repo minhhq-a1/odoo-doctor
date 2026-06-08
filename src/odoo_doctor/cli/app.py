@@ -270,7 +270,6 @@ def init(
 [adapters]
 ruff = true
 pylint_odoo = true
-oca = false
 
 [severity]
 # "search-in-loop" = "warning"
