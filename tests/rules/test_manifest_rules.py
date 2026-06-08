@@ -125,3 +125,21 @@ def test_missing_dependency_from_xml_ref(tmp_path: Path):
     assert len(diag_sale) == 1
     assert "sale.view_order_form" in diag_sale[0].message
     assert "sale.model_sale_order" in diag_sale[0].message
+
+
+def test_missing_dependency_ignores_unknown_module_ref(tmp_path):
+    from odoo_doctor.rules.manifest.missing_dependency import check_missing_dependency
+
+    mod = tmp_path / "typo_dep"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name":"Typo","version":"17.0.1.0.0","depends":["base"],"data":["v.xml"],"license":"LGPL-3"}'
+    )
+    (mod / "v.xml").write_text(
+        '<odoo><record id="r" model="ir.ui.view">'
+        '<field name="x" ref="nonexistent_module_xyz.some_view"/></record></odoo>'
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["typo_dep"]
+    diags = check_missing_dependency(ctx)
+    assert all("nonexistent_module_xyz" not in d.message for d in diags)

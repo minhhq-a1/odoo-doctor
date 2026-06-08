@@ -62,6 +62,7 @@ def check_missing_dependency(ctx: ModuleContext) -> list[Diagnostic]:
             mod = _module_from_external_id(ref)
             if (
                 mod
+                and ctx.resolver.module_is_known(mod)
                 and mod != ctx.name
                 and mod not in depends_set
                 and mod not in _ALWAYS_AVAILABLE
@@ -76,6 +77,7 @@ def check_missing_dependency(ctx: ModuleContext) -> list[Diagnostic]:
             mod = _module_from_external_id(view.inherit_id)
             if (
                 mod
+                and ctx.resolver.module_is_known(mod)
                 and mod != ctx.name
                 and mod not in depends_set
                 and mod not in _ALWAYS_AVAILABLE
