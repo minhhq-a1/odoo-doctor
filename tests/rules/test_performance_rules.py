@@ -60,7 +60,7 @@ def test_search_in_loop_nested(tmp_path: Path):
     f = tmp_path / "nested.py"
     f.write_text(code)
     diags = check_search_in_loop(f, "test_mod", "17.0")
-    assert len(diags) >= 1
+    assert len(diags) == 1
 
 
 def test_search_in_loop_ignores_re_search(tmp_path):
