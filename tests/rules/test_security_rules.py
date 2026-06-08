@@ -220,3 +220,19 @@ def test_raw_sql_safe_table_interpolation(tmp_path: Path):
     f3.write_text(code3)
     diags3 = check_raw_sql_interpolation(f3, "m3", "17.0")
     assert len(diags3) == 1
+
+
+def test_missing_access_csv_skips_transient_when_no_csv(tmp_path):
+    from odoo_doctor.rules.security.missing_access_csv import check_missing_access_csv
+
+    addon = tmp_path / "wiz"
+    (addon / "models").mkdir(parents=True)
+    (addon / "__manifest__.py").write_text(
+        "{'name':'Wiz','version':'17.0.1.0.0','depends':['base'],'data':[],'license':'LGPL-3'}\n"
+    )
+    (addon / "models" / "w.py").write_text(
+        "from odoo import models\nclass W(models.TransientModel):\n    _name='w.wizard'\n"
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["wiz"]
+    assert check_missing_access_csv(ctx) == []
