@@ -236,3 +236,25 @@ def test_missing_access_csv_skips_transient_when_no_csv(tmp_path):
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     ctx = graph.modules["wiz"]
     assert check_missing_access_csv(ctx) == []
+
+
+def test_raw_sql_constant_percent_is_safe(tmp_path):
+    code = dedent("""\
+        class M:
+            def m(self):
+                self.env.cr.execute("SELECT * FROM t WHERE x = '%s'" % ("const",))
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_raw_sql_interpolation(f, "m", "17.0") == []
+
+
+def test_raw_sql_constant_format_is_safe(tmp_path):
+    code = dedent("""\
+        class M:
+            def m(self):
+                self.env.cr.execute("SELECT * FROM t WHERE x = '{}'".format("const"))
+    """)
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    assert check_raw_sql_interpolation(f, "m", "17.0") == []
