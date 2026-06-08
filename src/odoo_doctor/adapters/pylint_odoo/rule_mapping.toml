@@ -1,6 +1,7 @@
+# Verified against pylint-odoo 10.0.2 (OCA/pylint-odoo odoo_addons.py).
 [rules]
-"E8102" = { category = "Security", tier = "P0", confidence = "high" }
-"W8120" = { category = "Maintainability", tier = "P3", confidence = "medium" }
-"C8101" = { category = "Module Hygiene", tier = "P3", confidence = "high" }
-"W8110" = { category = "Correctness", tier = "P2", confidence = "high" }
-"E8501" = { category = "Security", tier = "P1", confidence = "high" }
+"E8102" = { category = "Correctness", tier = "P2", confidence = "high" }       # invalid-commit
+"E8103" = { category = "Security", tier = "P0", confidence = "high" }           # sql-injection
+"W8110" = { category = "Correctness", tier = "P2", confidence = "high" }        # missing-return
+"W8120" = { category = "Maintainability", tier = "P3", confidence = "medium" }  # translation-positional-used
+"C8101" = { category = "Module Hygiene", tier = "P3", confidence = "high" }     # manifest-required-author

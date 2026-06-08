@@ -1,3 +1,4 @@
 ************* Module models.sale
-models/sale.py:10:0: W8120: Translation method is missing (translation-required)
-models/sale.py:25:0: E8102: Use of cr.execute with string interpolation (sql-injection)
+models/sale.py:10:0: W8120: Translation method is missing (translation-positional-used)
+models/sale.py:25:0: E8102: Use of cr.commit() directly (invalid-commit)
+models/sale.py:30:0: E8103: SQL injection risk detected (sql-injection)
