@@ -25,7 +25,8 @@ if TYPE_CHECKING:
 def check_missing_xml_ref(ctx: ModuleContext) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
 
-    for xml_id, info in ctx.xml_ids.items():
+    for info in ctx.xml_records:
+        xml_id = info.xml_id
         for ref in info.refs:
             qualified = ref if "." in ref else f"{ctx.name}.{ref}"
             lookup = ctx.resolver.resolve_xml_id_for_module(qualified, ctx.name)

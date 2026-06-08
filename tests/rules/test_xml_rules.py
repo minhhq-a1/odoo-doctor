@@ -169,3 +169,26 @@ def test_missing_xml_ref_eval(tmp_path: Path):
     assert len(diags) == 1
     assert "missing_local" in diags[0].message
     assert "sale.group_sale_manager" not in diags[0].message
+
+
+def test_missing_xml_ref_checks_all_record_definitions(tmp_path):
+    mod = tmp_path / "dup_ref"
+    (mod / "views").mkdir(parents=True)
+    (mod / "__manifest__.py").write_text(
+        '{"name":"Dup","depends":[],"data":["views/v.xml"],"license":"LGPL-3"}'
+    )
+    (mod / "views" / "v.xml").write_text("""\
+<odoo>
+  <record id="r" model="ir.actions.act_window">
+    <field name="view_id" ref="exists_locally"/>
+  </record>
+  <record id="exists_locally" model="ir.ui.view"><field name="model">res.partner</field></record>
+  <record id="r" model="ir.actions.act_window">
+    <field name="view_id" ref="missing_second"/>
+  </record>
+</odoo>
+""")
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    ctx = graph.modules["dup_ref"]
+    diags = check_missing_xml_ref(ctx)
+    assert any("missing_second" in d.message for d in diags)
