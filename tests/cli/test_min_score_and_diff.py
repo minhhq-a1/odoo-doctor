@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
 from odoo_doctor.cli.app import app
+import odoo_doctor.cli.app as appmod
 
 runner = CliRunner()
 
@@ -191,9 +193,6 @@ def test_diff_keeps_context_diagnostics_for_changed_module(tmp_path: Path):
 
 
 # ─── Part C / C1: --diff failure semantics ──────────────────────────────────
-
-import subprocess
-import odoo_doctor.cli.app as appmod
 
 
 def test_get_changed_files_returns_none_on_git_failure(tmp_path: Path, monkeypatch):
