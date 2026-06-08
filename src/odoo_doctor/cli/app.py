@@ -221,7 +221,7 @@ def scan(
             if not json_output:
                 for name, score in failed_modules:
                     typer.echo(
-                        f"[FAIL] {name}: score {score.overall:.0f} < min {effective_min}",
+                        f"[FAIL] {name}: score {score.overall:.1f} < min {effective_min}",
                         err=True,
                     )
             raise typer.Exit(code=2)

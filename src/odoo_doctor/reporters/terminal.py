@@ -40,7 +40,7 @@ def render_terminal(
     for module, score in scores.items():
         color = _LABEL_COLORS.get(score.label, "white")
         console.print(
-            f"\n[bold]{module}[/bold]  Score: [{color}]{score.overall:.0f}/100 ({score.label})[/{color}]"
+            f"\n[bold]{module}[/bold]  Score: [{color}]{score.overall:.1f}/100 ({score.label})[/{color}]"
         )
 
         if score.categories:
@@ -90,7 +90,7 @@ def render_terminal(
         label = score_label(overall)
         color = _LABEL_COLORS.get(label, "white")
         console.print(
-            f"\n[bold]Project Score:[/bold] [{color}]{overall:.0f}/100 ({label})[/{color}]"
+            f"\n[bold]Project Score:[/bold] [{color}]{overall:.1f}/100 ({label})[/{color}]"
         )
 
     return buf.getvalue()

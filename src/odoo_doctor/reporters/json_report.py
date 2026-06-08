@@ -75,6 +75,7 @@ def _project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | in
         overall = 100.0
     else:
         overall = sum(score.overall for score in scores.values()) / module_count
+    overall = round(overall, 1)
     return {
         "overall": overall,
         "label": score_label(overall),

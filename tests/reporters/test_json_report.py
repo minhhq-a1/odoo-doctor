@@ -94,3 +94,10 @@ def test_render_json_top_findings_have_full_fields():
     assert tf["severity"] == diag["severity"]
     assert tf["confidence"] == diag["confidence"]
 
+
+def test_render_json_project_score_rounded():
+    scores = {"a": ScoreResult(99.5142857, "Excellent", [], [], 1)}
+    parsed = json.loads(render_json([], scores))
+    assert parsed["project_score"]["overall"] == 99.5
+
+

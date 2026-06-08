@@ -88,6 +88,7 @@ def score_diagnostics(
         overall = 100.0
     else:
         overall = 0.4 * min(in_scope_scores) + 0.6 * (sum(in_scope_scores) / len(in_scope_scores))
+    overall = round(overall, 1)
 
     result = ScoreResult(
         overall=overall,
