@@ -47,10 +47,15 @@ class PylintOdooAdapter:
 
     def run(self, module_path: Path, odoo_version: str) -> list[Diagnostic]:
         if not self.is_available():
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "missing executable",
-                "Pylint executable was not found on PATH.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "missing executable",
+                    "Pylint executable was not found on PATH.",
+                )
+            ]
 
         try:
             result = subprocess.run(
@@ -60,34 +65,56 @@ class PylintOdooAdapter:
                     "--output-format=text",
                     str(module_path),
                 ],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
         except subprocess.TimeoutExpired:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "timeout",
-                "Pylint-Odoo did not finish within 120 seconds.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "timeout",
+                    "Pylint-Odoo did not finish within 120 seconds.",
+                )
+            ]
         except FileNotFoundError:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "missing executable",
-                "Pylint executable was not found on PATH.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "missing executable",
+                    "Pylint executable was not found on PATH.",
+                )
+            ]
 
         if result.stderr and "No module named pylint_odoo" in result.stderr:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "missing plugin",
-                "Pylint-Odoo plugin is not installed or cannot be imported.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "missing plugin",
+                    "Pylint-Odoo plugin is not installed or cannot be imported.",
+                )
+            ]
 
         diags = self._parse_output(
             result.stdout or "", module_name=module_path.name, odoo_version=odoo_version
         )
         if result.returncode != 0 and not diags:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "process error",
-                f"Pylint exited with status {result.returncode} but produced no findings; "
-                "the run may have failed (configuration or internal error).",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "process error",
+                    f"Pylint exited with status {result.returncode} but produced no findings; "
+                    "the run may have failed (configuration or internal error).",
+                )
+            ]
         return diags
 
     def _parse_output(
@@ -103,23 +130,25 @@ class PylintOdooAdapter:
             file_path, line_no, col, code, message, _symbol = match.groups()
             mapping = self._mapping.get(code, _UNMAPPED)
 
-            diags.append(Diagnostic(
-                module=module_name,
-                file_path=file_path,
-                line=int(line_no),
-                column=int(col),
-                rule=code,
-                category=mapping.category,
-                severity="warning" if mapping.tier in ("P2", "P3") else "error",
-                tier=mapping.tier,
-                source="pylint-odoo",
-                confidence=mapping.confidence,
-                title=f"Pylint-Odoo {code}",
-                message=message.strip(),
-                help=f"See Pylint-Odoo docs for {code}.",
-                url="https://github.com/OCA/pylint-odoo",
-                odoo_version=odoo_version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=module_name,
+                    file_path=file_path,
+                    line=int(line_no),
+                    column=int(col),
+                    rule=code,
+                    category=mapping.category,
+                    severity="warning" if mapping.tier in ("P2", "P3") else "error",
+                    tier=mapping.tier,
+                    source="pylint-odoo",
+                    confidence=mapping.confidence,
+                    title=f"Pylint-Odoo {code}",
+                    message=message.strip(),
+                    help=f"See Pylint-Odoo docs for {code}.",
+                    url="https://github.com/OCA/pylint-odoo",
+                    odoo_version=odoo_version,
+                )
+            )
         return diags
 
     def _load_mapping(self) -> dict[str, _RuleMapping]:

@@ -90,7 +90,8 @@ def test_parse_odoo_source_from_fixtures(tmp_path: Path):
     """parse_odoo_source finds models in a small synthetic source tree."""
     addons = tmp_path / "addons"
     (addons / "sale" / "models").mkdir(parents=True)
-    (addons / "sale" / "models" / "sale_order.py").write_text(dedent("""\
+    (addons / "sale" / "models" / "sale_order.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class SaleOrder(models.Model):
@@ -100,7 +101,8 @@ def test_parse_odoo_source_from_fixtures(tmp_path: Path):
 
             def action_confirm(self):
                 pass
-    """))
+    """)
+    )
 
     models = parse_odoo_source(tmp_path)
     assert "sale.order" in models
@@ -113,13 +115,15 @@ def test_parse_odoo_source_skips_tests(tmp_path: Path):
     """Test files should not be parsed."""
     tests_dir = tmp_path / "addons" / "sale" / "tests"
     tests_dir.mkdir(parents=True)
-    (tests_dir / "test_sale.py").write_text(dedent("""\
+    (tests_dir / "test_sale.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class FakeModel(models.Model):
             _name = "fake.model"
             name = fields.Char()
-    """))
+    """)
+    )
 
     models = parse_odoo_source(tmp_path)
     assert "fake.model" not in models
@@ -129,21 +133,25 @@ def test_parse_odoo_source_merges_inherit(tmp_path: Path):
     """Fields from _inherit classes are merged into primary model."""
     addons = tmp_path / "addons"
     (addons / "base" / "models").mkdir(parents=True)
-    (addons / "base" / "models" / "res_partner.py").write_text(dedent("""\
+    (addons / "base" / "models" / "res_partner.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class ResPartner(models.Model):
             _name = "res.partner"
             name = fields.Char()
-    """))
+    """)
+    )
     (addons / "sale" / "models").mkdir(parents=True)
-    (addons / "sale" / "models" / "res_partner.py").write_text(dedent("""\
+    (addons / "sale" / "models" / "res_partner.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class ResPartnerSale(models.Model):
             _inherit = "res.partner"
             sale_order_count = fields.Integer()
-    """))
+    """)
+    )
 
     models = parse_odoo_source(tmp_path)
     assert "res.partner" in models
@@ -175,19 +183,33 @@ def test_build_stubs_cli_source_mode(tmp_path: Path):
     """CLI source mode writes JSON output."""
     addons = tmp_path / "addons"
     (addons / "sale" / "models").mkdir(parents=True)
-    (addons / "sale" / "models" / "sale.py").write_text(dedent("""\
+    (addons / "sale" / "models" / "sale.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class SaleOrder(models.Model):
             _name = "sale.order"
             name = fields.Char()
-    """))
+    """)
+    )
 
     out = tmp_path / "out.json"
     from odoo_doctor.graph.stubs.build_stubs import main
-    main(["source", "--odoo-path", str(tmp_path), "--version", "17.0", "--output", str(out)])
+
+    main(
+        [
+            "source",
+            "--odoo-path",
+            str(tmp_path),
+            "--version",
+            "17.0",
+            "--output",
+            str(out),
+        ]
+    )
 
     import json
+
     data = json.loads(out.read_text())
     assert data["version"] == "17.0"
     assert "sale.order" in data["models"]

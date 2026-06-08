@@ -10,7 +10,10 @@ from odoo_doctor.graph.module_context import build_project_graph
 
 
 def test_missing_required_fields_clean(sample_addon: Path):
-    from odoo_doctor.rules.manifest.missing_required_fields import check_missing_required_fields
+    from odoo_doctor.rules.manifest.missing_required_fields import (
+        check_missing_required_fields,
+    )
+
     graph = build_project_graph([sample_addon.parent], odoo_version="17.0")
     ctx = graph.modules["sample_addon"]
     diags = check_missing_required_fields(ctx)
@@ -18,7 +21,10 @@ def test_missing_required_fields_clean(sample_addon: Path):
 
 
 def test_missing_required_fields_catches(tmp_path: Path):
-    from odoo_doctor.rules.manifest.missing_required_fields import check_missing_required_fields
+    from odoo_doctor.rules.manifest.missing_required_fields import (
+        check_missing_required_fields,
+    )
+
     mod = tmp_path / "incomplete_mod"
     mod.mkdir()
     (mod / "__manifest__.py").write_text('{"name": "Incomplete"}')
@@ -33,6 +39,7 @@ def test_missing_required_fields_catches(tmp_path: Path):
 
 def test_missing_dependency_catches_sale(tmp_path: Path):
     from odoo_doctor.rules.manifest.missing_dependency import check_missing_dependency
+
     # A module that inherits sale.order but doesn't declare 'sale' in depends
     mod = tmp_path / "missing_dep"
     mod.mkdir()
@@ -41,12 +48,14 @@ def test_missing_dependency_catches_sale(tmp_path: Path):
     )
     models_dir = mod / "models"
     models_dir.mkdir()
-    (models_dir / "sale_ext.py").write_text(dedent("""\
+    (models_dir / "sale_ext.py").write_text(
+        dedent("""\
         from odoo import models
 
         class SaleExt(models.Model):
             _inherit = "sale.order"
-    """))
+    """)
+    )
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     ctx = graph.modules["missing_dep"]
     diags = check_missing_dependency(ctx)
@@ -55,6 +64,7 @@ def test_missing_dependency_catches_sale(tmp_path: Path):
 
 def test_missing_dependency_clean_when_sale_in_depends(tmp_path: Path):
     from odoo_doctor.rules.manifest.missing_dependency import check_missing_dependency
+
     mod = tmp_path / "ok_dep"
     mod.mkdir()
     (mod / "__manifest__.py").write_text(
@@ -62,12 +72,14 @@ def test_missing_dependency_clean_when_sale_in_depends(tmp_path: Path):
     )
     models_dir = mod / "models"
     models_dir.mkdir()
-    (models_dir / "sale_ext.py").write_text(dedent("""\
+    (models_dir / "sale_ext.py").write_text(
+        dedent("""\
         from odoo import models
 
         class SaleExt(models.Model):
             _inherit = "sale.order"
-    """))
+    """)
+    )
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     ctx = graph.modules["ok_dep"]
     diags = check_missing_dependency(ctx)
@@ -76,12 +88,14 @@ def test_missing_dependency_clean_when_sale_in_depends(tmp_path: Path):
 
 def test_missing_dependency_from_xml_ref(tmp_path: Path):
     from odoo_doctor.rules.manifest.missing_dependency import check_missing_dependency
+
     mod = tmp_path / "xml_dep"
     mod.mkdir()
     (mod / "__manifest__.py").write_text(
         '{"name": "XML Dep", "version": "17.0.1.0.0", "depends": ["base"], "data": ["views.xml"], "license": "LGPL-3"}'
     )
-    (mod / "views.xml").write_text(dedent("""\
+    (mod / "views.xml").write_text(
+        dedent("""\
         <odoo>
             <record id="view_test" model="ir.ui.view">
                 <field name="name">test</field>
@@ -94,7 +108,8 @@ def test_missing_dependency_from_xml_ref(tmp_path: Path):
                 <field name="model" ref="sale.model_sale_order"/>
             </record>
         </odoo>
-    """))
+    """)
+    )
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     ctx = graph.modules["xml_dep"]
     diags = check_missing_dependency(ctx)
@@ -102,7 +117,11 @@ def test_missing_dependency_from_xml_ref(tmp_path: Path):
     diag_rules = [d.rule for d in diags]
     assert "manifest-missing-dependency" in diag_rules
     # Verify aggregation
-    diag_sale = [d for d in diags if d.rule == "manifest-missing-dependency" and "sale" in d.message]
+    diag_sale = [
+        d
+        for d in diags
+        if d.rule == "manifest-missing-dependency" and "sale" in d.message
+    ]
     assert len(diag_sale) == 1
     assert "sale.view_order_form" in diag_sale[0].message
     assert "sale.model_sale_order" in diag_sale[0].message

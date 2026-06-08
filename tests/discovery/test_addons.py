@@ -42,4 +42,3 @@ def test_discover_addons_tolerates_non_utf8_manifest(tmp_path):
     # Must not raise; the addon is discovered (replaced char) rather than crashing
     result = discover_addons([tmp_path])
     assert len(result) == 1
-

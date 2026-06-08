@@ -74,14 +74,18 @@ def test_pylint_adapter_warns_on_missing_plugin(monkeypatch, tmp_path: Path):
     assert "missing plugin" in diags[0].title
 
 
-def test_pylint_adapter_warns_on_nonzero_exit_with_no_findings(monkeypatch, tmp_path: Path):
+def test_pylint_adapter_warns_on_nonzero_exit_with_no_findings(
+    monkeypatch, tmp_path: Path
+):
     adapter = PylintOdooAdapter()
     monkeypatch.setattr(adapter, "is_available", lambda: True)
     # Exit 32 = pylint usage error; stdout has nothing parseable
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda *a, **k: subprocess.CompletedProcess(a[0], 32, stdout="", stderr="usage error"),
+        lambda *a, **k: subprocess.CompletedProcess(
+            a[0], 32, stdout="", stderr="usage error"
+        ),
     )
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
@@ -102,4 +106,3 @@ def test_pylint_adapter_keeps_findings_on_nonzero_exit(monkeypatch, tmp_path: Pa
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
     assert diags[0].rule == "E8102"
-

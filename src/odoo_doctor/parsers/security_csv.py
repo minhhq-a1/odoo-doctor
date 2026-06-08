@@ -12,8 +12,10 @@ from pathlib import Path
 class AccessRule:
     id: str
     name: str
-    model_external_id: str   # e.g. "model_sale_custom_wizard"
-    model_external_id_module: str  # e.g. "base" from "base.model_res_partner"; current module if unqualified
+    model_external_id: str  # e.g. "model_sale_custom_wizard"
+    model_external_id_module: (
+        str  # e.g. "base" from "base.model_res_partner"; current module if unqualified
+    )
     group_id: str | None
     perm_read: bool
     perm_write: bool
@@ -38,19 +40,21 @@ def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
             if "." in raw_model_id:
                 model_id_module, model_id = raw_model_id.split(".", 1)
 
-            rules.append(AccessRule(
-                id=row.get("id", ""),
-                name=row.get("name", ""),
-                model_external_id=model_id,
-                model_external_id_module=model_id_module,
-                group_id=row.get("group_id:id", row.get("group_id/id")) or None,
-                perm_read=row.get("perm_read", "0") == "1",
-                perm_write=row.get("perm_write", "0") == "1",
-                perm_create=row.get("perm_create", "0") == "1",
-                perm_unlink=row.get("perm_unlink", "0") == "1",
-                file_path=str(file_path),
-                line=lineno,
-            ))
+            rules.append(
+                AccessRule(
+                    id=row.get("id", ""),
+                    name=row.get("name", ""),
+                    model_external_id=model_id,
+                    model_external_id_module=model_id_module,
+                    group_id=row.get("group_id:id", row.get("group_id/id")) or None,
+                    perm_read=row.get("perm_read", "0") == "1",
+                    perm_write=row.get("perm_write", "0") == "1",
+                    perm_create=row.get("perm_create", "0") == "1",
+                    perm_unlink=row.get("perm_unlink", "0") == "1",
+                    file_path=str(file_path),
+                    line=lineno,
+                )
+            )
 
     return rules
 
@@ -58,7 +62,7 @@ def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
 def model_external_id_to_name(external_id: str) -> str:
     """Convert 'model_sale_custom_wizard' to 'sale.custom.wizard'."""
     if external_id.startswith("model_"):
-        return external_id[len("model_"):].replace("_", ".")
+        return external_id[len("model_") :].replace("_", ".")
     return external_id.replace("_", ".")
 
 
@@ -73,7 +77,7 @@ def candidate_model_names(external_id: str):
     """
     name = external_id
     if name.startswith("model_"):
-        name = name[len("model_"):]
+        name = name[len("model_") :]
     parts = name.split("_")
     n = len(parts)
 

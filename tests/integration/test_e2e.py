@@ -47,15 +47,21 @@ def test_e2e_scan_bad_addon_finds_missing_access(bad_addon: Path):
     assert len(access_diags) >= 1
 
 
-def test_e2e_scan_bad_addon_score_lower_than_sample(sample_addon: Path, bad_addon: Path):
+def test_e2e_scan_bad_addon_score_lower_than_sample(
+    sample_addon: Path, bad_addon: Path
+):
     """bad_addon should score lower than sample_addon."""
     sample_result = runner.invoke(app, ["scan", str(sample_addon.parent), "--json"])
     bad_result = runner.invoke(app, ["scan", str(bad_addon.parent), "--json"])
     assert sample_result.exit_code == 0
     assert bad_result.exit_code == 0
 
-    sample_score = json.loads(sample_result.stdout)["modules"]["sample_addon"]["score"]["overall"]
-    bad_score = json.loads(bad_result.stdout)["modules"]["bad_addon"]["score"]["overall"]
+    sample_score = json.loads(sample_result.stdout)["modules"]["sample_addon"]["score"][
+        "overall"
+    ]
+    bad_score = json.loads(bad_result.stdout)["modules"]["bad_addon"]["score"][
+        "overall"
+    ]
     assert bad_score < sample_score
 
 

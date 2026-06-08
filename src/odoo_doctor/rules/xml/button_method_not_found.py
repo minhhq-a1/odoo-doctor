@@ -39,21 +39,23 @@ def check_button_method_not_found(ctx: ModuleContext) -> list[Diagnostic]:
             else:
                 continue
 
-            diags.append(Diagnostic(
-                module=ctx.name,
-                file_path=view.file_path,
-                line=view.line,
-                column=0,
-                rule="button-method-not-found",
-                category="Correctness",
-                severity="error",
-                tier="P1",
-                source="native",
-                confidence=confidence,
-                title=f"Button calls unknown method '{method_name}'",
-                message=f"View '{view.xml_id}' has button calling '{method_name}' on model '{view.model}' which is not found.",
-                help=f"Add method '{method_name}' to model '{view.model}' or fix the button name attribute.",
-                odoo_version=ctx.odoo_version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=ctx.name,
+                    file_path=view.file_path,
+                    line=view.line,
+                    column=0,
+                    rule="button-method-not-found",
+                    category="Correctness",
+                    severity="error",
+                    tier="P1",
+                    source="native",
+                    confidence=confidence,
+                    title=f"Button calls unknown method '{method_name}'",
+                    message=f"View '{view.xml_id}' has button calling '{method_name}' on model '{view.model}' which is not found.",
+                    help=f"Add method '{method_name}' to model '{view.model}' or fix the button name attribute.",
+                    odoo_version=ctx.odoo_version,
+                )
+            )
 
     return diags

@@ -78,21 +78,25 @@ def test_load_config_child_overrides_parent(tmp_path: Path):
     """Child odoo-doctor.toml overrides parent values."""
     parent = tmp_path / "project"
     parent.mkdir()
-    (parent / "odoo-doctor.toml").write_text(dedent("""\
+    (parent / "odoo-doctor.toml").write_text(
+        dedent("""\
         [odoo-doctor]
         odoo_version = "16.0"
         min_score = 50
 
         [ignore]
         files = ["**/migrations/**"]
-    """))
+    """)
+    )
 
     child = parent / "addons"
     child.mkdir()
-    (child / "odoo-doctor.toml").write_text(dedent("""\
+    (child / "odoo-doctor.toml").write_text(
+        dedent("""\
         [odoo-doctor]
         odoo_version = "17.0"
-    """))
+    """)
+    )
 
     cfg = load_config(child)
     assert cfg.odoo_version == "17.0"
@@ -112,24 +116,27 @@ def test_load_config_no_parent_walk_when_local_exists(tmp_path: Path):
     """When a local config exists, parent config is still merged underneath."""
     parent = tmp_path / "project"
     parent.mkdir()
-    (parent / "odoo-doctor.toml").write_text(dedent("""\
+    (parent / "odoo-doctor.toml").write_text(
+        dedent("""\
         [odoo-doctor]
         odoo_version = "16.0"
         min_score = 80
 
         [adapters]
         ruff = false
-    """))
+    """)
+    )
 
     child = parent / "sub"
     child.mkdir()
-    (child / "odoo-doctor.toml").write_text(dedent("""\
+    (child / "odoo-doctor.toml").write_text(
+        dedent("""\
         [adapters]
         ruff = true
-    """))
+    """)
+    )
 
     cfg = load_config(child)
     assert cfg.odoo_version == "16.0"
     assert cfg.min_score == 80
     assert cfg.adapters["ruff"] is True
-

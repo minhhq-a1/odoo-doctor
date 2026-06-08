@@ -16,7 +16,10 @@ from odoo_doctor.core.scoring import score_diagnostics
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.reporters.json_report import render_json
 from odoo_doctor.reporters.terminal import render_terminal
-from odoo_doctor.rules.suppression import scan_python_suppressions, scan_xml_suppressions
+from odoo_doctor.rules.suppression import (
+    scan_python_suppressions,
+    scan_xml_suppressions,
+)
 
 # Import all rule modules to trigger @rule registration
 import odoo_doctor.rules.manifest.missing_required_fields  # noqa: F401
@@ -35,18 +38,32 @@ from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
 from odoo_doctor.core.diagnostics import Diagnostic
 
-app = typer.Typer(name="odoo-doctor", help="Unified health scoring for Odoo custom addons.")
+app = typer.Typer(
+    name="odoo-doctor", help="Unified health scoring for Odoo custom addons."
+)
 
 
 @app.command()
 def scan(
-    path: Optional[str] = typer.Argument(None, help="Path to scan for addons; omit to use config addons_paths"),
-    odoo_version: Optional[str] = typer.Option(None, "--odoo-version", help="Target Odoo version"),
-    module: Optional[str] = typer.Option(None, "--module", help="Scan only this module"),
+    path: Optional[str] = typer.Argument(
+        None, help="Path to scan for addons; omit to use config addons_paths"
+    ),
+    odoo_version: Optional[str] = typer.Option(
+        None, "--odoo-version", help="Target Odoo version"
+    ),
+    module: Optional[str] = typer.Option(
+        None, "--module", help="Scan only this module"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-    fail_on: Optional[str] = typer.Option(None, "--fail-on", help="Fail if severity found (error|warning)"),
-    diff: Optional[str] = typer.Option(None, "--diff", help="Only scan files changed vs this branch"),
-    min_score: Optional[int] = typer.Option(None, "--min-score", help="Exit 2 if any module scores below this (0-100)"),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on", help="Fail if severity found (error|warning)"
+    ),
+    diff: Optional[str] = typer.Option(
+        None, "--diff", help="Only scan files changed vs this branch"
+    ),
+    min_score: Optional[int] = typer.Option(
+        None, "--min-score", help="Exit 2 if any module scores below this (0-100)"
+    ),
 ) -> None:
     """Scan Odoo addons and report health score."""
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
@@ -122,7 +139,10 @@ def scan(
             for py_file in ctx.path.rglob("*.py"):
                 if py_file.name.startswith("__"):
                     continue
-                if changed_files is not None and str(py_file.resolve()) not in changed_files:
+                if (
+                    changed_files is not None
+                    and str(py_file.resolve()) not in changed_files
+                ):
                     continue
                 try:
                     all_diags.extend(func(py_file, ctx.name, ctx.odoo_version))
@@ -140,7 +160,10 @@ def scan(
         adapters.append(PylintOdooAdapter())
 
     for adapter in adapters:
-        if not adapter.is_available() and adapter.config_key not in cfg.explicit_adapters:
+        if (
+            not adapter.is_available()
+            and adapter.config_key not in cfg.explicit_adapters
+        ):
             continue
         for ctx in graph.modules.values():
             try:
@@ -161,7 +184,8 @@ def scan(
         }
         context_diag_ids = {id(d) for d in context_diags}
         all_diags = [
-            d for d in all_diags
+            d
+            for d in all_diags
             if str(Path(d.file_path).resolve()) in abs_changed
             or (id(d) in context_diag_ids and d.module in changed_modules)
         ]
@@ -179,7 +203,11 @@ def scan(
     # Run pipeline
     active_rules = default_registry.active_rules_map()
     diags, eligible = run_pipeline(
-        all_diags, cfg, suppressions, active_rules, version,
+        all_diags,
+        cfg,
+        suppressions,
+        active_rules,
+        version,
         base_path=config_root,
     )
 
@@ -192,7 +220,8 @@ def scan(
         mod_diags = [d for d in diags if d.module == module_name]
         mod_elig = [elig for d, elig in zip(diags, eligible) if d.module == module_name]
         scores[module_name] = score_diagnostics(
-            mod_diags, mod_elig,
+            mod_diags,
+            mod_elig,
             category_weights=cfg.category_weights,
             in_scope_categories=in_scope,
         )
@@ -212,6 +241,7 @@ def scan(
     effective_min = min_score if min_score is not None else cfg.min_score
     if effective_min > 0:
         from odoo_doctor.core.scoring import ScoreResult
+
         failed_modules = [
             (name, score)
             for name, score in scores.items()
@@ -337,7 +367,10 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
     try:
         root_result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, cwd=repo_path, timeout=30,
+            capture_output=True,
+            text=True,
+            cwd=repo_path,
+            timeout=30,
         )
         if root_result.returncode != 0:
             return None
@@ -345,7 +378,10 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
 
         result = subprocess.run(
             ["git", "diff", "--name-only", base_branch],
-            capture_output=True, text=True, cwd=git_root, timeout=30,
+            capture_output=True,
+            text=True,
+            cwd=git_root,
+            timeout=30,
         )
         if result.returncode != 0:
             return None
@@ -357,12 +393,14 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None
 
+
 def _path_is_relative_to(path: Path, base: Path) -> bool:
     try:
         path.resolve().relative_to(base.resolve())
         return True
     except ValueError:
         return False
+
 
 def _has_severity_at_or_above(diagnostics: list[Diagnostic], threshold: str) -> bool:
     ranks = {"info": 1, "warning": 2, "error": 3}

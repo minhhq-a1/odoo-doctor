@@ -23,7 +23,7 @@ def test_adapter_gating_scenarios(tmp_path: Path, monkeypatch):
 
     # 1. Default config + missing executable => no adapter warnings
     monkeypatch.setattr(shutil, "which", lambda cmd: None)
-    
+
     # Run with default config (no odoo-doctor.toml)
     result = runner.invoke(app, ["scan", str(tmp_path), "--json"])
     assert result.exit_code == 0
@@ -34,7 +34,9 @@ def test_adapter_gating_scenarios(tmp_path: Path, monkeypatch):
     assert not any(d["rule"].startswith("adapter-") for d in all_diags)
 
     # 2. [adapters] ruff = true + missing executable => adapter-ruff-warning
-    (tmp_path / "odoo-doctor.toml").write_text("[adapters]\nruff = true\npylint_odoo = false\n")
+    (tmp_path / "odoo-doctor.toml").write_text(
+        "[adapters]\nruff = true\npylint_odoo = false\n"
+    )
     result = runner.invoke(app, ["scan", str(tmp_path), "--json"])
     assert result.exit_code == 0
     data = json.loads(result.stdout)
@@ -47,7 +49,9 @@ def test_adapter_gating_scenarios(tmp_path: Path, monkeypatch):
     assert not any(d["rule"] == "adapter-pylint-odoo-warning" for d in all_diags)
 
     # 3. [adapters] ruff = false => no execution, no warnings
-    (tmp_path / "odoo-doctor.toml").write_text("[adapters]\nruff = false\npylint_odoo = false\n")
+    (tmp_path / "odoo-doctor.toml").write_text(
+        "[adapters]\nruff = false\npylint_odoo = false\n"
+    )
     result = runner.invoke(app, ["scan", str(tmp_path), "--json"])
     assert result.exit_code == 0
     data = json.loads(result.stdout)

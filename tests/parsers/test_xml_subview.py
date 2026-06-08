@@ -15,7 +15,9 @@ def _write(tmp_path: Path, xml: str) -> Path:
 
 
 def test_nested_field_not_attributed_to_parent(tmp_path: Path):
-    f = _write(tmp_path, """\
+    f = _write(
+        tmp_path,
+        """\
 <odoo>
   <record id="view_form" model="ir.ui.view">
     <field name="model">my.parent</field>
@@ -32,7 +34,8 @@ def test_nested_field_not_attributed_to_parent(tmp_path: Path):
     </field>
   </record>
 </odoo>
-""")
+""",
+    )
     views = parse_views(f, module_name="m")
     assert len(views) == 1
     v = views[0]

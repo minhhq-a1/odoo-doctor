@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 @dataclass
 class CategoryScore:
     category: str
-    score: int          # 0–100
+    score: int  # 0–100
     finding_count: int
     total_impact: float
 
@@ -28,6 +28,7 @@ def score_label(overall: float) -> str:
     if overall >= 50:
         return "Needs work"
     return "Critical"
+
 
 @dataclass
 class ScoreResult:
@@ -75,19 +76,23 @@ def score_diagnostics(
     cat_scores: list[CategoryScore] = []
     for cat in CATEGORIES:
         score = max(0, int(100 - impact[cat]))
-        cat_scores.append(CategoryScore(
-            category=cat,
-            score=score,
-            finding_count=counts[cat],
-            total_impact=impact[cat],
-        ))
+        cat_scores.append(
+            CategoryScore(
+                category=cat,
+                score=score,
+                finding_count=counts[cat],
+                total_impact=impact[cat],
+            )
+        )
 
     # Overall: blend over in-scope categories only
     in_scope_scores = [cs.score for cs in cat_scores if cs.category in scope]
     if not in_scope_scores:
         overall = 100.0
     else:
-        overall = 0.4 * min(in_scope_scores) + 0.6 * (sum(in_scope_scores) / len(in_scope_scores))
+        overall = 0.4 * min(in_scope_scores) + 0.6 * (
+            sum(in_scope_scores) / len(in_scope_scores)
+        )
     overall = round(overall, 1)
 
     result = ScoreResult(

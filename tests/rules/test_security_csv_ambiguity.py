@@ -11,7 +11,9 @@ from odoo_doctor.rules.security.unknown_model_in_access_csv import (
     check_unknown_model_in_access_csv,
 )
 
-_CSV_HEADER = "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\n"
+_CSV_HEADER = (
+    "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\n"
+)
 
 
 def _module(tmp_path: Path, csv_body: str, model_py: str | None = None) -> Path:

@@ -10,7 +10,9 @@ class SaleOrderCustom(models.Model):
     @api.depends("order_line.product_id")
     def _compute_total_weight(self):
         for order in self:
-            order.total_weight = sum(line.product_id.weight for line in order.order_line)
+            order.total_weight = sum(
+                line.product_id.weight for line in order.order_line
+            )
 
     def action_confirm_custom(self):
         self.ensure_one()

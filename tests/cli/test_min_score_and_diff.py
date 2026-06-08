@@ -16,6 +16,7 @@ runner = CliRunner()
 
 # ─── Task 1: --min-score ────────────────────────────────────────────────────
 
+
 def test_min_score_passes_when_above_threshold(sample_addon: Path):
     """Clean addon scores high → exit 0 when min-score is low."""
     result = runner.invoke(app, ["scan", str(sample_addon), "--min-score", "0"])
@@ -61,7 +62,9 @@ def test_min_score_cli_overrides_config(tmp_path: Path):
 
 def test_min_score_json_output_still_exits_2(bad_addon: Path):
     """--json + --min-score still exits 2 (no terminal output for fail message)."""
-    result = runner.invoke(app, ["scan", str(bad_addon), "--min-score", "100", "--json"])
+    result = runner.invoke(
+        app, ["scan", str(bad_addon), "--min-score", "100", "--json"]
+    )
     assert result.exit_code == 2
     # JSON should still be valid on stdout
     parsed = json.loads(result.stdout)
@@ -70,16 +73,24 @@ def test_min_score_json_output_still_exits_2(bad_addon: Path):
 
 # ─── Task 3: --diff path matching ───────────────────────────────────────────
 
+
 def test_diff_filters_by_absolute_path(tmp_path: Path, bad_addon: Path):
     """--diff only returns diags for the changed files (absolute path match)."""
     changed_file = bad_addon / "models" / "bad_model.py"
 
-    with patch("odoo_doctor.cli.app._get_changed_files", return_value={str(changed_file)}):
-        result = runner.invoke(app, [
-            "scan", str(bad_addon.parent),
-            "--diff", "main",  # value doesn't matter, _get_changed_files is mocked
-            "--json",
-        ])
+    with patch(
+        "odoo_doctor.cli.app._get_changed_files", return_value={str(changed_file)}
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                str(bad_addon.parent),
+                "--diff",
+                "main",  # value doesn't matter, _get_changed_files is mocked
+                "--json",
+            ],
+        )
 
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -87,25 +98,37 @@ def test_diff_filters_by_absolute_path(tmp_path: Path, bad_addon: Path):
     bad_diags = parsed["modules"].get("bad_addon", {}).get("diagnostics", [])
     assert bad_diags
     for d in bad_diags:
-        assert "bad_model.py" in d["file_path"] or d["rule"] != "raw-sql-string-interpolation"
+        assert (
+            "bad_model.py" in d["file_path"]
+            or d["rule"] != "raw-sql-string-interpolation"
+        )
 
 
 def test_diff_filters_when_scan_path_is_not_repo_root(bad_addon: Path):
     """Absolute changed paths still match when scanning a subdirectory."""
     changed_file = bad_addon / "models" / "bad_model.py"
 
-    with patch("odoo_doctor.cli.app._get_changed_files", return_value={str(changed_file)}):
-        result = runner.invoke(app, [
-            "scan", str(bad_addon.parent),
-            "--diff", "main",
-            "--json",
-        ])
+    with patch(
+        "odoo_doctor.cli.app._get_changed_files", return_value={str(changed_file)}
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                str(bad_addon.parent),
+                "--diff",
+                "main",
+                "--json",
+            ],
+        )
 
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
     bad_diags = parsed["modules"].get("bad_addon", {}).get("diagnostics", [])
     assert bad_diags
-    assert any(Path(d["file_path"]).resolve() == changed_file.resolve() for d in bad_diags)
+    assert any(
+        Path(d["file_path"]).resolve() == changed_file.resolve() for d in bad_diags
+    )
     assert all(
         Path(d["file_path"]).resolve() == changed_file.resolve()
         or d["rule"] != "raw-sql-string-interpolation"
@@ -116,19 +139,21 @@ def test_diff_filters_when_scan_path_is_not_repo_root(bad_addon: Path):
 def test_diff_empty_changed_files_returns_no_diags(bad_addon: Path):
     """--diff with no changed files → no diagnostics."""
     with patch("odoo_doctor.cli.app._get_changed_files", return_value=set()):
-        result = runner.invoke(app, [
-            "scan", str(bad_addon.parent),
-            "--diff", "main",
-            "--json",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                str(bad_addon.parent),
+                "--diff",
+                "main",
+                "--json",
+            ],
+        )
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    all_diags = [
-        d
-        for mod in parsed["modules"].values()
-        for d in mod["diagnostics"]
-    ]
+    all_diags = [d for mod in parsed["modules"].values() for d in mod["diagnostics"]]
     assert all_diags == []
+
 
 def test_diff_keeps_context_diagnostics_for_changed_module(tmp_path: Path):
     """Changing a model file should keep context findings such as missing ACLs."""
@@ -145,12 +170,19 @@ def test_diff_keeps_context_diagnostics_for_changed_module(tmp_path: Path):
         'from odoo import models\nclass M(models.Model):\n    _name = "acl.mod"\n'
     )
 
-    with patch("odoo_doctor.cli.app._get_changed_files", return_value={str(model_file)}):
-        result = runner.invoke(app, [
-            "scan", str(tmp_path),
-            "--diff", "main",
-            "--json",
-        ])
+    with patch(
+        "odoo_doctor.cli.app._get_changed_files", return_value={str(model_file)}
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                str(tmp_path),
+                "--diff",
+                "main",
+                "--json",
+            ],
+        )
 
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -167,18 +199,25 @@ import odoo_doctor.cli.app as appmod
 def test_get_changed_files_returns_none_on_git_failure(tmp_path: Path, monkeypatch):
     """git rev-parse failing (not a repo / unknown ref) → None, not empty set."""
     monkeypatch.setattr(
-        appmod.subprocess, "run",
-        lambda *a, **k: subprocess.CompletedProcess(a[0], 128, stdout="", stderr="fatal"),
+        appmod.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(
+            a[0], 128, stdout="", stderr="fatal"
+        ),
     )
     assert appmod._get_changed_files(tmp_path, "nope") is None
 
 
 def test_get_changed_files_empty_diff_returns_empty_set(tmp_path: Path, monkeypatch):
     """git succeeds but nothing changed → empty set (a valid 'scan nothing' run)."""
-    calls = iter([
-        subprocess.CompletedProcess([], 0, stdout=str(tmp_path), stderr=""),  # rev-parse
-        subprocess.CompletedProcess([], 0, stdout="", stderr=""),             # diff (empty)
-    ])
+    calls = iter(
+        [
+            subprocess.CompletedProcess(
+                [], 0, stdout=str(tmp_path), stderr=""
+            ),  # rev-parse
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),  # diff (empty)
+        ]
+    )
     monkeypatch.setattr(appmod.subprocess, "run", lambda *a, **k: next(calls))
     assert appmod._get_changed_files(tmp_path, "main") == set()
 
@@ -186,13 +225,21 @@ def test_get_changed_files_empty_diff_returns_empty_set(tmp_path: Path, monkeypa
 def test_diff_git_failure_exits_3(bad_addon: Path):
     """A --diff git failure must error out (exit 3), never a clean exit 0."""
     with patch("odoo_doctor.cli.app._get_changed_files", return_value=None):
-        result = runner.invoke(app, [
-            "scan", str(bad_addon.parent), "--diff", "does-not-exist", "--json",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "scan",
+                str(bad_addon.parent),
+                "--diff",
+                "does-not-exist",
+                "--json",
+            ],
+        )
     assert result.exit_code == 3
 
 
 # ─── Part C / C2: --min-score range validation ──────────────────────────────
+
 
 def test_min_score_flag_above_100_rejected(sample_addon: Path):
     result = runner.invoke(app, ["scan", str(sample_addon), "--min-score", "150"])
@@ -213,5 +260,3 @@ def test_config_min_score_out_of_range_rejected(tmp_path: Path):
     (tmp_path / "odoo-doctor.toml").write_text("[odoo-doctor]\nmin_score = 150\n")
     result = runner.invoke(app, ["scan", str(tmp_path)])
     assert result.exit_code == 3
-
-

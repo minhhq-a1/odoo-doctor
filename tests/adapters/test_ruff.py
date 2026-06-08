@@ -35,8 +35,15 @@ def test_ruff_adapter_applies_rule_mapping(fixtures_dir: Path):
 
 def test_ruff_adapter_unmapped_rule():
     adapter = RuffAdapter()
-    raw = [{"code": "UNKNOWN999", "message": "something", "filename": "f.py",
-            "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 1}}]
+    raw = [
+        {
+            "code": "UNKNOWN999",
+            "message": "something",
+            "filename": "f.py",
+            "location": {"row": 1, "column": 1},
+            "end_location": {"row": 1, "column": 1},
+        }
+    ]
     diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
     assert diags[0].category == "Uncategorized"
     assert diags[0].tier == "P3"
@@ -46,10 +53,20 @@ def test_ruff_adapter_unmapped_rule():
 def test_ruff_adapter_filters_f401_in_init():
     adapter = RuffAdapter()
     raw = [
-        {"code": "F401", "message": "unused import", "filename": "__init__.py",
-         "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 1}},
-        {"code": "F401", "message": "unused import", "filename": "models/res_partner.py",
-         "location": {"row": 5, "column": 1}, "end_location": {"row": 5, "column": 1}},
+        {
+            "code": "F401",
+            "message": "unused import",
+            "filename": "__init__.py",
+            "location": {"row": 1, "column": 1},
+            "end_location": {"row": 1, "column": 1},
+        },
+        {
+            "code": "F401",
+            "message": "unused import",
+            "filename": "models/res_partner.py",
+            "location": {"row": 5, "column": 1},
+            "end_location": {"row": 5, "column": 1},
+        },
     ]
     diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
     # F401 in __init__.py is filtered out, but the one in res_partner.py is kept
@@ -85,7 +102,9 @@ def test_ruff_adapter_warns_on_invalid_json(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, stdout="not-json", stderr=""),
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout="not-json", stderr=""
+        ),
     )
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
@@ -94,7 +113,9 @@ def test_ruff_adapter_warns_on_invalid_json(monkeypatch, tmp_path: Path):
 
 def test_ruff_adapter_tolerates_null_fields(fixtures_dir: Path):
     adapter = RuffAdapter()
-    raw = json.loads((fixtures_dir / "adapters" / "ruff_output_null_fields.json").read_text())
+    raw = json.loads(
+        (fixtures_dir / "adapters" / "ruff_output_null_fields.json").read_text()
+    )
     diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
     # Both records survive — the null-field one degrades to defaults, no crash
     assert len(diags) == 2
@@ -109,15 +130,25 @@ def test_ruff_adapter_tolerates_null_fields(fixtures_dir: Path):
 
 def test_ruff_adapter_skips_non_dict_record():
     adapter = RuffAdapter()
-    raw = [None, {"code": "E501", "message": "x", "filename": "a.py",
-                  "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 2}}]
+    raw = [
+        None,
+        {
+            "code": "E501",
+            "message": "x",
+            "filename": "a.py",
+            "location": {"row": 1, "column": 1},
+            "end_location": {"row": 1, "column": 2},
+        },
+    ]
     diags = adapter._parse_output(raw, module_name="m", odoo_version="17.0")
     # The null record is dropped; the valid one is kept
     assert len(diags) == 1
     assert diags[0].rule == "E501"
 
 
-def test_ruff_adapter_warns_on_nonzero_exit_with_no_findings(monkeypatch, tmp_path: Path):
+def test_ruff_adapter_warns_on_nonzero_exit_with_no_findings(
+    monkeypatch, tmp_path: Path
+):
     adapter = RuffAdapter()
     monkeypatch.setattr(adapter, "is_available", lambda: True)
     monkeypatch.setattr(
@@ -136,10 +167,17 @@ def test_ruff_adapter_keeps_findings_on_exit_1(monkeypatch, tmp_path: Path):
     # Ruff exits 1 when violations exist — this is success, not failure
     adapter = RuffAdapter()
     monkeypatch.setattr(adapter, "is_available", lambda: True)
-    payload = json.dumps([{
-        "code": "E501", "message": "long", "filename": "a.py",
-        "location": {"row": 1, "column": 1}, "end_location": {"row": 1, "column": 2},
-    }])
+    payload = json.dumps(
+        [
+            {
+                "code": "E501",
+                "message": "long",
+                "filename": "a.py",
+                "location": {"row": 1, "column": 1},
+                "end_location": {"row": 1, "column": 2},
+            }
+        ]
+    )
     monkeypatch.setattr(
         subprocess,
         "run",
@@ -148,5 +186,3 @@ def test_ruff_adapter_keeps_findings_on_exit_1(monkeypatch, tmp_path: Path):
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
     assert diags[0].rule == "E501"
-
-

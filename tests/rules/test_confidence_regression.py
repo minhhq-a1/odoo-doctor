@@ -47,13 +47,15 @@ def test_repo_model_missing_field_is_flagged(tmp_path: Path):
     (mod / "models").mkdir(parents=True)
     (mod / "views").mkdir(parents=True)
     (mod / "__manifest__.py").write_text(_manifest(["views/v.xml"]))
-    (mod / "models" / "m.py").write_text(dedent("""\
+    (mod / "models" / "m.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class MyModel(models.Model):
             _name = "my.model"
             foo = fields.Char()
-    """))
+    """)
+    )
     (mod / "views" / "v.xml").write_text("""\
 <odoo>
   <record id="view_my_form" model="ir.ui.view">
@@ -78,7 +80,8 @@ def test_inherited_method_resolves_via_extended_methods(tmp_path: Path):
     (mod / "models").mkdir(parents=True)
     (mod / "views").mkdir(parents=True)
     (mod / "__manifest__.py").write_text(_manifest(["views/v.xml"]))
-    (mod / "models" / "m.py").write_text(dedent("""\
+    (mod / "models" / "m.py").write_text(
+        dedent("""\
         from odoo import models
 
         class SaleOrderExt(models.Model):
@@ -86,7 +89,8 @@ def test_inherited_method_resolves_via_extended_methods(tmp_path: Path):
 
             def action_my_custom(self):
                 return True
-    """))
+    """)
+    )
     (mod / "views" / "v.xml").write_text("""\
 <odoo>
   <record id="view_sale_btn" model="ir.ui.view">
@@ -108,7 +112,8 @@ def test_subview_field_not_flagged_against_parent_repo_model(tmp_path: Path):
     (mod / "models").mkdir(parents=True)
     (mod / "views").mkdir(parents=True)
     (mod / "__manifest__.py").write_text(_manifest(["views/v.xml"]))
-    (mod / "models" / "m.py").write_text(dedent("""\
+    (mod / "models" / "m.py").write_text(
+        dedent("""\
         from odoo import models, fields
 
         class Parent(models.Model):
@@ -119,7 +124,8 @@ def test_subview_field_not_flagged_against_parent_repo_model(tmp_path: Path):
             _name = "my.line"
             parent_id = fields.Many2one("my.parent")
             qty = fields.Float()
-    """))
+    """)
+    )
     (mod / "views" / "v.xml").write_text("""\
 <odoo>
   <record id="view_parent_form" model="ir.ui.view">

@@ -23,12 +23,16 @@ def test_stubdata_complete_defaults_false():
 
 def test_loader_reads_complete_true(tmp_path, monkeypatch):
     stub_file = tmp_path / "42.0.json"
-    stub_file.write_text(json.dumps({
-        "version": "42.0",
-        "complete": True,
-        "models": {"my.model": {"fields": ["a"], "methods": ["m"]}},
-        "xml_ids": {},
-    }))
+    stub_file.write_text(
+        json.dumps(
+            {
+                "version": "42.0",
+                "complete": True,
+                "models": {"my.model": {"fields": ["a"], "methods": ["m"]}},
+                "xml_ids": {},
+            }
+        )
+    )
     monkeypatch.setattr(loader, "_STUBS_DIR", tmp_path)
     stubs = load_stubs("42.0")
     assert stubs is not None
@@ -39,6 +43,7 @@ def test_complete_stub_proves_absence(monkeypatch):
     """When the stub file is complete, a missing field IS provably NOT_FOUND."""
     from odoo_doctor.graph.resolver import SymbolResolver
     from odoo_doctor.graph.resolver import ResolveResult
+
     r = SymbolResolver(repo_models={}, repo_xml_ids={}, stub_version="17.0")
     # Simulate a complete stub backing (e.g. build_stubs source output).
     r._stubs.complete = True

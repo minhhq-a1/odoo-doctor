@@ -33,3 +33,6 @@ jobs:
 
       - name: Run ruff
         run: python -m ruff check src tests
+
+      - name: Check formatting
+        run: python -m ruff format --check src tests

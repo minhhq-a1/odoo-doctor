@@ -35,10 +35,20 @@ def test_diagnostic_creation():
 
 def test_diagnostic_is_frozen():
     d = Diagnostic(
-        module="m", file_path="f.py", line=1, column=0,
-        rule="r", category="Security", severity="error", tier="P0",
-        source="native", confidence="high", title="t", message="msg",
-        help="h", odoo_version="17.0",
+        module="m",
+        file_path="f.py",
+        line=1,
+        column=0,
+        rule="r",
+        category="Security",
+        severity="error",
+        tier="P0",
+        source="native",
+        confidence="high",
+        title="t",
+        message="msg",
+        help="h",
+        odoo_version="17.0",
     )
     try:
         d.module = "other"  # type: ignore[misc]
@@ -49,8 +59,13 @@ def test_diagnostic_is_frozen():
 
 def test_categories_are_canonical():
     expected = [
-        "Security", "Correctness", "Performance", "Data Integrity",
-        "Upgrade Safety", "Module Hygiene", "Maintainability",
+        "Security",
+        "Correctness",
+        "Performance",
+        "Data Integrity",
+        "Upgrade Safety",
+        "Module Hygiene",
+        "Maintainability",
     ]
     assert CATEGORIES == expected
 

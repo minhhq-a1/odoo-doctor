@@ -43,48 +43,82 @@ class RuffAdapter:
 
     def run(self, module_path: Path, odoo_version: str) -> list[Diagnostic]:
         if not self.is_available():
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "missing executable",
-                "Ruff executable was not found on PATH.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "missing executable",
+                    "Ruff executable was not found on PATH.",
+                )
+            ]
 
         try:
             result = subprocess.run(
                 ["ruff", "check", "--output-format=json", str(module_path)],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
         except subprocess.TimeoutExpired:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "timeout",
-                "Ruff did not finish within 60 seconds.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "timeout",
+                    "Ruff did not finish within 60 seconds.",
+                )
+            ]
         except FileNotFoundError:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "missing executable",
-                "Ruff executable was not found on PATH.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "missing executable",
+                    "Ruff executable was not found on PATH.",
+                )
+            ]
 
         try:
             raw = json.loads(result.stdout) if result.stdout else []
         except json.JSONDecodeError:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "parse failure",
-                "Ruff returned invalid JSON output.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "parse failure",
+                    "Ruff returned invalid JSON output.",
+                )
+            ]
 
         if not isinstance(raw, list):
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "parse failure",
-                "Ruff JSON output did not match the expected list schema.",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "parse failure",
+                    "Ruff JSON output did not match the expected list schema.",
+                )
+            ]
 
-        diags = self._parse_output(raw, module_name=module_path.name, odoo_version=odoo_version)
+        diags = self._parse_output(
+            raw, module_name=module_path.name, odoo_version=odoo_version
+        )
         if result.returncode != 0 and not diags:
-            return [_adapter_warning(
-                self.name, module_path, odoo_version, "process error",
-                f"Ruff exited with status {result.returncode} but produced no findings; "
-                "the run may have failed (configuration or internal error).",
-            )]
+            return [
+                _adapter_warning(
+                    self.name,
+                    module_path,
+                    odoo_version,
+                    "process error",
+                    f"Ruff exited with status {result.returncode} but produced no findings; "
+                    "the run may have failed (configuration or internal error).",
+                )
+            ]
         return diags
 
     def _parse_output(
@@ -102,25 +136,26 @@ class RuffAdapter:
             mapping = self._mapping.get(code, _UNMAPPED)
             location = item.get("location") or {}
 
-            diags.append(Diagnostic(
-                module=module_name,
-                file_path=filename,
-                line=location.get("row", 0) or 0,
-                column=location.get("column", 0) or 0,
-                rule=code,
-                category=mapping.category,
-                severity="warning" if mapping.tier in ("P2", "P3") else "error",
-                tier=mapping.tier,
-                source="ruff",
-                confidence=mapping.confidence,
-                title=f"Ruff {code}",
-                message=item.get("message") or "",
-                help=f"See Ruff docs for rule {code}.",
-                url=f"https://docs.astral.sh/ruff/rules/{code}",
-                odoo_version=odoo_version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=module_name,
+                    file_path=filename,
+                    line=location.get("row", 0) or 0,
+                    column=location.get("column", 0) or 0,
+                    rule=code,
+                    category=mapping.category,
+                    severity="warning" if mapping.tier in ("P2", "P3") else "error",
+                    tier=mapping.tier,
+                    source="ruff",
+                    confidence=mapping.confidence,
+                    title=f"Ruff {code}",
+                    message=item.get("message") or "",
+                    help=f"See Ruff docs for rule {code}.",
+                    url=f"https://docs.astral.sh/ruff/rules/{code}",
+                    odoo_version=odoo_version,
+                )
+            )
         return diags
-
 
     def _load_mapping(self) -> dict[str, _RuleMapping]:
         mapping_file = Path(__file__).parent / "rule_mapping.toml"

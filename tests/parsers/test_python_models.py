@@ -72,4 +72,3 @@ def test_parse_controllers_tolerates_non_utf8(tmp_path):
     f = tmp_path / "latin1_ctrl.py"
     f.write_bytes(b"# -*- coding: latin-1 -*-\nNAME = '\xe9'\n")
     assert parse_controllers(f) == []
-

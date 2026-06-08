@@ -38,11 +38,14 @@ def test_module_context_has_parsed_data(sample_addon: Path):
     assert len(ctx.access_rules) > 0
 
 
-def test_resolver_uses_manifest_version_for_stubs_when_project_unknown(sample_addon: Path):
+def test_resolver_uses_manifest_version_for_stubs_when_project_unknown(
+    sample_addon: Path,
+):
     graph = build_project_graph(
         addon_paths=[sample_addon],
         odoo_version="unknown",
     )
     result = graph.resolver.resolve_model("sale.order")
     from odoo_doctor.graph.resolver import ResolveResult
+
     assert result.status == ResolveResult.FOUND

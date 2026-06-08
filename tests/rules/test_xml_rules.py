@@ -65,7 +65,8 @@ def test_button_method_found_in_model(tmp_path: Path):
     )
     models_dir = mod / "models"
     models_dir.mkdir()
-    (models_dir / "m.py").write_text(dedent("""\
+    (models_dir / "m.py").write_text(
+        dedent("""\
         from odoo import models
 
         class GoodModel(models.Model):
@@ -73,7 +74,8 @@ def test_button_method_found_in_model(tmp_path: Path):
 
             def action_do_it(self):
                 return True
-    """))
+    """)
+    )
     views_dir = mod / "views"
     views_dir.mkdir()
     (views_dir / "views.xml").write_text("""\
@@ -92,6 +94,7 @@ def test_button_method_found_in_model(tmp_path: Path):
     ctx = graph.modules["good_btn"]
     diags = check_button_method_not_found(ctx)
     assert diags == []
+
 
 def test_missing_xml_ref_reports_local_missing_ref(tmp_path: Path):
     """A ref to the current module is provably missing after local XML parsing."""
@@ -115,6 +118,7 @@ def test_missing_xml_ref_reports_local_missing_ref(tmp_path: Path):
     diags = check_missing_xml_ref(ctx)
     assert len(diags) == 1
     assert diags[0].rule == "missing-xml-ref"
+
 
 def test_missing_xml_ref_reports_local_missing_inherit_id(tmp_path: Path):
     """A view inheriting a missing current-module view should be reported."""

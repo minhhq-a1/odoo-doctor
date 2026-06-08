@@ -19,16 +19,27 @@ from odoo_doctor.core.pipeline import (
 
 def _diag(**overrides) -> Diagnostic:
     defaults = dict(
-        module="m", file_path="f.py", line=1, column=0,
-        rule="r", category="Security", severity="error", tier="P0",
-        source="native", confidence="high", title="t", message="msg",
-        help="h", odoo_version="17.0",
+        module="m",
+        file_path="f.py",
+        line=1,
+        column=0,
+        rule="r",
+        category="Security",
+        severity="error",
+        tier="P0",
+        source="native",
+        confidence="high",
+        title="t",
+        message="msg",
+        help="h",
+        odoo_version="17.0",
     )
     defaults.update(overrides)
     return Diagnostic(**defaults)
 
 
 # --- normalize ---
+
 
 def test_normalize_converts_paths_to_posix_absolute():
     d = _diag(file_path="models\\sale.py")
@@ -41,12 +52,17 @@ def test_run_pipeline_normalizes_before_dedup(tmp_path):
     file_path = tmp_path / "models" / "sale.py"
     file_path.parent.mkdir()
     file_path.touch()
-    native = _diag(file_path=str(file_path.resolve()), source="native", message="native")
+    native = _diag(
+        file_path=str(file_path.resolve()), source="native", message="native"
+    )
     adapter = _diag(file_path=str(file_path), source="ruff", message="adapter")
     cfg = OdooDoctorConfig()
 
     result_diags, eligible = run_pipeline(
-        [native, adapter], cfg, suppressions=set(), active_rules={"r": None},
+        [native, adapter],
+        cfg,
+        suppressions=set(),
+        active_rules={"r": None},
         detected_version="17.0",
     )
 
@@ -55,6 +71,7 @@ def test_run_pipeline_normalizes_before_dedup(tmp_path):
 
 
 # --- deduplicate ---
+
 
 def test_dedup_same_file_line_category_keeps_higher_confidence():
     native_low = _diag(source="native", confidence="low", message="short")
@@ -95,6 +112,7 @@ def test_dedup_same_rule_same_location_collapsed():
 
 # --- severity overrides ---
 
+
 def test_severity_override_changes_severity():
     d = _diag(rule="search-in-loop", severity="error")
     cfg = OdooDoctorConfig(severity_overrides={"search-in-loop": "warning"})
@@ -110,6 +128,7 @@ def test_severity_override_off_removes():
 
 
 # --- ignore filters ---
+
 
 def test_ignore_by_rule():
     d = _diag(rule="deprecated-api")
@@ -134,6 +153,7 @@ def test_ignore_by_file_glob():
 
 def test_ignore_by_file_glob_with_normalization_models():
     from pathlib import Path
+
     base_dir = Path("/tmp/fake_repo")
     file_path = base_dir / "models" / "sale.py"
     d = _diag(file_path=str(file_path))
@@ -147,6 +167,7 @@ def test_ignore_by_file_glob_with_normalization_models():
 
 def test_ignore_by_file_glob_with_normalization_migrations():
     from pathlib import Path
+
     base_dir = Path("/tmp/fake_repo")
     file_path = base_dir / "migrations" / "17.0" / "pre.py"
     d = _diag(file_path=str(file_path))
@@ -169,7 +190,10 @@ def test_run_pipeline_ignores_relative_patterns(tmp_path):
     cfg = OdooDoctorConfig(ignore_files=["models/*.py"])
 
     result_diags, eligible = run_pipeline(
-        [d], cfg, suppressions=set(), active_rules={"r": None},
+        [d],
+        cfg,
+        suppressions=set(),
+        active_rules={"r": None},
         detected_version="17.0",
         base_path=tmp_path,
     )
@@ -186,29 +210,32 @@ def test_run_pipeline_ignores_migrations_glob(tmp_path):
     cfg = OdooDoctorConfig(ignore_files=["migrations/**"])
 
     result_diags, eligible = run_pipeline(
-        [d], cfg, suppressions=set(), active_rules={"r": None},
+        [d],
+        cfg,
+        suppressions=set(),
+        active_rules={"r": None},
         detected_version="17.0",
         base_path=tmp_path,
     )
     assert len(result_diags) == 0
 
 
-
 # --- inline suppressions ---
 
+
 def test_inline_suppression_removes_matching():
-    d = normalize_diagnostics([
-        _diag(file_path="models/sale.py", line=10, rule="search-in-loop")
-    ])[0]
+    d = normalize_diagnostics(
+        [_diag(file_path="models/sale.py", line=10, rule="search-in-loop")]
+    )[0]
     suppressions = {("models/sale.py", 10, "search-in-loop")}
     result = apply_inline_suppressions([d], suppressions)
     assert len(result) == 0
 
 
 def test_inline_suppression_keeps_non_matching():
-    d = normalize_diagnostics([
-        _diag(file_path="models/sale.py", line=10, rule="search-in-loop")
-    ])[0]
+    d = normalize_diagnostics(
+        [_diag(file_path="models/sale.py", line=10, rule="search-in-loop")]
+    )[0]
     suppressions = {("models/sale.py", 10, "other-rule")}
     result = apply_inline_suppressions([d], suppressions)
     assert len(result) == 1
@@ -221,7 +248,8 @@ def test_run_pipeline_suppression_matches_after_path_normalization(tmp_path):
     d = _diag(file_path=str(file_path), line=10, rule="search-in-loop")
 
     result_diags, eligible = run_pipeline(
-        [d], OdooDoctorConfig(),
+        [d],
+        OdooDoctorConfig(),
         suppressions={(str(file_path), 10, "search-in-loop")},
         active_rules={"search-in-loop": None},
         detected_version="17.0",
@@ -232,6 +260,7 @@ def test_run_pipeline_suppression_matches_after_path_normalization(tmp_path):
 
 
 # --- version gates ---
+
 
 def test_version_gate_removes_inapplicable():
     d = _diag(rule="owl-rule", odoo_version="14.0")
@@ -256,6 +285,7 @@ def test_version_gate_keeps_when_no_min():
 
 # --- score eligibility ---
 
+
 def test_score_eligible_high_confidence():
     d = _diag(confidence="high", category="Security")
     result = mark_score_eligibility([d])
@@ -276,21 +306,26 @@ def test_score_ineligible_uncategorized():
 
 # --- full pipeline ---
 
+
 def test_run_pipeline_smoke():
     diags = [_diag(rule="r1"), _diag(rule="r2", confidence="low")]
     cfg = OdooDoctorConfig()
     active_rules = {"r1": None, "r2": None}
     result_diags, eligible = run_pipeline(
-        diags, cfg, suppressions=set(), active_rules=active_rules,
+        diags,
+        cfg,
+        suppressions=set(),
+        active_rules=active_rules,
         detected_version="17.0",
     )
     assert len(result_diags) == 2
-    assert eligible[0] is True   # r1: high confidence
+    assert eligible[0] is True  # r1: high confidence
     assert eligible[1] is False  # r2: low confidence
 
 
 def test_derive_capabilities():
     from odoo_doctor.core.pipeline import derive_capabilities
+
     caps = derive_capabilities("17.0.1.0", ["enterprise"])
     assert caps == {"enterprise", "odoo:17"}
 
@@ -325,4 +360,3 @@ def test_rule_is_enabled():
 
     # Excluded capability present
     assert rule_is_enabled(meta, "17.0", {"enterprise", "odoo:17", "legacy"}) is False
-

@@ -31,10 +31,27 @@ from collections import defaultdict
 
 # Field types defined by Odoo (fields.Xxx = ...)
 _ODOO_FIELD_CALLS = {
-    "Char", "Text", "Html", "Integer", "Float", "Boolean", "Date", "Datetime",
-    "Binary", "Selection", "Many2one", "One2many", "Many2many", "Reference",
-    "Monetary", "Image", "Json", "Properties", "PropertiesDefinition",
-    "Many2oneReference", "Command",
+    "Char",
+    "Text",
+    "Html",
+    "Integer",
+    "Float",
+    "Boolean",
+    "Date",
+    "Datetime",
+    "Binary",
+    "Selection",
+    "Many2one",
+    "One2many",
+    "Many2many",
+    "Reference",
+    "Monetary",
+    "Image",
+    "Json",
+    "Properties",
+    "PropertiesDefinition",
+    "Many2oneReference",
+    "Command",
 }
 
 _SKIP_METHOD_PREFIXES = ("__",)
@@ -86,7 +103,9 @@ def _extract_class_data(cls: ast.ClassDef) -> tuple[str | None, list[str], list[
             fname = item.target.id
             if not fname.startswith("_") and fname not in fields:
                 if item.value and _is_field_call(
-                    ast.Assign(targets=[item.target], value=item.value, lineno=0, col_offset=0)
+                    ast.Assign(
+                        targets=[item.target], value=item.value, lineno=0, col_offset=0
+                    )
                 ):
                     fields.append(fname)
 
@@ -111,7 +130,8 @@ def parse_odoo_source(odoo_path: Path) -> dict[str, dict]:
     inherit_extras: dict[str, dict] = defaultdict(lambda: {"fields": [], "methods": []})
 
     py_files = [
-        p for p in odoo_path.rglob("*.py")
+        p
+        for p in odoo_path.rglob("*.py")
         if not _should_skip_dir(p) and not p.name.startswith("test_")
     ]
 
@@ -187,14 +207,13 @@ def parse_odoo_xml_ids(odoo_path: Path) -> dict[str, str]:
         return {}
 
     xml_ids: dict[str, str] = {}
-    xml_files = [
-        p for p in odoo_path.rglob("*.xml")
-        if not _should_skip_dir(p)
-    ]
+    xml_files = [p for p in odoo_path.rglob("*.xml") if not _should_skip_dir(p)]
 
     for xml_file in xml_files:
         # Only look at data/ and security/ directories
-        if not any(part in ("data", "security", "views", "report") for part in xml_file.parts):
+        if not any(
+            part in ("data", "security", "views", "report") for part in xml_file.parts
+        ):
             continue
         try:
             tree = etree.parse(str(xml_file))
@@ -235,6 +254,7 @@ def _guess_module_name(xml_file: Path, odoo_path: Path) -> str:
 
 # ─── RPC mode ──────────────────────────────────────────────────────────────
 
+
 def build_stubs_from_rpc(
     url: str, db: str, username: str, password: str, version: str
 ) -> dict:
@@ -258,7 +278,8 @@ def build_stubs_from_rpc(
 
     print("Fetching model list from ir.model...")
     ir_models = call(
-        "ir.model", "search_read",
+        "ir.model",
+        "search_read",
         [[("transient", "=", False)]],
         fields=["model", "name"],
         limit=0,
@@ -272,7 +293,8 @@ def build_stubs_from_rpc(
     print(f"Found {len(ir_models)} models. Fetching fields...")
     # Better approach: fetch fields per model in one batch call
     ir_fields2 = call(
-        "ir.model.fields", "search_read",
+        "ir.model.fields",
+        "search_read",
         [[("store", "=", True)]],
         fields=["model", "name"],
         limit=0,
@@ -286,7 +308,8 @@ def build_stubs_from_rpc(
 
     print("Fetching XML IDs from ir.model.data...")
     ir_data = call(
-        "ir.model.data", "search_read",
+        "ir.model.data",
+        "search_read",
         [[("model", "!=", False)]],
         fields=["module", "name", "model"],
         limit=0,
@@ -297,12 +320,20 @@ def build_stubs_from_rpc(
         xml_ids[full_id] = rec["model"]
 
     # Filter empty models
-    result_models = {k: v for k, v in result_models.items() if v["fields"] or v["methods"]}
+    result_models = {
+        k: v for k, v in result_models.items() if v["fields"] or v["methods"]
+    }
 
-    return {"version": version, "complete": True, "models": result_models, "xml_ids": xml_ids}
+    return {
+        "version": version,
+        "complete": True,
+        "models": result_models,
+        "xml_ids": xml_ids,
+    }
 
 
 # ─── CLI ───────────────────────────────────────────────────────────────────
+
 
 def main(argv: list[str] | None = None) -> None:
     import argparse
@@ -320,7 +351,9 @@ def main(argv: list[str] | None = None) -> None:
 
     # RPC mode
     rpc = subparsers.add_parser("rpc", help="Connect to live Odoo via XML-RPC")
-    rpc.add_argument("--rpc-url", required=True, help="Odoo base URL (e.g. http://localhost:8069)")
+    rpc.add_argument(
+        "--rpc-url", required=True, help="Odoo base URL (e.g. http://localhost:8069)"
+    )
     rpc.add_argument("--rpc-db", required=True, help="Database name")
     rpc.add_argument("--rpc-user", default="admin", help="Username")
     rpc.add_argument("--rpc-password", required=True, help="Password")
@@ -338,7 +371,12 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Parsing Odoo source at {odoo_path} for version {args.version}...")
         models = parse_odoo_source(odoo_path)
         xml_ids = parse_odoo_xml_ids(odoo_path)
-        data = {"version": args.version, "complete": True, "models": models, "xml_ids": xml_ids}
+        data = {
+            "version": args.version,
+            "complete": True,
+            "models": models,
+            "xml_ids": xml_ids,
+        }
 
     elif args.mode == "rpc":
         data = build_stubs_from_rpc(

@@ -10,7 +10,6 @@ from pathlib import Path
 from odoo_doctor.core.source import read_source
 
 
-
 @dataclass
 class AddonInfo:
     name: str

@@ -32,21 +32,23 @@ def check_duplicate_xml_id(ctx: ModuleContext) -> list[Diagnostic]:
         if len(locations) <= 1:
             continue
         for file_path, line in locations[1:]:
-            diags.append(Diagnostic(
-                module=ctx.name,
-                file_path=file_path,
-                line=line,
-                column=0,
-                rule="duplicate-xml-id",
-                category="Correctness",
-                severity="error",
-                tier="P1",
-                source="native",
-                confidence="high",
-                title=f"Duplicate XML ID: {xml_id}",
-                message=f"XML ID '{xml_id}' is defined multiple times. First at {locations[0][0]}:{locations[0][1]}.",
-                help="Remove or rename the duplicate XML ID.",
-                odoo_version=ctx.odoo_version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=ctx.name,
+                    file_path=file_path,
+                    line=line,
+                    column=0,
+                    rule="duplicate-xml-id",
+                    category="Correctness",
+                    severity="error",
+                    tier="P1",
+                    source="native",
+                    confidence="high",
+                    title=f"Duplicate XML ID: {xml_id}",
+                    message=f"XML ID '{xml_id}' is defined multiple times. First at {locations[0][0]}:{locations[0][1]}.",
+                    help="Remove or rename the duplicate XML ID.",
+                    odoo_version=ctx.odoo_version,
+                )
+            )
 
     return diags
