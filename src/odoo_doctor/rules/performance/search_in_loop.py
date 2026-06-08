@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Generator
 from pathlib import Path
 
 from odoo_doctor.core.source import read_source
@@ -90,6 +91,17 @@ def _receiver_is_orm(call: ast.Call) -> bool:
     return False
 
 
+def _walk_excluding_nested_loops(node: ast.AST) -> Generator[ast.AST, None, None]:
+    from collections import deque
+
+    todo = deque(ast.iter_child_nodes(node))
+    while todo:
+        curr = todo.popleft()
+        yield curr
+        if not isinstance(curr, (ast.For, ast.While)):
+            todo.extend(ast.iter_child_nodes(curr))
+
+
 def _check_loop_body(
     loop: ast.For | ast.While,
     diags: list[Diagnostic],
@@ -98,7 +110,7 @@ def _check_loop_body(
     version: str,
 ) -> None:
     """Check if any ORM method call exists inside a loop body."""
-    for node in ast.walk(loop):
+    for node in _walk_excluding_nested_loops(loop):
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in _ORM_METHODS:
