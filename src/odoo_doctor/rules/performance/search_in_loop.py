@@ -8,7 +8,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from odoo_doctor.core.source import read_source
-
+from odoo_doctor.rules._ast_helpers import receiver_is_orm
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
@@ -56,41 +56,6 @@ def _walk_for_loops(
         _walk_for_loops(child, diags, file_path, module, version)
 
 
-def _receiver_is_orm(call: ast.Call) -> bool:
-    if not isinstance(call.func, ast.Attribute):
-        return False
-
-    has_env_subscript = [False]
-    root_name = [None]
-
-    def check_node(n: ast.AST) -> None:
-        if isinstance(n, ast.Name):
-            root_name[0] = n.id
-        elif isinstance(n, ast.Attribute):
-            check_node(n.value)
-        elif isinstance(n, ast.Subscript):
-            sub_val = n.value
-            is_env = False
-            if isinstance(sub_val, ast.Name) and sub_val.id == "env":
-                is_env = True
-            elif isinstance(sub_val, ast.Attribute) and sub_val.attr == "env":
-                is_env = True
-            if is_env:
-                has_env_subscript[0] = True
-            check_node(sub_val)
-        elif isinstance(n, ast.Call):
-            check_node(n.func)
-
-    check_node(call.func.value)
-
-    if root_name[0] in ("self", "cls"):
-        return True
-    if has_env_subscript[0]:
-        return True
-
-    return False
-
-
 def _walk_excluding_nested_loops(node: ast.AST) -> Generator[ast.AST, None, None]:
     from collections import deque
 
@@ -114,7 +79,7 @@ def _check_loop_body(
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in _ORM_METHODS:
-            if not _receiver_is_orm(node):
+            if not receiver_is_orm(node):
                 continue
             diags.append(
                 Diagnostic(
