@@ -73,3 +73,24 @@ def test_render_json_top_findings_empty():
     output = render_json([], {})
     parsed = json.loads(output)
     assert parsed["top_findings"] == []
+
+
+def test_render_json_has_schema_version():
+    parsed = json.loads(render_json([], {}))
+    assert parsed["schema_version"] == "1.0"
+
+
+def test_render_json_top_findings_have_full_fields():
+    d = _diag(tier="P0")
+    scores = {"m": ScoreResult(50.0, "Needs work", [CategoryScore("Security", 75, 1, 25.0)], ["Security"], 1)}
+    parsed = json.loads(render_json([d], scores))
+    tf = parsed["top_findings"][0]
+    for key in ("module", "file_path", "line", "rule", "tier", "title",
+                "category", "severity", "confidence"):
+        assert key in tf, f"top_findings missing {key}"
+    # Parity with the corresponding modules[*].diagnostics[*] entry
+    diag = parsed["modules"]["m"]["diagnostics"][0]
+    assert tf["category"] == diag["category"]
+    assert tf["severity"] == diag["severity"]
+    assert tf["confidence"] == diag["confidence"]
+
