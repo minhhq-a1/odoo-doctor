@@ -55,6 +55,8 @@ def scan(
     cfg = load_config(config_root)
     if odoo_version:
         cfg.odoo_version = odoo_version
+    _validate_min_score(min_score, "--min-score")
+    _validate_min_score(cfg.min_score, "min_score in odoo-doctor.toml")
     target = [module] if module else cfg.target_modules or None
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
 
@@ -369,6 +371,19 @@ def _has_severity_at_or_above(diagnostics: list[Diagnostic], threshold: str) -> 
     if threshold_rank is None:
         return False
     return any(ranks.get(d.severity, 0) >= threshold_rank for d in diagnostics)
+
+
+def _validate_min_score(value: int | None, source: str) -> None:
+    """Reject a min_score outside 0–100 with a clear error (exit 3)."""
+    if value is None:
+        return
+    if not (0 <= value <= 100):
+        typer.echo(
+            f"[ERROR] {source} must be between 0 and 100, got {value}.",
+            err=True,
+        )
+        raise typer.Exit(code=3)
+
 
 def _in_scope_categories(
     detected_version: str,

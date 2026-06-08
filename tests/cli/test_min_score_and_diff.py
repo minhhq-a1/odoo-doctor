@@ -191,3 +191,27 @@ def test_diff_git_failure_exits_3(bad_addon: Path):
         ])
     assert result.exit_code == 3
 
+
+# ─── Part C / C2: --min-score range validation ──────────────────────────────
+
+def test_min_score_flag_above_100_rejected(sample_addon: Path):
+    result = runner.invoke(app, ["scan", str(sample_addon), "--min-score", "150"])
+    assert result.exit_code == 3
+
+
+def test_min_score_flag_negative_rejected(sample_addon: Path):
+    result = runner.invoke(app, ["scan", str(sample_addon), "--min-score", "-1"])
+    assert result.exit_code == 3
+
+
+def test_config_min_score_out_of_range_rejected(tmp_path: Path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "M", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}'
+    )
+    (tmp_path / "odoo-doctor.toml").write_text("[odoo-doctor]\nmin_score = 150\n")
+    result = runner.invoke(app, ["scan", str(tmp_path)])
+    assert result.exit_code == 3
+
+
