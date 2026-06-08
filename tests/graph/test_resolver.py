@@ -36,7 +36,9 @@ def _make_resolver(repo_models=None, stub_version="17.0", source_path=None):
 def test_resolve_field_from_repo():
     models = {
         "sale.custom": ModelInfo(
-            name="sale.custom", file_path="f.py", line=1,
+            name="sale.custom",
+            file_path="f.py",
+            line=1,
             fields={"my_field": FieldInfo(name="my_field", field_type="Char")},
         )
     }
@@ -64,7 +66,9 @@ def test_resolve_field_repo_model_provable_not_found():
     """A repo-defined model with no _inherit has fully-known fields -> absence provable."""
     models = {
         "my.model": ModelInfo(
-            name="my.model", file_path="f.py", line=1,
+            name="my.model",
+            file_path="f.py",
+            line=1,
             fields={"foo": FieldInfo(name="foo", field_type="Char")},
         )
     }
@@ -77,7 +81,9 @@ def test_resolve_field_repo_model_inheriting_core_is_unknown():
     """Repo model that _inherits a partial-stub core model cannot prove absence."""
     models = {
         "my.order": ModelInfo(
-            name="my.order", file_path="f.py", line=1,
+            name="my.order",
+            file_path="f.py",
+            line=1,
             inherit=["sale.order"],
             fields={"foo": FieldInfo(name="foo", field_type="Char")},
         )
@@ -257,13 +263,22 @@ def test_owner_module_for_model():
 
 def test_magic_fields_constant_exists():
     from odoo_doctor.graph.resolver import ORM_MAGIC_FIELDS
-    for f in ("id", "display_name", "create_uid", "create_date",
-              "write_uid", "write_date", "__last_update"):
+
+    for f in (
+        "id",
+        "display_name",
+        "create_uid",
+        "create_date",
+        "write_uid",
+        "write_date",
+        "__last_update",
+    ):
         assert f in ORM_MAGIC_FIELDS
 
 
 def test_resolver_accepts_extended_methods_param():
     from odoo_doctor.parsers.python_models import MethodInfo
+
     r = SymbolResolver(
         repo_models={},
         repo_xml_ids={},
@@ -276,8 +291,11 @@ def test_resolver_accepts_extended_methods_param():
 
 def test_resolve_method_extended_via_inherit_found():
     from odoo_doctor.parsers.python_models import MethodInfo
+
     r = SymbolResolver(
-        repo_models={}, repo_xml_ids={}, stub_version="17.0",
+        repo_models={},
+        repo_xml_ids={},
+        stub_version="17.0",
         extended_methods={"sale.order": {"action_foo": MethodInfo(name="action_foo")}},
     )
     assert r.resolve_method("sale.order", "action_foo").status == ResolveResult.FOUND

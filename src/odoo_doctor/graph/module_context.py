@@ -17,7 +17,12 @@ from odoo_doctor.parsers.python_models import (
     parse_models,
 )
 from odoo_doctor.parsers.security_csv import AccessRule, parse_access_csv
-from odoo_doctor.parsers.xml_records import ViewInfo, XmlIdInfo, parse_views, parse_xml_records
+from odoo_doctor.parsers.xml_records import (
+    ViewInfo,
+    XmlIdInfo,
+    parse_views,
+    parse_xml_records,
+)
 
 
 @dataclass
@@ -28,8 +33,8 @@ class ModuleContext:
     manifest: ManifestData
     depends: list[str]
     models: dict[str, ModelInfo]
-    xml_ids: dict[str, XmlIdInfo]              # first definition per XML ID, for resolver lookup
-    xml_records: list[XmlIdInfo]               # all definitions, including duplicates
+    xml_ids: dict[str, XmlIdInfo]  # first definition per XML ID, for resolver lookup
+    xml_records: list[XmlIdInfo]  # all definitions, including duplicates
     views: list[ViewInfo]
     controllers: list[ControllerInfo]
     access_rules: list[AccessRule]
@@ -152,7 +157,8 @@ def build_project_graph(
     resolver_version = odoo_version
     if resolver_version == "unknown":
         detected_versions = {
-            data["version"] for data in module_data.values()
+            data["version"]
+            for data in module_data.values()
             if data["version"] != "unknown"
         }
         if len(detected_versions) == 1:

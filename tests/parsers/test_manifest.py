@@ -57,4 +57,3 @@ def test_parse_manifest_tolerates_pathological_nesting(tmp_path):
     (addon / "__manifest__.py").write_text("{'data': " + deep + "}")
     # Deeply nested literal blows the parser stack → RecursionError, must be caught
     assert parse_manifest(addon) is None
-

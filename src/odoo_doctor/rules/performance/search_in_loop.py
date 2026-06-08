@@ -67,19 +67,21 @@ def _check_loop_body(
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in _ORM_METHODS:
-            diags.append(Diagnostic(
-                module=module,
-                file_path=str(file_path),
-                line=node.lineno,
-                column=node.col_offset,
-                rule="search-in-loop",
-                category="Performance",
-                severity="error",
-                tier="P1",
-                source="native",
-                confidence="high",
-                title=f"ORM '{node.func.attr}' called inside loop",
-                message=f"'{node.func.attr}()' at line {node.lineno} is called inside a loop. Consider batching.",
-                help=f"Move the '{node.func.attr}()' call outside the loop and batch the operation.",
-                odoo_version=version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=module,
+                    file_path=str(file_path),
+                    line=node.lineno,
+                    column=node.col_offset,
+                    rule="search-in-loop",
+                    category="Performance",
+                    severity="error",
+                    tier="P1",
+                    source="native",
+                    confidence="high",
+                    title=f"ORM '{node.func.attr}' called inside loop",
+                    message=f"'{node.func.attr}()' at line {node.lineno} is called inside a loop. Consider batching.",
+                    help=f"Move the '{node.func.attr}()' call outside the loop and batch the operation.",
+                    odoo_version=version,
+                )
+            )

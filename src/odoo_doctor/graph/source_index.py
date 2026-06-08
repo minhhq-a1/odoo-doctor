@@ -12,7 +12,7 @@ from odoo_doctor.parsers.python_models import parse_models
 
 @dataclass(frozen=True)
 class SourceIndex:
-    model_owners: dict[str, str]   # model_name -> owning module name
+    model_owners: dict[str, str]  # model_name -> owning module name
     xml_id_owners: dict[str, str]  # xml_id -> owning module name
 
 

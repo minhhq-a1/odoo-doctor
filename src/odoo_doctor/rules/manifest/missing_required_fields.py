@@ -30,21 +30,23 @@ def check_missing_required_fields(ctx: ModuleContext) -> list[Diagnostic]:
     for field_name in _REQUIRED_FIELDS:
         value = ctx.manifest.raw.get(field_name)
         if value is None or value == "":
-            diags.append(Diagnostic(
-                module=ctx.name,
-                file_path=manifest_file,
-                line=1,
-                column=0,
-                rule="manifest-missing-required-fields",
-                category="Module Hygiene",
-                severity="warning",
-                tier="P2",
-                source="native",
-                confidence="high",
-                title=f"Manifest missing required field: {field_name!r}",
-                message=f"The __manifest__.py for '{ctx.name}' is missing or has empty field '{field_name}'.",
-                help=f"Add '{field_name}' to your __manifest__.py.",
-                odoo_version=ctx.odoo_version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=ctx.name,
+                    file_path=manifest_file,
+                    line=1,
+                    column=0,
+                    rule="manifest-missing-required-fields",
+                    category="Module Hygiene",
+                    severity="warning",
+                    tier="P2",
+                    source="native",
+                    confidence="high",
+                    title=f"Manifest missing required field: {field_name!r}",
+                    message=f"The __manifest__.py for '{ctx.name}' is missing or has empty field '{field_name}'.",
+                    help=f"Add '{field_name}' to your __manifest__.py.",
+                    odoo_version=ctx.odoo_version,
+                )
+            )
 
     return diags

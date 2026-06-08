@@ -10,7 +10,9 @@ from pathlib import Path
 from lxml import etree
 
 _SUPPRESS_RE = re.compile(r"odoo-doctor:\s*disable=([a-z0-9_-]+(?:,\s*[a-z0-9_-]+)*)")
-_SUPPRESS_FILE_RE = re.compile(r"odoo-doctor:\s*disable-file=([a-z0-9_-]+(?:,\s*[a-z0-9_-]+)*)")
+_SUPPRESS_FILE_RE = re.compile(
+    r"odoo-doctor:\s*disable-file=([a-z0-9_-]+(?:,\s*[a-z0-9_-]+)*)"
+)
 
 Suppressions = set[tuple[str, int, str]]  # (file_path, line, rule)
 

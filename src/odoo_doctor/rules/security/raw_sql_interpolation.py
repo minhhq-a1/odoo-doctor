@@ -13,7 +13,15 @@ from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
 
 _CR_METHODS = {"execute", "executemany"}
-_CR_OBJECTS = {"cr", "env.cr", "_cr", "self.env.cr", "self._cr", "cls.env.cr", "cls._cr"}
+_CR_OBJECTS = {
+    "cr",
+    "env.cr",
+    "_cr",
+    "self.env.cr",
+    "self._cr",
+    "cls.env.cr",
+    "cls._cr",
+}
 
 
 @rule(
@@ -82,7 +90,9 @@ class _RawSqlVisitor(ast.NodeVisitor):
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
         if isinstance(node.target, ast.Name) and isinstance(node.op, ast.Add):
-            if node.target.id in self._unsafe_names or _is_dynamic_expr(node.value, self._unsafe_names):
+            if node.target.id in self._unsafe_names or _is_dynamic_expr(
+                node.value, self._unsafe_names
+            ):
                 self._unsafe_names.add(node.target.id)
         self.generic_visit(node)
 
@@ -90,9 +100,11 @@ class _RawSqlVisitor(ast.NodeVisitor):
         if _is_cursor_execute(node) and node.args:
             sql_arg = node.args[0]
             if _is_unsafe_sql_expr(sql_arg, self._unsafe_names):
-                self.diagnostics.append(_make_diagnostic(
-                    node, self.file_path, self.module_name, self.odoo_version
-                ))
+                self.diagnostics.append(
+                    _make_diagnostic(
+                        node, self.file_path, self.module_name, self.odoo_version
+                    )
+                )
         self.generic_visit(node)
 
 
@@ -113,7 +125,9 @@ def _is_unsafe_sql_expr(node: ast.expr, unsafe_names: set[str]) -> bool:
         if isinstance(node.op, ast.Mod):
             return True
         if isinstance(node.op, ast.Add):
-            return _is_dynamic_expr(node.left, unsafe_names) or _is_dynamic_expr(node.right, unsafe_names)
+            return _is_dynamic_expr(node.left, unsafe_names) or _is_dynamic_expr(
+                node.right, unsafe_names
+            )
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
         if node.func.attr == "format" and _looks_like_sql(node.func.value):
             return True
@@ -132,7 +146,10 @@ def _is_dynamic_expr(node: ast.expr, unsafe_names: set[str]) -> bool:
 
 def _looks_like_sql(node: ast.expr) -> bool:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return any(token in node.value.upper() for token in ("SELECT", "UPDATE", "INSERT", "DELETE", "CREATE"))
+        return any(
+            token in node.value.upper()
+            for token in ("SELECT", "UPDATE", "INSERT", "DELETE", "CREATE")
+        )
     return True
 
 

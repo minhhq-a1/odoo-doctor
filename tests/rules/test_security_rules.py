@@ -109,6 +109,7 @@ def test_raw_sql_safe_parameterized(tmp_path: Path):
 
 def test_missing_access_csv_catches_bad_addon(bad_addon: Path):
     from odoo_doctor.rules.security.missing_access_csv import check_missing_access_csv
+
     graph = build_project_graph([bad_addon.parent], odoo_version="17.0")
     ctx = graph.modules["bad_addon"]
     diags = check_missing_access_csv(ctx)
@@ -119,6 +120,7 @@ def test_missing_access_csv_catches_bad_addon(bad_addon: Path):
 
 def test_missing_access_csv_clean(sample_addon: Path):
     from odoo_doctor.rules.security.missing_access_csv import check_missing_access_csv
+
     graph = build_project_graph([sample_addon.parent], odoo_version="17.0")
     ctx = graph.modules["sample_addon"]
     diags = check_missing_access_csv(ctx)
@@ -140,9 +142,7 @@ def test_unknown_model_in_access_csv_flags_current_module_missing_model(tmp_path
         "'depends': ['base'], 'data': ['security/ir.model.access.csv']}\n"
     )
     (addon / "models" / "m.py").write_text(
-        "from odoo import models\n"
-        "class XKnown(models.Model):\n"
-        "    _name = 'x.known'\n"
+        "from odoo import models\nclass XKnown(models.Model):\n    _name = 'x.known'\n"
     )
     (addon / "security" / "ir.model.access.csv").write_text(
         "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\n"
@@ -160,7 +160,9 @@ def test_unknown_model_in_access_csv_flags_current_module_missing_model(tmp_path
     assert "x.missing" in diags[0].message
 
 
-def test_unknown_model_in_access_csv_does_not_flag_external_unknown_module(tmp_path: Path):
+def test_unknown_model_in_access_csv_does_not_flag_external_unknown_module(
+    tmp_path: Path,
+):
     """External module IDs remain UNKNOWN unless the resolver can prove absence."""
     from odoo_doctor.rules.security.unknown_model_in_access_csv import (
         check_unknown_model_in_access_csv,

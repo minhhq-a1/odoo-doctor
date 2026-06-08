@@ -39,21 +39,23 @@ def check_view_field_not_in_model(ctx: ModuleContext) -> list[Diagnostic]:
             else:
                 continue
 
-            diags.append(Diagnostic(
-                module=ctx.name,
-                file_path=view.file_path,
-                line=view.line,
-                column=0,
-                rule="view-field-not-in-model",
-                category="Correctness",
-                severity="error",
-                tier="P1",
-                source="native",
-                confidence=confidence,
-                title=f"View references unknown field '{field_name}'",
-                message=f"View '{view.xml_id}' for model '{view.model}' references field '{field_name}' which is not found.",
-                help=f"Add field '{field_name}' to model '{view.model}' or remove it from the view.",
-                odoo_version=ctx.odoo_version,
-            ))
+            diags.append(
+                Diagnostic(
+                    module=ctx.name,
+                    file_path=view.file_path,
+                    line=view.line,
+                    column=0,
+                    rule="view-field-not-in-model",
+                    category="Correctness",
+                    severity="error",
+                    tier="P1",
+                    source="native",
+                    confidence=confidence,
+                    title=f"View references unknown field '{field_name}'",
+                    message=f"View '{view.xml_id}' for model '{view.model}' references field '{field_name}' which is not found.",
+                    help=f"Add field '{field_name}' to model '{view.model}' or remove it from the view.",
+                    odoo_version=ctx.odoo_version,
+                )
+            )
 
     return diags

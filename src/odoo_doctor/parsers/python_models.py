@@ -10,11 +10,10 @@ from pathlib import Path
 from odoo_doctor.core.source import read_source
 
 
-
 @dataclass
 class FieldInfo:
     name: str
-    field_type: str        # "Char", "Many2one", "Float", etc.
+    field_type: str  # "Char", "Many2one", "Float", etc.
     comodel: str | None = None
     compute: str | None = None
     depends: list[str] = field(default_factory=list)
@@ -32,7 +31,7 @@ class MethodInfo:
 
 @dataclass
 class ModelInfo:
-    name: str | None         # _name value, None if only _inherit
+    name: str | None  # _name value, None if only _inherit
     inherit: list[str] = field(default_factory=list)
     inherits: dict[str, str] = field(default_factory=dict)
     fields: dict[str, FieldInfo] = field(default_factory=dict)
@@ -61,8 +60,20 @@ _ABSTRACT_BASES = {"models.AbstractModel", "AbstractModel"}
 _ALL_BASES = _MODEL_BASES | _TRANSIENT_BASES | _ABSTRACT_BASES
 
 _ODOO_FIELD_TYPES = {
-    "Char", "Text", "Html", "Integer", "Float", "Boolean", "Date", "Datetime",
-    "Binary", "Selection", "Many2one", "One2many", "Many2many", "Monetary",
+    "Char",
+    "Text",
+    "Html",
+    "Integer",
+    "Float",
+    "Boolean",
+    "Date",
+    "Datetime",
+    "Binary",
+    "Selection",
+    "Many2one",
+    "One2many",
+    "Many2many",
+    "Monetary",
     "Reference",
 }
 
@@ -111,18 +122,21 @@ def parse_controllers(file_path: Path) -> list[ControllerInfo]:
                 continue
             route, auth = route_info
             uses_sudo = _body_uses_sudo(item, source)
-            controllers.append(ControllerInfo(
-                method_name=item.name,
-                route=route,
-                auth=auth,
-                uses_sudo=uses_sudo,
-                file_path=str(file_path),
-                line=item.lineno,
-            ))
+            controllers.append(
+                ControllerInfo(
+                    method_name=item.name,
+                    route=route,
+                    auth=auth,
+                    uses_sudo=uses_sudo,
+                    file_path=str(file_path),
+                    line=item.lineno,
+                )
+            )
     return controllers
 
 
 # --- Helpers ---
+
 
 def _is_odoo_model(cls: ast.ClassDef) -> bool:
     for base in cls.bases:
@@ -154,7 +168,9 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                         model.inherit = _extract_inherit(item.value)
                     elif target.id == "_inherits" and isinstance(item.value, ast.Dict):
                         for k, v in zip(item.value.keys, item.value.values):
-                            if isinstance(k, ast.Constant) and isinstance(v, ast.Constant):
+                            if isinstance(k, ast.Constant) and isinstance(
+                                v, ast.Constant
+                            ):
                                 model.inherits[k.value] = v.value
 
         # Field definitions
@@ -178,7 +194,8 @@ def _extract_inherit(node: ast.expr) -> list[str]:
         return [node.value]
     if isinstance(node, ast.List):
         return [
-            e.value for e in node.elts
+            e.value
+            for e in node.elts
             if isinstance(e, ast.Constant) and isinstance(e.value, str)
         ]
     return []
@@ -227,7 +244,11 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
     depends: list[str] = []
 
     for dec in func.decorator_list:
-        dec_name = _dotted_name(dec) if not isinstance(dec, ast.Call) else _dotted_name(dec.func)
+        dec_name = (
+            _dotted_name(dec)
+            if not isinstance(dec, ast.Call)
+            else _dotted_name(dec.func)
+        )
         if dec_name:
             decorators.append(dec_name)
         # Extract @api.depends("field1", "field2")
@@ -250,9 +271,17 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
 
 def _body_calls_super(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for node in ast.walk(func):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "super":
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "super"
+        ):
             return True
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "super":
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "super"
+        ):
             return True
     return False
 
@@ -265,7 +294,9 @@ def _body_uses_sudo(func: ast.FunctionDef | ast.AsyncFunctionDef, source: str) -
     return False
 
 
-def _extract_route(func: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[str, str] | None:
+def _extract_route(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[str, str] | None:
     """Extract route and auth from @http.route decorator."""
     for dec in func.decorator_list:
         if not isinstance(dec, ast.Call):

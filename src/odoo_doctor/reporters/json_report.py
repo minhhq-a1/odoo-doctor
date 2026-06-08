@@ -46,26 +46,29 @@ def render_json(
 
     top = sorted(diagnostics, key=lambda d: (d.tier, d.file_path, d.line))[:5]
 
-    return json.dumps({
-        "schema_version": "1.0",
-        "version": "0.1.0",
-        "project_score": _project_score(scores),
-        "top_findings": [
-            {
-                "module": d.module,
-                "file_path": d.file_path,
-                "line": d.line,
-                "rule": d.rule,
-                "tier": d.tier,
-                "title": d.title,
-                "category": d.category,
-                "severity": d.severity,
-                "confidence": d.confidence,
-            }
-            for d in top
-        ],
-        "modules": modules,
-    }, indent=2)
+    return json.dumps(
+        {
+            "schema_version": "1.0",
+            "version": "0.1.0",
+            "project_score": _project_score(scores),
+            "top_findings": [
+                {
+                    "module": d.module,
+                    "file_path": d.file_path,
+                    "line": d.line,
+                    "rule": d.rule,
+                    "tier": d.tier,
+                    "title": d.title,
+                    "category": d.category,
+                    "severity": d.severity,
+                    "confidence": d.confidence,
+                }
+                for d in top
+            ],
+            "modules": modules,
+        },
+        indent=2,
+    )
 
 
 def _project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | int]:

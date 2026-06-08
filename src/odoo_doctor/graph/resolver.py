@@ -29,15 +29,17 @@ class SymbolLookup:
 
 # Fields implicitly present on every Odoo model (ORM-injected). Always FOUND,
 # regardless of stub contents — they never appear in curated stubs.
-ORM_MAGIC_FIELDS = frozenset({
-    "id",
-    "display_name",
-    "create_uid",
-    "create_date",
-    "write_uid",
-    "write_date",
-    "__last_update",
-})
+ORM_MAGIC_FIELDS = frozenset(
+    {
+        "id",
+        "display_name",
+        "create_uid",
+        "create_date",
+        "write_uid",
+        "write_date",
+        "__last_update",
+    }
+)
 
 
 _MODEL_OWNER_OVERRIDES = {
@@ -166,7 +168,9 @@ class SymbolResolver:
         # 5. Otherwise we cannot prove absence.
         return SymbolLookup(ResolveResult.UNKNOWN)
 
-    def _model_is_complete(self, model_name: str, _seen: set[str] | None = None) -> bool:
+    def _model_is_complete(
+        self, model_name: str, _seen: set[str] | None = None
+    ) -> bool:
         """A model's symbol set is provably complete (absence ⇒ NOT_FOUND) when it is
         repo-defined with every _inherit/_inherits ancestor itself complete, or it is
         backed by a stub file flagged `complete`. Partial stubs and unknown models are
@@ -204,7 +208,9 @@ class SymbolResolver:
         # XML IDs are module-scoped; we can't prove absence without full knowledge
         return SymbolLookup(ResolveResult.UNKNOWN)
 
-    def resolve_xml_id_for_module(self, xml_id: str, current_module: str) -> SymbolLookup:
+    def resolve_xml_id_for_module(
+        self, xml_id: str, current_module: str
+    ) -> SymbolLookup:
         lookup = self.resolve_xml_id(xml_id)
         if lookup.status != ResolveResult.UNKNOWN:
             return lookup

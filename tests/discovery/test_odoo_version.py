@@ -7,28 +7,58 @@ from odoo_doctor.discovery.odoo_version import detect_odoo_version
 
 
 def test_cli_flag_wins():
-    assert detect_odoo_version(cli_version="16.0", config_version="17.0", manifest_version="15.0.1.0.0") == "16.0"
+    assert (
+        detect_odoo_version(
+            cli_version="16.0", config_version="17.0", manifest_version="15.0.1.0.0"
+        )
+        == "16.0"
+    )
 
 
 def test_config_fallback():
-    assert detect_odoo_version(cli_version=None, config_version="17.0", manifest_version=None) == "17.0"
+    assert (
+        detect_odoo_version(
+            cli_version=None, config_version="17.0", manifest_version=None
+        )
+        == "17.0"
+    )
 
 
 def test_manifest_prefix():
-    assert detect_odoo_version(cli_version=None, config_version=None, manifest_version="17.0.1.0.0") == "17.0"
+    assert (
+        detect_odoo_version(
+            cli_version=None, config_version=None, manifest_version="17.0.1.0.0"
+        )
+        == "17.0"
+    )
 
 
 def test_manifest_short():
-    assert detect_odoo_version(cli_version=None, config_version=None, manifest_version="16.0") == "16.0"
+    assert (
+        detect_odoo_version(
+            cli_version=None, config_version=None, manifest_version="16.0"
+        )
+        == "16.0"
+    )
 
 
 def test_unknown():
-    assert detect_odoo_version(cli_version=None, config_version=None, manifest_version=None) == "unknown"
+    assert (
+        detect_odoo_version(
+            cli_version=None, config_version=None, manifest_version=None
+        )
+        == "unknown"
+    )
 
 
 def test_non_standard_manifest_version():
     """Custom version strings should not be treated as Odoo version."""
-    assert detect_odoo_version(cli_version=None, config_version=None, manifest_version="2.3.1") == "unknown"
+    assert (
+        detect_odoo_version(
+            cli_version=None, config_version=None, manifest_version="2.3.1"
+        )
+        == "unknown"
+    )
 
 
 def test_package_metadata_fallback(monkeypatch):
@@ -36,12 +66,17 @@ def test_package_metadata_fallback(monkeypatch):
     import importlib.metadata
 
     monkeypatch.setattr(
-        importlib.metadata, "version",
-        lambda pkg: "17.0.20240101" if pkg == "odoo" else (_ for _ in ()).throw(
-            importlib.metadata.PackageNotFoundError(pkg)
+        importlib.metadata,
+        "version",
+        lambda pkg: (
+            "17.0.20240101"
+            if pkg == "odoo"
+            else (_ for _ in ()).throw(importlib.metadata.PackageNotFoundError(pkg))
         ),
     )
-    result = detect_odoo_version(cli_version=None, config_version=None, manifest_version=None)
+    result = detect_odoo_version(
+        cli_version=None, config_version=None, manifest_version=None
+    )
     assert result == "17.0"
 
 
@@ -50,10 +85,13 @@ def test_package_metadata_not_installed(monkeypatch):
     import importlib.metadata
 
     monkeypatch.setattr(
-        importlib.metadata, "version",
+        importlib.metadata,
+        "version",
         lambda pkg: (_ for _ in ()).throw(importlib.metadata.PackageNotFoundError(pkg)),
     )
-    result = detect_odoo_version(cli_version=None, config_version=None, manifest_version=None)
+    result = detect_odoo_version(
+        cli_version=None, config_version=None, manifest_version=None
+    )
     assert result == "unknown"
 
 
@@ -62,7 +100,9 @@ def test_package_metadata_non_standard_version(monkeypatch):
     import importlib.metadata
 
     monkeypatch.setattr(importlib.metadata, "version", lambda pkg: "3.2.1")
-    result = detect_odoo_version(cli_version=None, config_version=None, manifest_version=None)
+    result = detect_odoo_version(
+        cli_version=None, config_version=None, manifest_version=None
+    )
     assert result == "unknown"
 
 
@@ -71,5 +111,7 @@ def test_cli_still_wins_over_package(monkeypatch):
     import importlib.metadata
 
     monkeypatch.setattr(importlib.metadata, "version", lambda pkg: "17.0.20240101")
-    result = detect_odoo_version(cli_version="16.0", config_version=None, manifest_version=None)
+    result = detect_odoo_version(
+        cli_version="16.0", config_version=None, manifest_version=None
+    )
     assert result == "16.0"

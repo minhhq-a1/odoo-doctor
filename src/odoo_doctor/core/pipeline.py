@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 # Type aliases
 Suppressions = set[tuple[str, int, str]]  # (file_path, line, rule)
-ActiveRules = dict[str, str | None]       # rule_name -> min_version or None
+ActiveRules = dict[str, str | None]  # rule_name -> min_version or None
 
 
 # --- Helpers ---
@@ -44,7 +44,9 @@ def derive_capabilities(detected_version: str, configured: list[str]) -> set[str
     return caps
 
 
-def rule_is_enabled(meta: RuleMeta, detected_version: str, capabilities: set[str]) -> bool:
+def rule_is_enabled(
+    meta: RuleMeta, detected_version: str, capabilities: set[str]
+) -> bool:
     """Return True if the rule is enabled based on version and capabilities."""
     if meta.min_version and not _version_gte(detected_version, meta.min_version):
         return False
@@ -57,6 +59,7 @@ def rule_is_enabled(meta: RuleMeta, detected_version: str, capabilities: set[str
 
 # --- Stage 1: Normalize ---
 
+
 def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
     """Normalize paths before downstream matching and deduplication."""
     result: list[Diagnostic] = []
@@ -67,6 +70,7 @@ def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
 
 
 # --- Stage 2: Deduplicate ---
+
 
 def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
     """Group by (module, file_path, line, category, rule). Keep highest confidence,
@@ -94,6 +98,7 @@ def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
 
 # --- Stage 3: Severity overrides ---
 
+
 def apply_severity_overrides(
     diagnostics: list[Diagnostic], config: OdooDoctorConfig
 ) -> list[Diagnostic]:
@@ -112,8 +117,11 @@ def apply_severity_overrides(
 
 # --- Stage 4: Ignore filters ---
 
+
 def apply_ignore_filters(
-    diagnostics: list[Diagnostic], config: OdooDoctorConfig, base_path: Path | None = None
+    diagnostics: list[Diagnostic],
+    config: OdooDoctorConfig,
+    base_path: Path | None = None,
 ) -> list[Diagnostic]:
     """Remove diagnostics matching ignore rules, files, or modules."""
     result: list[Diagnostic] = []
@@ -128,7 +136,9 @@ def apply_ignore_filters(
     return result
 
 
-def _matches_any_glob(file_path: str, patterns: list[str], base_path: Path | None = None) -> bool:
+def _matches_any_glob(
+    file_path: str, patterns: list[str], base_path: Path | None = None
+) -> bool:
     """Check if file_path matches any glob pattern, supporting ** via pathlib."""
     norm = file_path.replace("\\", "/")
     p = Path(norm)
@@ -180,6 +190,7 @@ def _matches_any_glob(file_path: str, patterns: list[str], base_path: Path | Non
 
 # --- Stage 5: Inline suppressions ---
 
+
 def apply_inline_suppressions(
     diagnostics: list[Diagnostic], suppressions: Suppressions
 ) -> list[Diagnostic]:
@@ -193,17 +204,17 @@ def apply_inline_suppressions(
         for file_path, line, rule in suppressions
     }
     # Pre-compute file-wide suppressions: {(file, rule)} for line==0 entries
-    file_wide = {
-        (fp, rule) for fp, line, rule in normalized_suppressions if line == 0
-    }
+    file_wide = {(fp, rule) for fp, line, rule in normalized_suppressions if line == 0}
     return [
-        d for d in diagnostics
+        d
+        for d in diagnostics
         if (d.file_path, d.line, d.rule) not in normalized_suppressions
         and (d.file_path, d.rule) not in file_wide
     ]
 
 
 # --- Stage 6: Version gates ---
+
 
 def apply_version_gates(
     diagnostics: list[Diagnostic],
@@ -228,6 +239,7 @@ def apply_capability_gates(
 ) -> list[Diagnostic]:
     """Remove diagnostics whose rules are gated out by capabilities/versions."""
     from odoo_doctor.rules.registry import default_registry
+
     derived_caps = derive_capabilities(detected_version, config.capabilities)
     result: list[Diagnostic] = []
     for d in diagnostics:
@@ -242,17 +254,16 @@ def apply_capability_gates(
 
 # --- Stage 7: Score eligibility ---
 
+
 def mark_score_eligibility(
     diagnostics: list[Diagnostic],
 ) -> list[bool]:
     """Return parallel list of booleans — True if the diagnostic counts toward score."""
-    return [
-        d.confidence == "high" and d.category in CATEGORIES
-        for d in diagnostics
-    ]
+    return [d.confidence == "high" and d.category in CATEGORIES for d in diagnostics]
 
 
 # --- Composed pipeline ---
+
 
 def run_pipeline(
     diagnostics: list[Diagnostic],

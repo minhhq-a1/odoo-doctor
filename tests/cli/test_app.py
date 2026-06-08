@@ -22,6 +22,7 @@ def test_scan_json_output(sample_addon: Path):
     result = runner.invoke(app, ["scan", str(sample_addon.parent), "--json"])
     assert result.exit_code == 0
     import json
+
     parsed = json.loads(result.stdout)
     assert "modules" in parsed
 
@@ -39,11 +40,14 @@ def test_scan_uses_config_addons_paths_when_path_omitted(tmp_path: Path, monkeyp
     (mod / "__manifest__.py").write_text(
         '{"name": "X", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}'
     )
-    (tmp_path / "odoo-doctor.toml").write_text('[odoo-doctor]\naddons_paths = ["addons"]\n')
+    (tmp_path / "odoo-doctor.toml").write_text(
+        '[odoo-doctor]\naddons_paths = ["addons"]\n'
+    )
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["scan", "--json"])
     assert result.exit_code == 0
     import json
+
     parsed = json.loads(result.stdout)
     assert "x_mod" in parsed["modules"]
 
@@ -56,10 +60,13 @@ def test_scan_explicit_path_ignores_config_addons_paths(tmp_path: Path):
     (mod / "__manifest__.py").write_text(
         '{"name": "X", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}'
     )
-    (tmp_path / "odoo-doctor.toml").write_text('[odoo-doctor]\naddons_paths = ["addons"]\n')
+    (tmp_path / "odoo-doctor.toml").write_text(
+        '[odoo-doctor]\naddons_paths = ["addons"]\n'
+    )
     result = runner.invoke(app, ["scan", str(tmp_path), "--json"])
     assert result.exit_code == 0
     import json
+
     parsed = json.loads(result.stdout)
     assert parsed["modules"] == {}
 
@@ -94,10 +101,13 @@ def test_scan_warns_on_adapter_crash(tmp_path: Path):
     (mod / "__manifest__.py").write_text(
         '{"name": "X", "version": "17.0.1.0.0", "depends": [], "data": [], "license": "LGPL-3"}'
     )
-    (tmp_path / "odoo-doctor.toml").write_text("[adapters]\nruff = false\npylint_odoo = false\n")
+    (tmp_path / "odoo-doctor.toml").write_text(
+        "[adapters]\nruff = false\npylint_odoo = false\n"
+    )
 
     result = runner.invoke(app, ["scan", str(tmp_path)])
     assert result.exit_code == 0
+
 
 def test_fail_on_warning_fails_for_errors(bad_addon: Path):
     """--fail-on warning means warning or anything more severe."""
@@ -115,7 +125,7 @@ def test_init_template_excludes_oca(tmp_path: Path):
 def test_config_tolerates_oca_key(tmp_path: Path):
     """An existing config with an 'oca' key still loads (tolerated-but-inert)."""
     from odoo_doctor.core.config import load_config
+
     (tmp_path / "odoo-doctor.toml").write_text("[adapters]\noca = true\n")
     cfg = load_config(tmp_path)
     assert cfg.adapters.get("oca") is True  # accepted, never crashes
-

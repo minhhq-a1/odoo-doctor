@@ -29,16 +29,28 @@ def test_get_rules_by_context():
     reg = RuleRegistry()
 
     @rule(
-        name="ctx-rule", category="Security", tier="P1", severity="error",
-        default_confidence="high", needs_context=True, registry=reg,
+        name="ctx-rule",
+        category="Security",
+        tier="P1",
+        severity="error",
+        default_confidence="high",
+        needs_context=True,
+        registry=reg,
     )
-    def ctx_func(ctx): return []
+    def ctx_func(ctx):
+        return []
 
     @rule(
-        name="file-rule", category="Performance", tier="P2", severity="warning",
-        default_confidence="medium", needs_context=False, registry=reg,
+        name="file-rule",
+        category="Performance",
+        tier="P2",
+        severity="warning",
+        default_confidence="medium",
+        needs_context=False,
+        registry=reg,
     )
-    def file_func(f, m, v): return []
+    def file_func(f, m, v):
+        return []
 
     ctx_rules = reg.get_rules(needs_context=True)
     file_rules = reg.get_rules(needs_context=False)
@@ -52,10 +64,17 @@ def test_active_rules_map():
     reg = RuleRegistry()
 
     @rule(
-        name="ver-rule", category="Security", tier="P1", severity="error",
-        default_confidence="high", needs_context=True, min_version="16.0", registry=reg,
+        name="ver-rule",
+        category="Security",
+        tier="P1",
+        severity="error",
+        default_confidence="high",
+        needs_context=True,
+        min_version="16.0",
+        registry=reg,
     )
-    def vr(ctx): return []
+    def vr(ctx):
+        return []
 
     rules_map = reg.active_rules_map()
     assert rules_map["ver-rule"] == "16.0"
@@ -75,7 +94,8 @@ def test_rule_capabilities():
         excludes_capabilities={"legacy-web"},
         registry=reg,
     )
-    def cr(ctx): return []
+    def cr(ctx):
+        return []
 
     meta, _ = reg.get("cap-rule")
     assert meta.requires_capabilities == {"enterprise"}

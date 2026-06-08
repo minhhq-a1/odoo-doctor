@@ -11,11 +11,11 @@ from typing import Callable
 class RuleMeta:
     name: str
     category: str
-    tier: str                  # "P0" | "P1" | "P2" | "P3"
-    severity: str              # "error" | "warning" | "info"
-    default_confidence: str    # "high" | "medium" | "low"
-    needs_context: bool        # True: func(ctx) | False: func(file, module, version)
-    min_version: str | None    # minimum Odoo version, or None for all
+    tier: str  # "P0" | "P1" | "P2" | "P3"
+    severity: str  # "error" | "warning" | "info"
+    default_confidence: str  # "high" | "medium" | "low"
+    needs_context: bool  # True: func(ctx) | False: func(file, module, version)
+    min_version: str | None  # minimum Odoo version, or None for all
     requires_capabilities: set[str] = field(default_factory=set)
     excludes_capabilities: set[str] = field(default_factory=set)
 
@@ -29,7 +29,9 @@ class RuleRegistry:
         self._rules.append((meta, func))
         self._by_name[meta.name] = (meta, func)
 
-    def get_rules(self, needs_context: bool | None = None) -> list[tuple[RuleMeta, Callable]]:
+    def get_rules(
+        self, needs_context: bool | None = None
+    ) -> list[tuple[RuleMeta, Callable]]:
         if needs_context is None:
             return list(self._rules)
         return [(m, f) for m, f in self._rules if m.needs_context is needs_context]
@@ -65,6 +67,7 @@ def rule(
     registry: RuleRegistry | None = None,
 ) -> Callable[[Callable], Callable]:
     """Decorator that registers a rule function in the registry."""
+
     def decorator(func: Callable) -> Callable:
         meta = RuleMeta(
             name=name,
@@ -80,4 +83,5 @@ def rule(
         target = registry if registry is not None else default_registry
         target.register(meta, func)
         return func
+
     return decorator

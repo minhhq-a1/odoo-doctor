@@ -20,7 +20,7 @@ def test_read_source_replaces_non_utf8_bytes(tmp_path: Path):
     f.write_bytes(b"x = '\xe9'\n")
     out = read_source(f)
     assert out is not None
-    assert "\uFFFD" in out  # decoded with errors="replace", did not raise
+    assert "\ufffd" in out  # decoded with errors="replace", did not raise
 
 
 def test_read_source_returns_none_for_missing_file(tmp_path: Path):

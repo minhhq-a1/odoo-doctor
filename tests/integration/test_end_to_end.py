@@ -47,7 +47,9 @@ def test_end_to_end_clean_addon(sample_addon: Path):
     # Clean addon should have minimal high-confidence findings
     # (may have some from adapters if installed, but native rules should be clean)
     native_high = [d for d in high_confidence if d["source"] == "native"]
-    assert len(native_high) == 0, f"Clean addon should have no native high-confidence findings: {native_high}"
+    assert len(native_high) == 0, (
+        f"Clean addon should have no native high-confidence findings: {native_high}"
+    )
 
 
 def test_end_to_end_terminal_output(bad_addon: Path):

@@ -35,10 +35,10 @@ class Diagnostic:
 
     rule: str
     category: str
-    severity: str       # "error" | "warning" | "info"
-    tier: str           # "P0" | "P1" | "P2" | "P3"
-    source: str         # "native" | "pylint-odoo" | "ruff" | "oca"
-    confidence: str     # "high" | "medium" | "low"
+    severity: str  # "error" | "warning" | "info"
+    tier: str  # "P0" | "P1" | "P2" | "P3"
+    source: str  # "native" | "pylint-odoo" | "ruff" | "oca"
+    confidence: str  # "high" | "medium" | "low"
 
     title: str
     message: str

@@ -9,10 +9,20 @@ from odoo_doctor.core.scoring import ScoreResult, score_diagnostics
 
 def _diag(**overrides) -> Diagnostic:
     defaults = dict(
-        module="m", file_path="f.py", line=1, column=0,
-        rule="r", category="Security", severity="error", tier="P0",
-        source="native", confidence="high", title="t", message="msg",
-        help="h", odoo_version="17.0",
+        module="m",
+        file_path="f.py",
+        line=1,
+        column=0,
+        rule="r",
+        category="Security",
+        severity="error",
+        tier="P0",
+        source="native",
+        confidence="high",
+        title="t",
+        message="msg",
+        help="h",
+        odoo_version="17.0",
     )
     defaults.update(overrides)
     return Diagnostic(**defaults)
@@ -88,9 +98,9 @@ def test_labels():
 def test_score_overall_rounded_to_one_decimal():
     """A blend that yields 99.5142857… must be stored rounded to 1 decimal."""
     from odoo_doctor.core.diagnostics import CATEGORIES
+
     diags = [_diag(tier="P3", category="Security")]  # P3 impact = 1 → Security = 99
     eligible = [True]
     result = score_diagnostics(diags, eligible, in_scope_categories=list(CATEGORIES))
     # min=99, avg=699/7=99.857…, overall=0.4*99 + 0.6*99.857… = 99.5142857…
     assert result.overall == 99.5
-

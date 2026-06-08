@@ -12,9 +12,9 @@ from lxml import etree
 
 @dataclass
 class XmlIdInfo:
-    xml_id: str             # "module.xml_id"
+    xml_id: str  # "module.xml_id"
     model: str | None
-    record_type: str        # "record", "template", "menuitem", etc.
+    record_type: str  # "record", "template", "menuitem", etc.
     file_path: str
     line: int
     refs: list[str] = field(default_factory=list)  # referenced xml IDs
@@ -74,14 +74,16 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
                 for match in _REF_CALL_RE.findall(eval_attr):
                     refs.append(match)
 
-        records.append(XmlIdInfo(
-            xml_id=full_id,
-            model=model,
-            record_type=elem.tag,
-            file_path=str(file_path),
-            line=elem.sourceline or 0,
-            refs=refs,
-        ))
+        records.append(
+            XmlIdInfo(
+                xml_id=full_id,
+                model=model,
+                record_type=elem.tag,
+                file_path=str(file_path),
+                line=elem.sourceline or 0,
+                refs=refs,
+            )
+        )
 
     return records
 
@@ -121,15 +123,17 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
         if not model:
             continue
 
-        views.append(ViewInfo(
-            xml_id=xml_id,
-            model=model,
-            inherit_id=inherit_id,
-            field_refs=field_refs,
-            button_methods=button_methods,
-            file_path=str(file_path),
-            line=record.sourceline or 0,
-        ))
+        views.append(
+            ViewInfo(
+                xml_id=xml_id,
+                model=model,
+                inherit_id=inherit_id,
+                field_refs=field_refs,
+                button_methods=button_methods,
+                file_path=str(file_path),
+                line=record.sourceline or 0,
+            )
+        )
 
     return views
 
@@ -145,6 +149,7 @@ def _extract_arch_refs(
     comodel (inline subview), not to this view's model, so it is not attributed
     here. (Spec A5: never check a field against the wrong model.)
     """
+
     def walk(elem: etree._Element, inside_field: bool) -> None:
         for child in elem:
             if child.tag == "field":
@@ -157,7 +162,11 @@ def _extract_arch_refs(
                 if not inside_field:
                     btn_name = child.get("name")
                     btn_type = child.get("type")
-                    if btn_name and btn_type == "object" and btn_name not in button_methods:
+                    if (
+                        btn_name
+                        and btn_type == "object"
+                        and btn_name not in button_methods
+                    ):
                         button_methods.append(btn_name)
                 walk(child, inside_field)
             else:

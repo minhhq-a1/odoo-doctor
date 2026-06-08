@@ -14,9 +14,11 @@ _STUBS_DIR = Path(__file__).parent / "data"
 @dataclass
 class StubData:
     version: str
-    models: dict[str, dict]   # model_name -> {"fields": [...], "methods": [...]}
-    xml_ids: dict[str, str]   # xml_id -> model
-    complete: bool = False    # True only for source/RPC-generated stubs (provable absence)
+    models: dict[str, dict]  # model_name -> {"fields": [...], "methods": [...]}
+    xml_ids: dict[str, str]  # xml_id -> model
+    complete: bool = (
+        False  # True only for source/RPC-generated stubs (provable absence)
+    )
 
 
 def load_stubs(odoo_version: str) -> StubData | None:
