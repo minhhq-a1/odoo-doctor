@@ -16,6 +16,12 @@ else:
         import tomli as tomllib  # type: ignore[no-redef]
 
 
+@dataclass(frozen=True)
+class SurfaceConfig:
+    min_confidence: str | None = None
+    categories: list[str] = field(default_factory=list)
+
+
 @dataclass
 class OdooDoctorConfig:
     """Parsed configuration from odoo-doctor.toml + CLI overrides."""
@@ -39,6 +45,7 @@ class OdooDoctorConfig:
     ignore_files: list[str] = field(default_factory=list)
     ignore_modules: list[str] = field(default_factory=list)
     category_weights: dict[str, float] = field(default_factory=dict)
+    surfaces: dict[str, SurfaceConfig] = field(default_factory=dict)
 
 
 def load_config(directory: Path) -> OdooDoctorConfig:
@@ -98,11 +105,25 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
     severity_raw = raw.get("severity", {})
     ignore_raw = raw.get("ignore", {})
     weights_raw = raw.get("category_weights", {})
+    surfaces_raw = raw.get("surfaces", {})
 
     defaults = OdooDoctorConfig()
     adapters = dict(defaults.adapters)
     for key, val in adapters_raw.items():
         adapters[key] = bool(val)
+
+    surfaces = {
+        "pr_comment": SurfaceConfig(),
+        "ci_failure": SurfaceConfig(min_confidence="high"),
+    }
+    for surface_name, surface_data in surfaces_raw.items():
+        if not isinstance(surface_data, dict):
+            continue
+        base = surfaces.get(surface_name, SurfaceConfig())
+        surfaces[surface_name] = SurfaceConfig(
+            min_confidence=surface_data.get("min_confidence", base.min_confidence),
+            categories=surface_data.get("categories", base.categories),
+        )
 
     return OdooDoctorConfig(
         odoo_version=main.get("odoo_version"),
@@ -118,4 +139,5 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
         ignore_files=ignore_raw.get("files", []),
         ignore_modules=ignore_raw.get("modules", []),
         category_weights=dict(weights_raw),
+        surfaces=surfaces,
     )
