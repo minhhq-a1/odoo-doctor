@@ -53,6 +53,8 @@ _MODEL_OWNER_OVERRIDES = {
     "mail.thread": "mail",
 }
 
+_ALWAYS_AVAILABLE = {"base", "ir", "res"}
+
 
 class SymbolResolver:
     """Resolve models, fields, methods, and XML IDs across the project.
@@ -217,3 +219,22 @@ class SymbolResolver:
         if "." not in xml_id or xml_id.split(".", 1)[0] == current_module:
             return SymbolLookup(ResolveResult.LOCAL_NOT_FOUND)
         return lookup
+
+    def module_is_known(self, module: str) -> bool:
+        """Check if a module is known to the system via repo models, xml_ids, overrides, or builtin."""
+        if module in _ALWAYS_AVAILABLE:
+            return True
+        if module in _MODEL_OWNER_OVERRIDES.values():
+            return True
+        # any repo model whose module == module
+        if any(model.module == module for model in self._repo_models.values()):
+            return True
+        # any repo xml_id with prefix f"{module}."
+        if any(xml_id.startswith(f"{module}.") for xml_id in self._repo_xml_ids):
+            return True
+        # any stub xml_id with prefix f"{module}."
+        if self._stubs and any(
+            xml_id.startswith(f"{module}.") for xml_id in self._stubs.xml_ids
+        ):
+            return True
+        return False
