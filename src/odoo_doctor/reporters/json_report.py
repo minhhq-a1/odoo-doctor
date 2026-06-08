@@ -47,6 +47,7 @@ def render_json(
     top = sorted(diagnostics, key=lambda d: (d.tier, d.file_path, d.line))[:5]
 
     return json.dumps({
+        "schema_version": "1.0",
         "version": "0.1.0",
         "project_score": _project_score(scores),
         "top_findings": [
@@ -57,6 +58,9 @@ def render_json(
                 "rule": d.rule,
                 "tier": d.tier,
                 "title": d.title,
+                "category": d.category,
+                "severity": d.severity,
+                "confidence": d.confidence,
             }
             for d in top
         ],
