@@ -60,11 +60,17 @@ def scan(
         None, "--module", help="Scan only this module"
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    format_opt: Optional[str] = typer.Option(
+        None, "--format", help="Output format (terminal, json, github)"
+    ),
     fail_on: Optional[str] = typer.Option(
         None, "--fail-on", help="Fail if severity found (error|warning)"
     ),
     diff: Optional[str] = typer.Option(
         None, "--diff", help="Only scan files changed vs this branch"
+    ),
+    score_delta: Optional[str] = typer.Option(
+        None, "--score-delta", help="Compute score difference vs this base ref"
     ),
     min_score: Optional[int] = typer.Option(
         None, "--min-score", help="Exit 2 if any module scores below this (0-100)"
@@ -79,7 +85,8 @@ def scan(
         cfg.odoo_version = odoo_version
     _validate_min_score(min_score, "--min-score")
     _validate_min_score(cfg.min_score, "min_score in odoo-doctor.toml")
-    target = [module] if module else cfg.target_modules or None
+    if module:
+        cfg.target_modules = [module]
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
 
     # Determine changed files for --diff
@@ -94,21 +101,195 @@ def scan(
             )
             raise typer.Exit(code=3)
 
-    # Build project graph
+    output_format = "terminal"
+    if json_output:
+        output_format = "json"
+    if format_opt:
+        output_format = format_opt
+
     version = cfg.odoo_version or "unknown"
-    graph = build_project_graph(
+    diags, scores = _collect_scores(
         addon_paths=addons_paths,
-        odoo_version=version,
-        target_modules=target,
-        odoo_source_path=cfg.odoo_source_path or None,
+        cfg=cfg,
+        version=version,
+        changed_files=changed_files,
+        config_root=config_root,
     )
 
-    if not graph.modules:
-        if json_output:
+    if not scores:
+        if output_format == "json":
             typer.echo(render_json([], {}))
+        elif output_format == "github":
+            typer.echo("")
         else:
             typer.echo("No addons found.")
         return
+
+    delta_str = None
+    if score_delta:
+        base_diags, base_scores = _scan_base_ref(
+            config_root=config_root,
+            base_ref=score_delta,
+            addon_paths=addons_paths,
+            cfg=cfg,
+            version=version,
+        )
+        delta_str = _compute_aggregate_delta(scores, base_scores)
+        if output_format == "terminal":
+            typer.echo(f"Score Delta: {delta_str} (vs base {score_delta})")
+
+    # Output
+    if output_format == "json":
+        typer.echo(render_json(diags, scores))
+    elif output_format == "github":
+        from odoo_doctor.reporters.github_annotations import render_github_annotations
+
+        typer.echo(render_github_annotations(diags, config_root))
+
+        # In github output, we also want to post PR comment
+        from odoo_doctor.reporters.pr_comment import (
+            render_pr_comment_body,
+            post_pr_comment,
+        )
+
+        body = render_pr_comment_body(
+            diags, scores, delta=delta_str, surfaces=cfg.surfaces.get("pr_comment")
+        )
+        post_pr_comment(body)
+    else:
+        typer.echo(render_terminal(diags, scores))
+
+    # Fail on severity
+    if fail_on:
+        if _has_severity_at_or_above(diags, fail_on):
+            raise typer.Exit(code=1)
+
+    # Fail on min_score: CLI flag overrides config value
+    effective_min = min_score if min_score is not None else cfg.min_score
+    if effective_min > 0:
+        from odoo_doctor.core.scoring import ScoreResult
+
+        failed_modules = [
+            (name, score)
+            for name, score in scores.items()
+            if isinstance(score, ScoreResult) and score.overall < effective_min
+        ]
+        if failed_modules:
+            if output_format not in ("json", "github"):
+                for name, score in failed_modules:
+                    typer.echo(
+                        f"[FAIL] {name}: score {score.overall:.1f} < min {effective_min}",
+                        err=True,
+                    )
+            raise typer.Exit(code=2)
+
+
+@app.command("rules")
+def rules_cmd(
+    action: str = typer.Argument("list", help="list or explain"),
+    rule_name: Optional[str] = typer.Argument(None, help="Rule name to explain"),
+) -> None:
+    """List rules or explain a specific rule."""
+    if action == "list":
+        for meta, _ in default_registry.get_rules():
+            typer.echo(f"  {meta.name:40s} [{meta.category}, {meta.tier}]")
+    elif action == "explain" and rule_name:
+        if rule_name in default_registry:
+            meta, _ = default_registry.get(rule_name)
+            typer.echo(f"Rule: {meta.name}")
+            typer.echo(f"Category: {meta.category}")
+            typer.echo(f"Tier: {meta.tier}")
+            typer.echo(f"Severity: {meta.severity}")
+            typer.echo(f"Confidence: {meta.default_confidence}")
+            typer.echo(f"Needs module context: {meta.needs_context}")
+            typer.echo(f"Min Odoo version: {meta.min_version or 'any'}")
+        else:
+            typer.echo(f"Unknown rule: {rule_name}")
+
+
+@app.command()
+def init(
+    path: str = typer.Option(".", "--path", help="Where to create odoo-doctor.toml"),
+) -> None:
+    """Create a default odoo-doctor.toml config file."""
+    config_path = Path(path) / "odoo-doctor.toml"
+    if config_path.exists():
+        typer.echo(f"Config already exists at {config_path}")
+        return
+
+    config_path.write_text("""\
+[odoo-doctor]
+# odoo_version = "17.0"
+# addons_paths = ["."]
+# odoo_source_path = ""
+# min_score = 60
+
+[adapters]
+ruff = true
+pylint_odoo = true
+
+[severity]
+# "search-in-loop" = "warning"
+
+[ignore]
+rules = []
+files = ["**/migrations/**"]
+modules = []
+
+[category_weights]
+# Security = 1.0
+# Performance = 1.5
+""")
+    typer.echo(f"Created {config_path}")
+
+
+@app.command()
+def install() -> None:
+    """Install agent skills and optional git hooks."""
+    import shutil
+    from importlib.resources import files, as_file
+
+    try:
+        skills_traversable = files("odoo_doctor.skills")
+    except ModuleNotFoundError:
+        typer.echo("Skills package not found. Reinstall odoo-doctor.")
+        raise typer.Exit(code=1)
+
+    dest = Path.cwd() / ".odoo-doctor" / "skills"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    with as_file(skills_traversable) as skills_src:
+        if not skills_src.exists():
+            typer.echo("Skills directory not found in package. Reinstall odoo-doctor.")
+            raise typer.Exit(code=1)
+
+        for skill_dir in skills_src.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                target = dest / skill_dir.name
+                if target.exists():
+                    shutil.rmtree(target)
+                shutil.copytree(skill_dir, target)
+                typer.echo(f"  Installed skill: {skill_dir.name}")
+
+    typer.echo(f"Skills installed to {dest}")
+    typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")
+
+
+def _collect_scores(
+    addon_paths: list[Path],
+    cfg: OdooDoctorConfig,
+    version: str,
+    changed_files: set[str] | None = None,
+    config_root: Path | None = None,
+) -> tuple[list[Diagnostic], dict[str, object]]:
+    graph = build_project_graph(
+        addon_paths=addon_paths,
+        odoo_version=version,
+        target_modules=cfg.target_modules or None,
+        odoo_source_path=cfg.odoo_source_path or None,
+    )
+    if not graph.modules:
+        return [], {}
 
     # Detect version from first module if still unknown
     if version == "unknown" and graph.modules:
@@ -231,126 +412,91 @@ def scan(
             in_scope_categories=in_scope,
         )
 
-    # Output
-    if json_output:
-        typer.echo(render_json(diags, scores))
-    else:
-        typer.echo(render_terminal(diags, scores))
-
-    # Fail on severity
-    if fail_on:
-        if _has_severity_at_or_above(diags, fail_on):
-            raise typer.Exit(code=1)
-
-    # Fail on min_score: CLI flag overrides config value
-    effective_min = min_score if min_score is not None else cfg.min_score
-    if effective_min > 0:
-        from odoo_doctor.core.scoring import ScoreResult
-
-        failed_modules = [
-            (name, score)
-            for name, score in scores.items()
-            if isinstance(score, ScoreResult) and score.overall < effective_min
-        ]
-        if failed_modules:
-            if not json_output:
-                for name, score in failed_modules:
-                    typer.echo(
-                        f"[FAIL] {name}: score {score.overall:.1f} < min {effective_min}",
-                        err=True,
-                    )
-            raise typer.Exit(code=2)
+    return diags, scores
 
 
-@app.command("rules")
-def rules_cmd(
-    action: str = typer.Argument("list", help="list or explain"),
-    rule_name: Optional[str] = typer.Argument(None, help="Rule name to explain"),
-) -> None:
-    """List rules or explain a specific rule."""
-    if action == "list":
-        for meta, _ in default_registry.get_rules():
-            typer.echo(f"  {meta.name:40s} [{meta.category}, {meta.tier}]")
-    elif action == "explain" and rule_name:
-        if rule_name in default_registry:
-            meta, _ = default_registry.get(rule_name)
-            typer.echo(f"Rule: {meta.name}")
-            typer.echo(f"Category: {meta.category}")
-            typer.echo(f"Tier: {meta.tier}")
-            typer.echo(f"Severity: {meta.severity}")
-            typer.echo(f"Confidence: {meta.default_confidence}")
-            typer.echo(f"Needs module context: {meta.needs_context}")
-            typer.echo(f"Min Odoo version: {meta.min_version or 'any'}")
-        else:
-            typer.echo(f"Unknown rule: {rule_name}")
+def _scan_base_ref(
+    config_root: Path,
+    base_ref: str,
+    addon_paths: list[Path],
+    cfg: OdooDoctorConfig,
+    version: str,
+) -> tuple[list[Diagnostic], dict[str, object]]:
+    import tempfile
 
+    root_result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        cwd=config_root,
+        timeout=30,
+    )
+    if root_result.returncode != 0:
+        typer.echo("[ERROR] --score-delta: Not a git repository.", err=True)
+        raise typer.Exit(code=3)
+    git_root = Path(root_result.stdout.strip()).resolve()
 
-@app.command()
-def init(
-    path: str = typer.Option(".", "--path", help="Where to create odoo-doctor.toml"),
-) -> None:
-    """Create a default odoo-doctor.toml config file."""
-    config_path = Path(path) / "odoo-doctor.toml"
-    if config_path.exists():
-        typer.echo(f"Config already exists at {config_path}")
-        return
-
-    config_path.write_text("""\
-[odoo-doctor]
-# odoo_version = "17.0"
-# addons_paths = ["."]
-# odoo_source_path = ""
-# min_score = 60
-
-[adapters]
-ruff = true
-pylint_odoo = true
-
-[severity]
-# "search-in-loop" = "warning"
-
-[ignore]
-rules = []
-files = ["**/migrations/**"]
-modules = []
-
-[category_weights]
-# Security = 1.0
-# Performance = 1.5
-""")
-    typer.echo(f"Created {config_path}")
-
-
-@app.command()
-def install() -> None:
-    """Install agent skills and optional git hooks."""
-    import shutil
-    from importlib.resources import files, as_file
-
+    tmpdir = Path(tempfile.mkdtemp(prefix="odoo-doctor-base-"))
     try:
-        skills_traversable = files("odoo_doctor.skills")
-    except ModuleNotFoundError:
-        typer.echo("Skills package not found. Reinstall odoo-doctor.")
-        raise typer.Exit(code=1)
+        wt_add = subprocess.run(
+            ["git", "worktree", "add", "--detach", str(tmpdir), base_ref],
+            cwd=git_root,
+            capture_output=True,
+            text=True,
+        )
+        if wt_add.returncode != 0:
+            typer.echo(
+                f"[ERROR] --score-delta: Could not resolve base ref '{base_ref}'.",
+                err=True,
+            )
+            typer.echo(wt_add.stderr, err=True)
+            raise typer.Exit(code=3)
 
-    dest = Path.cwd() / ".odoo-doctor" / "skills"
-    dest.mkdir(parents=True, exist_ok=True)
+        # Map addon paths from config_root to tmpdir
+        base_addon_paths = []
+        for p in addon_paths:
+            try:
+                rel = p.resolve().relative_to(git_root)
+                base_addon_paths.append(tmpdir / rel)
+            except ValueError:
+                pass
 
-    with as_file(skills_traversable) as skills_src:
-        if not skills_src.exists():
-            typer.echo("Skills directory not found in package. Reinstall odoo-doctor.")
-            raise typer.Exit(code=1)
+        base_cfg_root = (
+            tmpdir / config_root.relative_to(git_root)
+            if config_root.is_relative_to(git_root)
+            else tmpdir
+        )
 
-        for skill_dir in skills_src.iterdir():
-            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
-                target = dest / skill_dir.name
-                if target.exists():
-                    shutil.rmtree(target)
-                shutil.copytree(skill_dir, target)
-                typer.echo(f"  Installed skill: {skill_dir.name}")
+        return _collect_scores(
+            base_addon_paths, cfg, version, config_root=base_cfg_root
+        )
+    finally:
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(tmpdir)],
+            cwd=git_root,
+            capture_output=True,
+        )
 
-    typer.echo(f"Skills installed to {dest}")
-    typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")
+
+def _compute_aggregate_delta(
+    scores: dict[str, object], base_scores: dict[str, object]
+) -> str:
+    from odoo_doctor.core.scoring import ScoreResult
+
+    def agg(sc: dict[str, object]) -> float:
+        valid = [s for s in sc.values() if isinstance(s, ScoreResult)]
+        if not valid:
+            return 100.0
+        return sum(s.overall for s in valid) / len(valid)
+
+    head_score = agg(scores)
+    base_score = agg(base_scores)
+    diff = round(head_score - base_score, 1)
+    if diff > 0:
+        return f"+{diff}"
+    elif diff < 0:
+        return f"{diff}"
+    return "0.0"
 
 
 def _resolve_addons_paths(

@@ -1,0 +1,21 @@
+name: Odoo Doctor
+on:
+  pull_request:
+    paths:
+      - '**/*.py'
+      - '**/*.xml'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: ./
+        with:
+          odoo-version: "17.0"
+          fail-on: "error"
+          advisory: "false"
+          pr-comment: "true"

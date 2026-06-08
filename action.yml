@@ -1,0 +1,66 @@
+name: "odoo-doctor"
+description: "Unified health scoring for Odoo custom addons."
+inputs:
+  odoo-version:
+    description: "Target Odoo version"
+    required: false
+  fail-on:
+    description: "Fail if severity found (error|warning)"
+    required: false
+    default: "error"
+  min-score:
+    description: "Exit 2 if any module scores below this (0-100)"
+    required: false
+    default: "0"
+  paths:
+    description: "Path to scan"
+    required: false
+    default: "."
+  diff-base:
+    description: "Only scan files changed vs this branch"
+    required: false
+    default: "${{ github.event.pull_request.base.ref }}"
+  advisory:
+    description: "Run in advisory mode (surface findings but do not fail)"
+    required: false
+    default: "false"
+  pr-comment:
+    description: "Post a sticky PR comment with the results"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        
+    - name: Install odoo-doctor
+      shell: bash
+      run: pip install odoo-doctor
+        
+    - name: Run odoo-doctor
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        ARGS=()
+        if [ "${{ inputs.odoo-version }}" != "" ]; then
+          ARGS+=(--odoo-version "${{ inputs.odoo-version }}")
+        fi
+        if [ "${{ inputs.advisory }}" != "true" ] && [ "${{ inputs.fail-on }}" != "" ]; then
+          ARGS+=(--fail-on "${{ inputs.fail-on }}")
+        fi
+        if [ "${{ inputs.advisory }}" != "true" ] && [ "${{ inputs.min-score }}" != "" ]; then
+          ARGS+=(--min-score "${{ inputs.min-score }}")
+        fi
+        if [ "${{ inputs.diff-base }}" != "" ]; then
+          ARGS+=(--diff "${{ inputs.diff-base }}")
+        fi
+        if [ "${{ inputs.pr-comment }}" == "true" ] && [ "${{ inputs.diff-base }}" != "" ]; then
+          ARGS+=(--score-delta "${{ inputs.diff-base }}")
+        fi
+        
+        odoo-doctor scan "${{ inputs.paths }}" --format github "${ARGS[@]}"

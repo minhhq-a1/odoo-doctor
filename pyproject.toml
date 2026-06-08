@@ -45,6 +45,7 @@ odoo-doctor = "odoo_doctor.cli.app:app"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.hatch.build.targets.wheel]
