@@ -45,6 +45,11 @@ odoo-doctor scan . --diff main --json
 | `manifest-missing-dependency` | P1 | Module Hygiene |
 | `manifest-missing-required-fields` | P2 | Module Hygiene |
 | `search-in-loop` | P1 | Performance |
+| `public-controller-sudo-risk` | P1 | Security |
+| `unbounded-search` | P2 | Performance |
+| `manifest-data-order-risk` | P2 | Module Hygiene |
+| `override-missing-super` | P1 | Correctness |
+| `compute-missing-depends` | P2 | Correctness |
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
@@ -96,6 +101,14 @@ modules = []
 
 [category_weights]
 Security = 1.5
+
+[surfaces.pr_comment]
+min_confidence = "all"
+categories = []
+
+[surfaces.ci_failure]
+min_confidence = "high"
+categories = []
 ```
 
 ---
@@ -104,12 +117,33 @@ Security = 1.5
 
 ### GitHub Actions
 
+The easiest way to integrate Odoo Doctor into GitHub Actions is using our official composite action. See `.github/workflows/odoo-doctor.example.yml` for a full example.
+
 ```yaml
-- name: Odoo Doctor
+- name: Odoo Doctor Scan
+  uses: minhhq-a1/odoo-doctor@v0.2.0
+  with:
+    fail-on: warning
+    min-score: 75
+    diff-base: main
+    pr-comment: true
+    paths: "."
+```
+
+If you prefer `pip install`, you can run it directly:
+
+```yaml
+- name: Odoo Doctor (pip)
   run: |
     pip install odoo-doctor
-    odoo-doctor scan . --min-score 75 --fail-on error
+    odoo-doctor scan . --format github --min-score 75 --fail-on error
 ```
+
+### CI/PR Surfaces
+
+- **`--format github`**: Emits GitHub Actions annotations inline.
+- **`--score-delta <base-ref>`**: Opt-in PR score delta. It does a worktree-isolated second scan and needs git history (`fetch-depth: 0` in Actions).
+- **Sticky PR comment**: Posted/updated via `gh` when `--format github` runs in a PR with a valid `GH_TOKEN`. Idempotent via a hidden marker.
 
 ### pre-commit
 
@@ -194,6 +228,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `0` | Clean — no triggered thresholds |
 | `1` | Findings at or above `--fail-on` severity |
 | `2` | One or more modules score below `--min-score` |
+| `3` | Invalid argument, out-of-range `--min-score`, or git/ref failure |
 
 ---
 
@@ -203,6 +238,6 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 git clone https://github.com/minhhq-a1/odoo-doctor
 cd odoo-doctor
 pip install -e ".[dev]"
-pytest                    # 154+ tests
+pytest                    # 323+ tests
 pytest --cov=odoo_doctor  # with coverage
 ```
