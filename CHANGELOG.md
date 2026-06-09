@@ -4,7 +4,7 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-06-08
 
 ### Added
 
@@ -13,6 +13,9 @@ All notable changes to Odoo Doctor are documented here.
 - **Aggregated Dependency Inference**: Expanded `manifest-missing-dependency` to scan XML references, eval ref attributes, and inherited views. Diagnostics are aggregated by missing dependency module, presenting multiple evidence items in a single report.
 - **eval="ref(...)" Parsing**: XML parser extracts referenced IDs within `eval` attributes using a conservative regex, enabling XML ref and missing dependency checks.
 - **odoo_source_path Indexing**: Lightweight indexer (`build_source_index`) scans configured Odoo source addons for model ownership and XML IDs, resolving them without importing Odoo.
+- **5 new native rules:** public-controller-sudo-risk (Security/P1), unbounded-search (Performance/P2), manifest-data-order-risk (Module Hygiene/P2), override-missing-super (Correctness/P1), compute-missing-depends (Correctness/P2). Registry now 15 native rules.
+- **CI/PR surfaces:** `--format {terminal,json,github}` (GitHub Actions annotations); opt-in `--score-delta <base-ref>` (worktree-isolated base scan, aggregate delta); sticky idempotent PR comment via `gh`; composite `action.yml`; `[surfaces.pr_comment]` / `[surfaces.ci_failure]` config (min_confidence + categories).
+- pylint-odoo D7 mapping: E8103=sql-injection (Security/P0) added; E8102=invalid-commit re-tiered to P2.
 
 ### Fixed
 
@@ -20,6 +23,14 @@ All notable changes to Odoo Doctor are documented here.
 - `--diff` now preserves module context diagnostics when any file in that module changed, preventing missed findings such as missing ACLs after adding a model.
 - `--fail-on` now treats the selected severity as a threshold, so `--fail-on warning` also fails on errors.
 - Deduplication key now includes `rule` to ensure different rules reporting at the same location are not erroneously merged.
+- Crash safety (Part B): non-UTF-8 source files, null adapter JSON fields, and non-zero adapter subprocess exits no longer abort a scan or fake a clean module.
+- Part C correctness: `--diff` typos / unresolvable refs fail loudly (exit 3); `--min-score` out of 0–100 rejected (exit 3).
+- Overall score rounded to 1 decimal so the terminal report and the `--min-score` gate agree.
+
+### Changed
+
+- `schema_version` remains `1.0` — the JSON shape is unchanged; 0.2.0 adds findings and render surfaces, not new payload fields.
+- `oca` adapter key dropped from the `init` template (tolerated-but-inert if present in existing configs).
 
 ---
 
