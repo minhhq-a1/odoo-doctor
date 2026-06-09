@@ -94,6 +94,11 @@ def test_render_json_has_schema_version():
     assert parsed["schema_version"] == "1.0"
 
 
+def test_render_json_has_version():
+    parsed = json.loads(render_json([], {}))
+    assert parsed["version"] == "0.2.0"
+
+
 def test_render_json_top_findings_have_full_fields():
     d = _diag(tier="P0")
     scores = {
