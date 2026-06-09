@@ -46,10 +46,11 @@ def render_json(
 
     top = sorted(diagnostics, key=lambda d: (d.tier, d.file_path, d.line))[:5]
 
+    # Using version tracking for tooling compatibility
     return json.dumps(
         {
+            "version": "0.2.0",
             "schema_version": "1.0",
-            "version": "0.1.0",
             "project_score": _project_score(scores),
             "top_findings": [
                 {
