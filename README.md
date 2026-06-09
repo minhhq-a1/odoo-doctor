@@ -238,6 +238,6 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 git clone https://github.com/minhhq-a1/odoo-doctor
 cd odoo-doctor
 pip install -e ".[dev]"
-pytest                    # 323+ tests
+pytest                    # 324+ test cases
 pytest --cov=odoo_doctor  # with coverage
 ```
