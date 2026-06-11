@@ -26,6 +26,7 @@ import odoo_doctor.rules.manifest.missing_required_fields  # noqa: F401
 import odoo_doctor.rules.manifest.missing_dependency  # noqa: F401
 import odoo_doctor.rules.manifest.data_order_risk  # noqa: F401
 import odoo_doctor.rules.security.missing_access_csv  # noqa: F401
+import odoo_doctor.rules.security.eval_usage  # noqa: F401
 import odoo_doctor.rules.security.unknown_model_in_access_csv  # noqa: F401
 import odoo_doctor.rules.security.raw_sql_interpolation  # noqa: F401
 import odoo_doctor.rules.security.public_controller_sudo  # noqa: F401
