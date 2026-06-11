@@ -14,6 +14,7 @@ CATEGORIES: list[str] = [
     "Upgrade Safety",
     "Module Hygiene",
     "Maintainability",
+    "Frontend",
 ]
 
 TIER_IMPACT: dict[str, int] = {
