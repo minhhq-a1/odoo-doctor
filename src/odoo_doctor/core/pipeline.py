@@ -139,11 +139,11 @@ def apply_ignore_filters(
 def _matches_any_glob(
     file_path: str, patterns: list[str], base_path: Path | None = None
 ) -> bool:
-    """Check if file_path matches any glob pattern, supporting ** via pathlib."""
+    """Check if file_path matches any glob pattern, supporting ** across segments."""
     norm = file_path.replace("\\", "/")
     p = Path(norm)
 
-    rel_path_str = None
+    paths_to_check = [norm]
     if p.is_absolute():
         bases = []
         if base_path is not None:
@@ -151,40 +151,42 @@ def _matches_any_glob(
         bases.append(Path.cwd().resolve())
         for base in bases:
             try:
-                rel_path_str = p.relative_to(base).as_posix()
+                paths_to_check.append(p.relative_to(base).as_posix())
                 break
             except ValueError:
                 pass
 
-    paths_to_check = [norm]
-    if rel_path_str:
-        paths_to_check.append(rel_path_str)
-
     for pat in patterns:
         for path_str in paths_to_check:
-            curr_p = Path(path_str)
-            # Try fnmatch directly
-            if fnmatch.fnmatch(path_str, pat):
+            if _glob_match(path_str, pat):
                 return True
-            # Try pathlib.match (supports **)
-            try:
-                if curr_p.match(pat):
-                    return True
-            except ValueError:
-                pass
-            # Handle ** by checking if any sub-path matches
-            # e.g. "**/migrations/**" should match "migrations/17.0/pre.py"
-            if "**" in pat:
-                # Strip leading **/ and check if the path contains the pattern
-                pat_stripped = pat.strip("/").replace("**/", "").replace("/**", "")
-                if pat_stripped and pat_stripped in path_str:
-                    return True
-                # Also try: split the pattern and check each segment
-                parts = path_str.split("/")
-                for i in range(len(parts)):
-                    sub = "/".join(parts[i:])
-                    if fnmatch.fnmatch(sub, pat.lstrip("*/")):
-                        return True
+    return False
+
+
+def _glob_match(path_str: str, pat: str) -> bool:
+    """Match a posix path against a glob pattern where ** spans directories."""
+    path_parts = [seg for seg in path_str.split("/") if seg]
+    pat_parts = [seg for seg in pat.split("/") if seg]
+    return _match_segments(path_parts, pat_parts)
+
+
+def _match_segments(path_parts: list[str], pat_parts: list[str]) -> bool:
+    """Recursive segment matcher. '**' matches zero or more whole segments."""
+    if not pat_parts:
+        return not path_parts
+    head, *rest = pat_parts
+    if head == "**":
+        # '**' matches zero segments...
+        if _match_segments(path_parts, rest):
+            return True
+        # ...or one-or-more segments.
+        if path_parts and _match_segments(path_parts[1:], pat_parts):
+            return True
+        return False
+    if not path_parts:
+        return False
+    if fnmatch.fnmatchcase(path_parts[0], head):
+        return _match_segments(path_parts[1:], rest)
     return False
 
 
