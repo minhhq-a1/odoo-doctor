@@ -30,6 +30,7 @@ import odoo_doctor.rules.security.eval_usage  # noqa: F401
 import odoo_doctor.rules.security.unknown_model_in_access_csv  # noqa: F401
 import odoo_doctor.rules.security.raw_sql_interpolation  # noqa: F401
 import odoo_doctor.rules.security.public_controller_sudo  # noqa: F401
+import odoo_doctor.rules.security.sudo_without_comment  # noqa: F401
 import odoo_doctor.rules.security.record_rule_without_domain  # noqa: F401
 import odoo_doctor.rules.xml.duplicate_xml_id  # noqa: F401
 import odoo_doctor.rules.xml.missing_xml_ref  # noqa: F401
