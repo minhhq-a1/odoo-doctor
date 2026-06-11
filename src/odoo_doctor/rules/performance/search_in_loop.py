@@ -13,7 +13,7 @@ from odoo_doctor.rules._ast_helpers import receiver_is_orm
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
 
-_ORM_METHODS = {"search", "search_count", "browse", "read", "write", "create"}
+_ORM_METHODS = {"search", "search_count", "browse", "read"}
 
 
 @rule(
