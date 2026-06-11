@@ -57,9 +57,18 @@ Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
 ## Score explained
 
+Each category score starts at 100 and loses points per **high-confidence**
+finding, where each finding deducts `tier_impact × category_weight`
+(default weight 1.0; override via `[category_weights]`). The overall score
+blends only **in-scope** categories (those with at least one active rule):
+
 ```
-overall = 0.4 × min(category_scores) + 0.6 × avg(category_scores)
+category_score = max(0, 100 − Σ(tier_impact × category_weight))
+overall        = 0.4 × min(in_scope_category_scores)
+               + 0.6 × avg(in_scope_category_scores)
 ```
+
+Tier impacts: P0 = 25, P1 = 10, P2 = 4, P3 = 1.
 
 | Label | Range |
 |-------|-------|
