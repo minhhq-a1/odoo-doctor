@@ -80,6 +80,9 @@ def scan(
     min_score: Optional[int] = typer.Option(
         None, "--min-score", help="Exit 2 if any module scores below this (0-100)"
     ),
+    cache_enabled: bool = typer.Option(
+        False, "--cache", help="Reuse the cached result when nothing relevant changed"
+    ),
 ) -> None:
     """Scan Odoo addons and report health score."""
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
@@ -113,13 +116,23 @@ def scan(
         output_format = format_opt
 
     version = cfg.odoo_version or "unknown"
+
+    cache = None
+    if cache_enabled and not diff:
+        from odoo_doctor.core.cache import ScanCache
+        cache = ScanCache(config_root / ".odoo_doctor_cache")
+        cache.load()
+
     diags, scores = _collect_scores(
         addon_paths=addons_paths,
         cfg=cfg,
         version=version,
         changed_files=changed_files,
         config_root=config_root,
+        cache=cache,
     )
+    if cache is not None:
+        cache.save()
 
     if not scores:
         if output_format == "json":
