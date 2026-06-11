@@ -66,6 +66,7 @@ def test_categories_are_canonical():
         "Upgrade Safety",
         "Module Hygiene",
         "Maintainability",
+        "Frontend",
     ]
     assert CATEGORIES == expected
 
