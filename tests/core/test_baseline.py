@@ -16,9 +16,9 @@ from odoo_doctor.core.baseline import (
 def _src(tmp_path: Path) -> Path:
     f = tmp_path / "x.py"
     f.write_text(
-        "a = eval(x)\n"        # line 1
-        "b = 2\n"              # line 2
-        "c = eval(y)\n"        # line 3
+        "a = eval(x)\n"  # line 1
+        "b = 2\n"  # line 2
+        "c = eval(y)\n"  # line 3
     )
     return f
 
@@ -81,9 +81,7 @@ def test_filter_drops_baselined_findings(tmp_path: Path):
     write_baseline([_diag(str(f), 1)], bfile)  # baseline the eval(x) finding
     ids = load_baseline(bfile)
 
-    kept = filter_against_baseline(
-        [_diag(str(f), 1), _diag(str(f), 3)], ids
-    )
+    kept = filter_against_baseline([_diag(str(f), 1), _diag(str(f), 3)], ids)
     # eval(x) (line 1) suppressed; eval(y) (line 3) is a distinct identity, kept.
     kept_lines = {d.line for d in kept}
     assert kept_lines == {3}

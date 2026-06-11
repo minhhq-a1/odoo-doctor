@@ -50,7 +50,7 @@ def check_field_no_string_on_required(ctx: ModuleContext) -> list[Diagnostic]:
                         "but has no explicit string= label."
                     ),
                     help=(
-                        "Add string=\"...\" so the required field has a clear, "
+                        'Add string="..." so the required field has a clear, '
                         "translatable label in the UI."
                     ),
                     odoo_version=ctx.odoo_version,

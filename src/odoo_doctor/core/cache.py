@@ -60,9 +60,7 @@ def project_fingerprint(
         if not root.exists():
             continue
         files = sorted(
-            p
-            for p in root.rglob("*")
-            if p.is_file() and p.suffix in _SCANNED_SUFFIXES
+            p for p in root.rglob("*") if p.is_file() and p.suffix in _SCANNED_SUFFIXES
         )
         for p in files:
             key = str(p.resolve())

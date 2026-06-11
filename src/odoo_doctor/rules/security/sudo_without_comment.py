@@ -52,9 +52,7 @@ def check_sudo_without_comment(
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if not (
-            isinstance(node.func, ast.Attribute) and node.func.attr == "sudo"
-        ):
+        if not (isinstance(node.func, ast.Attribute) and node.func.attr == "sudo"):
             continue
         lineno = node.lineno
         this_line = lines[lineno - 1] if 0 < lineno <= len(lines) else ""

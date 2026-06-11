@@ -8,6 +8,10 @@ command, baseline mode, and (future) remote service without duplicating logic.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from odoo_doctor.core.cache import ScanCache
 
 import typer
 
@@ -50,13 +54,63 @@ def _in_scope_categories(
     return [c for c in CATEGORIES if c in rule_categories]
 
 
+def _config_repr(cfg: OdooDoctorConfig) -> str:
+    """A stable string capturing config fields that affect results."""
+    import dataclasses
+
+    return repr(dataclasses.asdict(cfg)) if dataclasses.is_dataclass(cfg) else repr(cfg)
+
+
+def _score_per_module(
+    diags: list[Diagnostic], cfg: OdooDoctorConfig, version: str
+) -> dict[str, object]:
+    from odoo_doctor.core.pipeline import mark_score_eligibility
+
+    eligible = mark_score_eligibility(diags)
+    in_scope = _in_scope_categories(version, cfg)
+    scores: dict[str, object] = {}
+    modules = {d.module for d in diags}
+    for name in modules:
+        mod_diags = [d for d in diags if d.module == name]
+        mod_elig = [e for d, e in zip(diags, eligible) if d.module == name]
+        scores[name] = score_diagnostics(
+            mod_diags,
+            mod_elig,
+            category_weights=cfg.category_weights,
+            in_scope_categories=in_scope,
+        )
+    return scores
+
+
 def collect_scores(
     addon_paths: list[Path],
     cfg: OdooDoctorConfig,
     version: str,
     changed_files: set[str] | None = None,
     config_root: Path | None = None,
+    cache: "ScanCache | None" = None,
 ) -> tuple[list[Diagnostic], dict[str, object]]:
+    from dataclasses import asdict
+    from odoo_doctor.core.cache import project_fingerprint
+
+    fingerprint: str | None = None
+    if cache is not None and changed_files is None:
+        ruleset = tuple(
+            f"{meta.name}@{meta.min_version}"
+            for meta, _ in default_registry.get_rules()
+        )
+        fingerprint = project_fingerprint(
+            addon_paths=addon_paths,
+            config_repr=_config_repr(cfg),
+            version=version,
+            ruleset=ruleset,
+        )
+        hit = cache.lookup(fingerprint)
+        if hit is not None:
+            diags = [Diagnostic(**d) for d in hit]
+            scores = _score_per_module(diags, cfg, version)
+            return diags, scores
+
     graph = build_project_graph(
         addon_paths=addon_paths,
         odoo_version=version,
@@ -171,6 +225,9 @@ def collect_scores(
         version,
         base_path=config_root,
     )
+
+    if cache is not None and fingerprint is not None:
+        cache.store(fingerprint, [asdict(d) for d in diags])
 
     # Determine in-scope categories
     in_scope = _in_scope_categories(version, cfg)

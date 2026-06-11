@@ -7,6 +7,7 @@ import ast
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.fixer import default_fixers
+from odoo_doctor.rules.manifest.data_order_risk import _is_security_file
 
 # Defaults for required manifest fields. Keys not present here are not
 # auto-fillable (the fixer returns None and leaves the file untouched).
@@ -51,9 +52,7 @@ def fix_missing_required_field(diag: Diagnostic, text: str) -> str | None:
         return None
 
     missing = [
-        key
-        for key, default in _FIELD_DEFAULTS.items()
-        if data.get(key) in (None, "")
+        key for key, default in _FIELD_DEFAULTS.items() if data.get(key) in (None, "")
     ]
     if not missing:
         return text  # nothing to do -> idempotent no-op
@@ -80,9 +79,6 @@ def _format_manifest(data: dict) -> str:
 
 
 default_fixers.register("manifest-missing-required-fields", fix_missing_required_field)
-
-
-from odoo_doctor.rules.manifest.data_order_risk import _is_security_file
 
 
 def fix_data_order_risk(diag: Diagnostic, text: str) -> str | None:

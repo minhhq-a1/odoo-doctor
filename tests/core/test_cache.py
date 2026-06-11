@@ -33,7 +33,9 @@ def test_fingerprint_changes_when_config_changes(tmp_path: Path):
 def test_fingerprint_changes_when_ruleset_changes(tmp_path: Path):
     root = _addon(tmp_path)
     fp1 = project_fingerprint([root], config_repr="c", version="17.0", ruleset=("a",))
-    fp2 = project_fingerprint([root], config_repr="c", version="17.0", ruleset=("a", "b"))
+    fp2 = project_fingerprint(
+        [root], config_repr="c", version="17.0", ruleset=("a", "b")
+    )
     assert fp1 != fp2
 
 

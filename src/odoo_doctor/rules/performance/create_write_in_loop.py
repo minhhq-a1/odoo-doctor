@@ -70,15 +70,21 @@ def _walk_for_loops(
 ) -> None:
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.For, ast.While)):
-            _check_loop_body(child, diags, file_path, module, version, method_name, rule_name)
-        _walk_for_loops(child, diags, file_path, module, version, method_name, rule_name)
+            _check_loop_body(
+                child, diags, file_path, module, version, method_name, rule_name
+            )
+        _walk_for_loops(
+            child, diags, file_path, module, version, method_name, rule_name
+        )
 
 
 def check_create_write_in_loop(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
     """Helper used by tests to get both."""
-    return check_create_in_loop(file_path, module_name, odoo_version) + check_write_in_loop(file_path, module_name, odoo_version)
+    return check_create_in_loop(
+        file_path, module_name, odoo_version
+    ) + check_write_in_loop(file_path, module_name, odoo_version)
 
 
 @rule(
@@ -101,7 +107,9 @@ def check_create_in_loop(
         tree = ast.parse(source)
     except SyntaxError:
         return []
-    _walk_for_loops(tree, diags, file_path, module_name, odoo_version, "create", "create-in-loop")
+    _walk_for_loops(
+        tree, diags, file_path, module_name, odoo_version, "create", "create-in-loop"
+    )
     return diags
 
 
@@ -125,5 +133,7 @@ def check_write_in_loop(
         tree = ast.parse(source)
     except SyntaxError:
         return []
-    _walk_for_loops(tree, diags, file_path, module_name, odoo_version, "write", "write-in-loop")
+    _walk_for_loops(
+        tree, diags, file_path, module_name, odoo_version, "write", "write-in-loop"
+    )
     return diags

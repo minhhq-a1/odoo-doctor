@@ -28,9 +28,7 @@ def test_write_then_apply_baseline_suppresses_existing(tmp_path: Path):
     bfile = tmp_path / "baseline.json"
 
     # Write baseline.
-    w = runner.invoke(
-        app, ["scan", str(tmp_path), "--write-baseline", str(bfile)]
-    )
+    w = runner.invoke(app, ["scan", str(tmp_path), "--write-baseline", str(bfile)])
     assert w.exit_code == 0
     assert bfile.exists()
 

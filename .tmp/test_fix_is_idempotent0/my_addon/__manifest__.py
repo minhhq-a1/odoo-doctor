@@ -1,0 +1,1 @@
+{'name': 'My Addon', 'version': '1.0', 'depends': ['base'], 'data': ['views/v.xml', 'security/ir.model.access.csv'], 'installable': True}
