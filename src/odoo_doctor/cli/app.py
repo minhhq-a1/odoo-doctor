@@ -83,6 +83,12 @@ def scan(
     cache_enabled: bool = typer.Option(
         False, "--cache", help="Reuse the cached result when nothing relevant changed"
     ),
+    baseline: Optional[str] = typer.Option(
+        None, "--baseline", help="Suppress findings present in this baseline file"
+    ),
+    write_baseline_path: Optional[str] = typer.Option(
+        None, "--write-baseline", help="Write current findings as a baseline and exit 0"
+    ),
 ) -> None:
     """Scan Odoo addons and report health score."""
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
@@ -133,6 +139,25 @@ def scan(
     )
     if cache is not None:
         cache.save()
+
+    if write_baseline_path:
+        from odoo_doctor.core.baseline import write_baseline
+
+        write_baseline(diags, Path(write_baseline_path))
+        typer.echo(f"Wrote baseline with {len(diags)} finding(s) to {write_baseline_path}")
+        return
+
+    if baseline:
+        from odoo_doctor.core.baseline import load_baseline, filter_against_baseline
+        from odoo_doctor.core.scanner import _score_per_module  # added in plan 04
+
+        ids = load_baseline(Path(baseline))
+        diags = filter_against_baseline(diags, ids)
+
+        # Re-score with the suppressed set so score + exit code reflect only new
+        # findings. Reuse the SAME scoring helper that collect_scores uses, so
+        # eligibility (mark_score_eligibility) and in-scope logic cannot drift.
+        scores = _score_per_module(diags, cfg, version)
 
     if not scores:
         if output_format == "json":
