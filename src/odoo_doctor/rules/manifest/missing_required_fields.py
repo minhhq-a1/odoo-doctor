@@ -22,6 +22,7 @@ _REQUIRED_FIELDS = ["name", "version", "depends", "data", "installable", "licens
     default_confidence="high",
     needs_context=True,
     min_version="14.0",
+    fixable=True,
 )
 def check_missing_required_fields(ctx: ModuleContext) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
