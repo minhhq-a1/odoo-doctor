@@ -103,6 +103,11 @@ def scan(
         cfg.target_modules = [module]
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
 
+    if cfg.enable_plugins:
+        from odoo_doctor.rules.plugins import load_rule_plugins
+
+        load_rule_plugins()  # imports 3rd-party rule modules — opt-in only
+
     # Determine changed files for --diff
     changed_files: set[str] | None = None
     if diff:
@@ -265,6 +270,11 @@ def fix_cmd(
         cfg.odoo_version = odoo_version
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
     version = cfg.odoo_version or "unknown"
+
+    if cfg.enable_plugins:
+        from odoo_doctor.rules.plugins import load_rule_plugins
+
+        load_rule_plugins()  # imports 3rd-party rule modules — opt-in only
 
     diags, _scores = _collect_scores(
         addon_paths=addons_paths,

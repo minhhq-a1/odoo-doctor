@@ -32,6 +32,7 @@ class OdooDoctorConfig:
     odoo_source_path: str = ""
     min_score: int = 0
     capabilities: list[str] = field(default_factory=list)
+    enable_plugins: bool = False
 
     # 'oca' is reserved: the OCA pre-commit adapter is not implemented yet, so
     # the key is accepted (tolerated-but-inert) but never instantiates an adapter.
@@ -106,6 +107,7 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
     ignore_raw = raw.get("ignore", {})
     weights_raw = raw.get("category_weights", {})
     surfaces_raw = raw.get("surfaces", {})
+    plugins_raw = raw.get("plugins", {})
 
     defaults = OdooDoctorConfig()
     adapters = dict(defaults.adapters)
@@ -140,4 +142,5 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
         ignore_modules=ignore_raw.get("modules", []),
         category_weights=dict(weights_raw),
         surfaces=surfaces,
+        enable_plugins=bool(plugins_raw.get("enabled", False)),
     )
