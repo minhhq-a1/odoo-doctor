@@ -80,3 +80,35 @@ def _format_manifest(data: dict) -> str:
 
 
 default_fixers.register("manifest-missing-required-fields", fix_missing_required_field)
+
+
+from odoo_doctor.rules.manifest.data_order_risk import _is_security_file
+
+
+def fix_data_order_risk(diag: Diagnostic, text: str) -> str | None:
+    try:
+        data = ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        return None
+
+    files = data["data"]
+    if not all(isinstance(f, str) for f in files):
+        return None
+
+    # Stable partition: security files first (original order), then everything
+    # else (original order). Non-security/non-view files keep their slot in the
+    # 'rest' bucket.
+    security = [f for f in files if _is_security_file(f)]
+    rest = [f for f in files if not _is_security_file(f)]
+    reordered = security + rest
+
+    if reordered == files:
+        return text  # already correct -> idempotent no-op
+
+    data["data"] = reordered
+    return _format_manifest(data)
+
+
+default_fixers.register("manifest-data-order-risk", fix_data_order_risk)

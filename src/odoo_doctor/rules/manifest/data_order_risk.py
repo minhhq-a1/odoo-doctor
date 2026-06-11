@@ -39,6 +39,7 @@ def _is_view_action_file(path_str: str) -> bool:
     default_confidence="high",
     needs_context=True,
     min_version="14.0",
+    fixable=True,
 )
 def check_data_order_risk(ctx: ModuleContext) -> list[Diagnostic]:
     diags: list[Diagnostic] = []

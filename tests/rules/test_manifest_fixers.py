@@ -75,3 +75,45 @@ def test_idempotent_when_all_present():
 
 def test_returns_none_on_unparseable_manifest():
     assert fix_missing_required_field(_diag(), "{'name': ") is None
+
+
+from odoo_doctor.rules.manifest.fixers import fix_data_order_risk
+
+
+def _order_diag() -> Diagnostic:
+    return Diagnostic(
+        module="m",
+        file_path="m/__manifest__.py",
+        line=1,
+        column=0,
+        rule="manifest-data-order-risk",
+        category="Module Hygiene",
+        severity="error",
+        tier="P2",
+        source="native",
+        confidence="high",
+        title="Security file loaded after views/actions",
+        message="...",
+        help="...",
+        odoo_version="17.0",
+    )
+
+
+def test_reorders_security_before_views():
+    src = (
+        "{'name': 'M', 'data': ["
+        "'views/my_view.xml', 'security/ir.model.access.csv']}"
+    )
+    out = fix_data_order_risk(_order_diag(), src)
+    data = ast.literal_eval(out)["data"]
+    assert data.index("security/ir.model.access.csv") < data.index("views/my_view.xml")
+
+
+def test_data_order_idempotent_when_already_correct():
+    src = (
+        "{'name': 'M', 'data': ["
+        "'security/ir.model.access.csv', 'views/my_view.xml']}"
+    )
+    out = fix_data_order_risk(_order_diag(), src)
+    data = ast.literal_eval(out)["data"]
+    assert data == ["security/ir.model.access.csv", "views/my_view.xml"]
