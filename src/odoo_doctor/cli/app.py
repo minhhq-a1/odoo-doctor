@@ -66,7 +66,7 @@ def scan(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     format_opt: Optional[str] = typer.Option(
-        None, "--format", help="Output format (terminal, json, github)"
+        None, "--format", help="Output format (terminal, json, github, sarif)"
     ),
     fail_on: Optional[str] = typer.Option(
         None, "--fail-on", help="Fail if severity found (error|warning)"
@@ -139,6 +139,10 @@ def scan(
             typer.echo(render_json([], {}))
         elif output_format == "github":
             typer.echo("")
+        elif output_format == "sarif":
+            from odoo_doctor.reporters.sarif import render_sarif
+
+            typer.echo(render_sarif([], config_root))
         else:
             typer.echo("No addons found.")
         return
@@ -163,6 +167,10 @@ def scan(
         from odoo_doctor.reporters.github_annotations import render_github_annotations
 
         typer.echo(render_github_annotations(diags, config_root))
+    elif output_format == "sarif":
+        from odoo_doctor.reporters.sarif import render_sarif
+
+        typer.echo(render_sarif(diags, config_root))
 
         # In github output, we also want to post PR comment
         from odoo_doctor.reporters.pr_comment import (
