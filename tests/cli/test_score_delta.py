@@ -13,8 +13,9 @@ def temp_git_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    # Init git
+    # Init git on an explicit 'main' branch (independent of init.defaultBranch)
     subprocess.run(["git", "init"], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-b", "main"], cwd=repo, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True
     )
