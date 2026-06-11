@@ -40,6 +40,7 @@ import odoo_doctor.rules.performance.unbounded_search  # noqa: F401
 import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
 import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
 import odoo_doctor.rules.correctness.field_no_string_on_required  # noqa: F401
+import odoo_doctor.rules.correctness.missing_translation  # noqa: F401
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers  # noqa: F401
