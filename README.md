@@ -148,6 +148,21 @@ If you prefer `pip install`, you can run it directly:
     odoo-doctor scan . --format github --min-score 75 --fail-on error
 ```
 
+### SARIF & Baseline Mode
+
+For GitHub Code Scanning and IDE integration:
+```bash
+odoo-doctor scan . --format sarif > results.sarif
+# Then upload via github/codeql-action/upload-sarif
+```
+
+To capture current debt and block only new findings in CI:
+```bash
+odoo-doctor scan . --write-baseline .odoo-doctor-baseline.json
+# Commit the baseline, then in CI:
+odoo-doctor scan . --baseline .odoo-doctor-baseline.json --fail-on warning
+```
+
 ### CI/PR Surfaces
 
 - **`--format github`**: Emits GitHub Actions annotations inline.
