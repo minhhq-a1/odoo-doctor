@@ -36,6 +36,7 @@ import odoo_doctor.rules.xml.view_field_not_in_model  # noqa: F401
 import odoo_doctor.rules.xml.button_method_not_found  # noqa: F401
 import odoo_doctor.rules.xml.orphan_view  # noqa: F401
 import odoo_doctor.rules.performance.search_in_loop  # noqa: F401
+import odoo_doctor.rules.performance.create_write_in_loop  # noqa: F401
 import odoo_doctor.rules.performance.unbounded_search  # noqa: F401
 import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
 import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
