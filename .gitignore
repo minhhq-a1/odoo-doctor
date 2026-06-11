@@ -34,3 +34,6 @@ env/
 .env
 .env.*
 .worktrees/
+
+# Cache
+.odoo_doctor_cache/
