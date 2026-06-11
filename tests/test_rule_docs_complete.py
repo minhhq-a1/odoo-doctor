@@ -16,8 +16,6 @@ def test_all_rules_documented():
     docs = Path(__file__).resolve().parents[1] / "docs" / "rules.md"
     text = docs.read_text(encoding="utf-8")
     missing = [
-        meta.name
-        for meta, _ in default_registry.get_rules()
-        if meta.name not in text
+        meta.name for meta, _ in default_registry.get_rules() if meta.name not in text
     ]
     assert not missing, f"Undocumented rules: {missing}"

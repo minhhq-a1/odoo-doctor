@@ -131,6 +131,7 @@ def scan(
     cache = None
     if cache_enabled and not diff:
         from odoo_doctor.core.cache import ScanCache
+
         cache = ScanCache(config_root / ".odoo_doctor_cache")
         cache.load()
 
@@ -149,7 +150,9 @@ def scan(
         from odoo_doctor.core.baseline import write_baseline
 
         write_baseline(diags, Path(write_baseline_path))
-        typer.echo(f"Wrote baseline with {len(diags)} finding(s) to {write_baseline_path}")
+        typer.echo(
+            f"Wrote baseline with {len(diags)} finding(s) to {write_baseline_path}"
+        )
         return
 
     if baseline:
@@ -248,9 +251,7 @@ def fix_cmd(
     odoo_version: Optional[str] = typer.Option(
         None, "--odoo-version", help="Target Odoo version"
     ),
-    apply: bool = typer.Option(
-        False, "--fix", help="Apply fixes in place"
-    ),
+    apply: bool = typer.Option(False, "--fix", help="Apply fixes in place"),
     dry_run: bool = typer.Option(
         False, "--fix-dry-run", help="Print a unified diff without writing"
     ),
@@ -396,9 +397,6 @@ def install() -> None:
 
     typer.echo(f"Skills installed to {dest}")
     typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")
-
-
-
 
 
 def _scan_base_ref(

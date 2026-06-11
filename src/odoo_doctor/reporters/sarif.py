@@ -20,7 +20,9 @@ def _rel(path: str, base_path: Path | None) -> str:
     norm = path.replace("\\", "/")
     if base_path is not None:
         try:
-            return Path(norm).resolve().relative_to(Path(base_path).resolve()).as_posix()
+            return (
+                Path(norm).resolve().relative_to(Path(base_path).resolve()).as_posix()
+            )
         except ValueError:
             return norm
     return norm
@@ -49,9 +51,7 @@ def render_sarif(diagnostics: list[Diagnostic], base_path: Path | None) -> str:
                 "locations": [
                     {
                         "physicalLocation": {
-                            "artifactLocation": {
-                                "uri": _rel(d.file_path, base_path)
-                            },
+                            "artifactLocation": {"uri": _rel(d.file_path, base_path)},
                             "region": {
                                 "startLine": max(1, d.line),
                                 "startColumn": max(1, d.column + 1),

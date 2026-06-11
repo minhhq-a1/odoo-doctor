@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from odoo_doctor.cli.app import app
@@ -12,18 +13,20 @@ from odoo_doctor.cli.app import app
 runner = CliRunner()
 
 
-import pytest
-
 @pytest.fixture
 def local_tmp() -> Path:
     import uuid
+
     # Use a directory inside the workspace to allow sandbox writes
     ws_tmp = Path(__file__).parent.parent.parent / ".tmp" / str(uuid.uuid4())
     ws_tmp.mkdir(parents=True, exist_ok=True)
     return ws_tmp
 
+
 def _write_addon(root: Path) -> Path:
-    (root / "odoo-doctor.toml").write_text("[adapters]\nruff = false\npylint_odoo = false\n")
+    (root / "odoo-doctor.toml").write_text(
+        "[adapters]\nruff = false\npylint_odoo = false\n"
+    )
     mod = root / "my_addon"
     (mod / "security").mkdir(parents=True)
     (mod / "views").mkdir(parents=True)

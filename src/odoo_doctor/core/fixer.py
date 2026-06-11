@@ -44,9 +44,7 @@ class FixResult:
     fixed_count: int
     skipped_count: int  # fixable rule, but fixer returned None for that diag
 
-    def unified_diff(
-        self, original: dict[str, str], root: "Path | None" = None
-    ) -> str:
+    def unified_diff(self, original: dict[str, str], root: "Path | None" = None) -> str:
         """Render a unified diff. Paths are shown relative to *root* when given,
         so the diff is readable regardless of where the repo lives on disk."""
         chunks: list[str] = []
@@ -94,6 +92,7 @@ def compute_fixes(
     Diagnostics are grouped by file and applied in order. Each fixer receives
     the running text for its file, enabling multiple fixes per file.
     """
+
     def _resolve(p: str) -> Path:
         pp = Path(p)
         if not pp.is_absolute() and root is not None:
@@ -101,7 +100,9 @@ def compute_fixes(
         return pp
 
     if read_text is None:
-        read_text = lambda p: _resolve(p).read_text(encoding="utf-8")
+
+        def read_text(p):
+            return _resolve(p).read_text(encoding="utf-8")
 
     # Group fixable, high-confidence diagnostics by file.
     by_file: dict[str, list[Diagnostic]] = {}
@@ -140,4 +141,6 @@ def compute_fixes(
             originals[path] = original
             changed[path] = text
 
-    return FixResult(changed_files=changed, fixed_count=fixed, skipped_count=skipped), originals
+    return FixResult(
+        changed_files=changed, fixed_count=fixed, skipped_count=skipped
+    ), originals

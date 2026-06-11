@@ -5,7 +5,10 @@ from __future__ import annotations
 import ast
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.rules.manifest.fixers import fix_missing_required_field
+from odoo_doctor.rules.manifest.fixers import (
+    fix_data_order_risk,
+    fix_missing_required_field,
+)
 
 _DEFAULTS = {
     "name": "",
@@ -77,9 +80,6 @@ def test_returns_none_on_unparseable_manifest():
     assert fix_missing_required_field(_diag(), "{'name': ") is None
 
 
-from odoo_doctor.rules.manifest.fixers import fix_data_order_risk
-
-
 def _order_diag() -> Diagnostic:
     return Diagnostic(
         module="m",
@@ -100,20 +100,14 @@ def _order_diag() -> Diagnostic:
 
 
 def test_reorders_security_before_views():
-    src = (
-        "{'name': 'M', 'data': ["
-        "'views/my_view.xml', 'security/ir.model.access.csv']}"
-    )
+    src = "{'name': 'M', 'data': ['views/my_view.xml', 'security/ir.model.access.csv']}"
     out = fix_data_order_risk(_order_diag(), src)
     data = ast.literal_eval(out)["data"]
     assert data.index("security/ir.model.access.csv") < data.index("views/my_view.xml")
 
 
 def test_data_order_idempotent_when_already_correct():
-    src = (
-        "{'name': 'M', 'data': ["
-        "'security/ir.model.access.csv', 'views/my_view.xml']}"
-    )
+    src = "{'name': 'M', 'data': ['security/ir.model.access.csv', 'views/my_view.xml']}"
     out = fix_data_order_risk(_order_diag(), src)
     data = ast.literal_eval(out)["data"]
     assert data == ["security/ir.model.access.csv", "views/my_view.xml"]
