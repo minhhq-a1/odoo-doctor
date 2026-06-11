@@ -218,7 +218,9 @@ def total_amount(self):
 |------|------|----------|---------|
 | raw-sql-string-interpolation | P0 | Security | |
 | missing-access-csv | P0 | Security | |
+| eval-usage | P0 | Security | |
 | public-controller-sudo-risk | P1 | Security | |
+| sudo-without-comment | P1 | Security | |
 | unknown-model-in-access-csv | P1 | Correctness | |
 | duplicate-xml-id | P1 | Correctness | |
 | view-field-not-in-model | P1 | Correctness | |
@@ -227,7 +229,48 @@ def total_amount(self):
 | override-missing-super | P1 | Correctness | |
 | manifest-missing-dependency | P1 | Module Hygiene | |
 | search-in-loop | P1 | Performance | |
+| create-in-loop | P1 | Performance | |
+| write-in-loop | P1 | Performance | |
+| n-plus-one-read | P1 | Performance | |
 | unbounded-search | P2 | Performance | |
 | compute-missing-depends | P2 | Correctness | |
+| orphan-view | P2 | Maintainability | |
+| record-rule-without-domain | P1 | Security | |
+| field-no-string-on-required | P2 | Maintainability | |
+| missing-translation | P2 | Maintainability | |
 | manifest-missing-required-fields | P2 | Module Hygiene | Yes |
 | manifest-data-order-risk | P2 | Module Hygiene | Yes |
+
+## New Rules
+
+### orphan-view [P2]
+**Detects**: Unreferenced views.
+**Fix**: Reference or delete them.
+
+### record-rule-without-domain [P1]
+**Detects**: ir.rule without a domain_force.
+**Fix**: Add a valid domain_force.
+
+### field-no-string-on-required [P2]
+**Detects**: required=True fields without string label.
+**Fix**: Add string="...".
+
+### missing-translation [P2]
+**Detects**: UserError/ValidationError strings not wrapped in _().
+**Fix**: Wrap with _("...").
+
+### create-in-loop / write-in-loop [P1]
+**Detects**: create/write called inside loops.
+**Fix**: Batch records and call create/write once.
+
+### n-plus-one-read [P1]
+**Detects**: Chained attribute access inside loops.
+**Fix**: Prefetch before looping.
+
+### eval-usage [P0]
+**Detects**: Use of built-in eval/exec.
+**Fix**: Use safe_eval or explicit logic.
+
+### sudo-without-comment [P1]
+**Detects**: .sudo() without comment.
+**Fix**: Add a comment explaining why sudo is needed.
