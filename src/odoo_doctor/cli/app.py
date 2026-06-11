@@ -38,6 +38,10 @@ import odoo_doctor.rules.performance.unbounded_search  # noqa: F401
 import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
 import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
 
+# Import fixer modules to trigger fixer registration.
+import odoo_doctor.rules.manifest.fixers  # noqa: F401
+
+from odoo_doctor.core.fixer import compute_fixes, default_fixers
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
@@ -182,6 +186,68 @@ def scan(
                         err=True,
                     )
             raise typer.Exit(code=2)
+
+
+@app.command("fix")
+def fix_cmd(
+    path: Optional[str] = typer.Argument(
+        None, help="Path to scan and fix; omit to use config addons_paths"
+    ),
+    odoo_version: Optional[str] = typer.Option(
+        None, "--odoo-version", help="Target Odoo version"
+    ),
+    apply: bool = typer.Option(
+        False, "--fix", help="Apply fixes in place"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--fix-dry-run", help="Print a unified diff without writing"
+    ),
+) -> None:
+    """Apply deterministic, high-confidence fixes for fixable rules."""
+    if apply == dry_run:
+        # Neither or both: ambiguous.
+        typer.echo(
+            "[ERROR] fix requires exactly one of --fix or --fix-dry-run.",
+            err=True,
+        )
+        raise typer.Exit(code=3)
+
+    config_root = (Path(path) if path is not None else Path.cwd()).resolve()
+    cfg = load_config(config_root)
+    if odoo_version:
+        cfg.odoo_version = odoo_version
+    addons_paths = _resolve_addons_paths(path, config_root, cfg)
+    version = cfg.odoo_version or "unknown"
+
+    diags, _scores = _collect_scores(
+        addon_paths=addons_paths,
+        cfg=cfg,
+        version=version,
+        config_root=config_root,
+    )
+
+    fixable_rules = {
+        meta.name for meta, _ in default_registry.get_rules() if meta.fixable
+    }
+    result, originals = compute_fixes(
+        diags, fixable_rules, default_fixers, root=config_root
+    )
+
+    if dry_run:
+        diff = result.unified_diff(originals, root=config_root)
+        typer.echo(diff if diff else "No fixes available.")
+        return
+
+    # apply (file_path is absolute; resolve defensively against config_root)
+    for file_path, new_text in result.changed_files.items():
+        target = Path(file_path)
+        if not target.is_absolute():
+            target = config_root / target
+        target.write_text(new_text, encoding="utf-8")
+    typer.echo(
+        f"Applied {result.fixed_count} fix(es) across "
+        f"{len(result.changed_files)} file(s); {result.skipped_count} skipped."
+    )
 
 
 @app.command("rules")
