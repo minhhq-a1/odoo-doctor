@@ -48,12 +48,26 @@ def _walk_for_loops(
     file_path: Path,
     module: str,
     version: str,
+    orm_vars: set[str] | None = None,
 ) -> None:
     """Recursively find ORM calls inside for/while loops."""
+    orm_vars = set(orm_vars) if orm_vars else set()
+
+    if isinstance(node, ast.For):
+        from odoo_doctor.rules._ast_helpers import node_is_orm
+
+        if node_is_orm(node.iter, orm_vars):
+            if isinstance(node.target, ast.Name):
+                orm_vars.add(node.target.id)
+            elif isinstance(node.target, ast.Tuple):
+                for el in node.target.elts:
+                    if isinstance(el, ast.Name):
+                        orm_vars.add(el.id)
+
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.For, ast.While)):
-            _check_loop_body(child, diags, file_path, module, version)
-        _walk_for_loops(child, diags, file_path, module, version)
+            _check_loop_body(child, diags, file_path, module, version, orm_vars)
+        _walk_for_loops(child, diags, file_path, module, version, orm_vars)
 
 
 def _walk_excluding_nested_loops(node: ast.AST) -> Generator[ast.AST, None, None]:
@@ -73,13 +87,26 @@ def _check_loop_body(
     file_path: Path,
     module: str,
     version: str,
+    orm_vars: set[str],
 ) -> None:
     """Check if any ORM method call exists inside a loop body."""
+    local_orm_vars = set(orm_vars)
+    if isinstance(loop, ast.For):
+        from odoo_doctor.rules._ast_helpers import node_is_orm
+
+        if node_is_orm(loop.iter, local_orm_vars):
+            if isinstance(loop.target, ast.Name):
+                local_orm_vars.add(loop.target.id)
+            elif isinstance(loop.target, ast.Tuple):
+                for el in loop.target.elts:
+                    if isinstance(el, ast.Name):
+                        local_orm_vars.add(el.id)
+
     for node in _walk_excluding_nested_loops(loop):
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in _ORM_METHODS:
-            if not receiver_is_orm(node):
+            if not receiver_is_orm(node, local_orm_vars):
                 continue
             diags.append(
                 Diagnostic(

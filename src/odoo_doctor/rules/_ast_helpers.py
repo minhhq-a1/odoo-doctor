@@ -6,11 +6,8 @@ from __future__ import annotations
 import ast
 
 
-def receiver_is_orm(call: ast.Call) -> bool:
-    """Check if the receiver of a method call is likely an ORM object."""
-    if not isinstance(call.func, ast.Attribute):
-        return False
-
+def node_is_orm(node: ast.AST, orm_vars: set[str] | None = None) -> bool:
+    """Check if an AST node evaluates to an ORM object."""
     has_env_subscript = [False]
     root_name = [None]
 
@@ -32,11 +29,20 @@ def receiver_is_orm(call: ast.Call) -> bool:
         elif isinstance(n, ast.Call):
             check_node(n.func)
 
-    check_node(call.func.value)
+    check_node(node)
 
     if root_name[0] in ("self", "cls"):
         return True
     if has_env_subscript[0]:
         return True
+    if orm_vars and root_name[0] in orm_vars:
+        return True
 
     return False
+
+
+def receiver_is_orm(call: ast.Call, orm_vars: set[str] | None = None) -> bool:
+    """Check if the receiver of a method call is likely an ORM object."""
+    if not isinstance(call.func, ast.Attribute):
+        return False
+    return node_is_orm(call.func.value, orm_vars)

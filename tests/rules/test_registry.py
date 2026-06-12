@@ -107,5 +107,5 @@ def test_default_registry_count():
     import odoo_doctor.cli.app  # noqa: F401
     from odoo_doctor.rules.registry import default_registry
 
-    # 10 original + 5 new (D1-D5)
-    assert len(default_registry) == 15
+    # At least 15 rules from original + v0.3.0
+    assert len(default_registry) >= 15

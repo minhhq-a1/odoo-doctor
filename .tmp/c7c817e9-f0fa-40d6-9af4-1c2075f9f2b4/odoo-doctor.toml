@@ -1,0 +1,3 @@
+[adapters]
+ruff = false
+pylint_odoo = false
