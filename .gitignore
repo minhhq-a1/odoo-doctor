@@ -2,7 +2,7 @@
 .DS_Store
 
 # Local docs and planning notes
-docs/
+.agents/
 
 # Python
 __pycache__/
