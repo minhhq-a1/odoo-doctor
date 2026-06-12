@@ -39,7 +39,7 @@ runs:
         
     - name: Install odoo-doctor
       shell: bash
-      run: pip install odoo-doctor
+      run: pip install "${{ github.action_path }}"
         
     - name: Run odoo-doctor
       shell: bash
