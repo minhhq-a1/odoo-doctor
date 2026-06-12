@@ -4,6 +4,24 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.3.0] — 2026-06-12
+
+### Added
+
+- **Auto-Fix Engine**: Built `FixResult` for deterministic file modifications. Wired `--fix` and `--fix-dry-run` to safely apply non-destructive automated changes (e.g., missing manifest fields, data ordering).
+- **Scanner Extraction & Caching**: Extracted orchestration logic to `core/scanner.py`. Introduced project-level `ScanCache` (`--cache`) based on content-hash fingerprinting to skip clean files and drastically speed up scans.
+- **SARIF Reporter**: Developed `SARIF 2.1.0` output formatter (`--format sarif`) enabling native GitHub Code Scanning and advanced IDE integration.
+- **Baseline Filtering**: Implemented a line-independent identity hash system (`--baseline` and `--write-baseline`) to freeze existing technical debt and only fail the CI on net-new issues.
+- **Ecosystem Plugins**: Shipped an entry-point system allowing third-party Python packages to inject custom rules via the `odoo_doctor.rules` group. Gated by explicit `[plugins].enabled = true` config for security.
+- **9 new native rules**: Spanning Security, Performance, and Correctness: `create-in-loop`, `write-in-loop`, `eval-usage`, `orphan-view`, `record-rule-without-domain`, `field-no-string-on-required`, `missing-translation`, `n-plus-one-read`, `sudo-without-comment`.
+
+### Fixed
+
+- **AST Heuristics**: Improved `receiver_is_orm` helper to accurately track loop variables originating from ORM records (`for rec in self: rec.write()`), fixing false negatives in loop-based rules.
+- Odoo version detection regex adjusted to strictly match standard Odoo manifest formats (e.g., `17.0.1.0.0`).
+
+---
+
 ## [0.2.0] — 2026-06-08
 
 ### Added
