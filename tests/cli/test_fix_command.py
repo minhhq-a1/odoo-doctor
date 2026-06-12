@@ -33,7 +33,7 @@ def _write_addon(root: Path) -> Path:
     (mod / "__init__.py").touch()
     # Missing 'license' and data ordering wrong (view before security).
     (mod / "__manifest__.py").write_text(
-        "{'name': 'My Addon', 'version': '1.0', 'depends': ['base'], "
+        "{'name': 'My Addon', 'version': '17.0.1.0.0', 'depends': ['base'], "
         "'data': ['views/v.xml', 'security/ir.model.access.csv'], "
         "'installable': True}"
     )

@@ -32,12 +32,25 @@ def _check_loop_body(
     version: str,
     method_name: str,
     rule_name: str,
+    orm_vars: set[str],
 ) -> None:
+    local_orm_vars = set(orm_vars)
+    if isinstance(loop, ast.For):
+        from odoo_doctor.rules._ast_helpers import node_is_orm
+
+        if node_is_orm(loop.iter, local_orm_vars):
+            if isinstance(loop.target, ast.Name):
+                local_orm_vars.add(loop.target.id)
+            elif isinstance(loop.target, ast.Tuple):
+                for el in loop.target.elts:
+                    if isinstance(el, ast.Name):
+                        local_orm_vars.add(el.id)
+
     for node in _walk_excluding_nested_loops(loop):
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr == method_name:
-            if not receiver_is_orm(node):
+            if not receiver_is_orm(node, local_orm_vars):
                 continue
             diags.append(
                 Diagnostic(
@@ -67,14 +80,28 @@ def _walk_for_loops(
     version: str,
     method_name: str,
     rule_name: str,
+    orm_vars: set[str] | None = None,
 ) -> None:
+    orm_vars = set(orm_vars) if orm_vars else set()
+
+    if isinstance(node, ast.For):
+        from odoo_doctor.rules._ast_helpers import node_is_orm
+
+        if node_is_orm(node.iter, orm_vars):
+            if isinstance(node.target, ast.Name):
+                orm_vars.add(node.target.id)
+            elif isinstance(node.target, ast.Tuple):
+                for el in node.target.elts:
+                    if isinstance(el, ast.Name):
+                        orm_vars.add(el.id)
+
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.For, ast.While)):
             _check_loop_body(
-                child, diags, file_path, module, version, method_name, rule_name
+                child, diags, file_path, module, version, method_name, rule_name, orm_vars
             )
         _walk_for_loops(
-            child, diags, file_path, module, version, method_name, rule_name
+            child, diags, file_path, module, version, method_name, rule_name, orm_vars
         )
 
 
