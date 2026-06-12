@@ -181,6 +181,14 @@ categories = []
 2. Create tests in `tests/test_my_rule.py`.
 3. Rule auto-registers via `registry.py` (no manual registration needed).
 
+### Cut a New Release
+
+1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/reporters/json_report.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`.
+2. Update the `CHANGELOG.md` with release notes.
+3. Commit and merge to `main`.
+4. Create and push a new Git tag (e.g., `git tag v0.4.0 && git push origin v0.4.0`).
+5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
+
 ### Run a Single Test
 
 ```bash
