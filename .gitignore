@@ -2,7 +2,7 @@
 .DS_Store
 
 # Local docs and planning notes
-docs/
+.agents/
 
 # Python
 __pycache__/
@@ -34,3 +34,10 @@ env/
 .env
 .env.*
 .worktrees/
+
+# Cache
+.odoo_doctor_cache/
+
+# Temp directories
+.tmp/
+.claude/

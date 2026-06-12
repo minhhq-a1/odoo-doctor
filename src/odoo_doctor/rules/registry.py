@@ -18,6 +18,7 @@ class RuleMeta:
     min_version: str | None  # minimum Odoo version, or None for all
     requires_capabilities: set[str] = field(default_factory=set)
     excludes_capabilities: set[str] = field(default_factory=set)
+    fixable: bool = False
 
 
 class RuleRegistry:
@@ -64,6 +65,7 @@ def rule(
     min_version: str | None = None,
     requires_capabilities: set[str] | list[str] | None = None,
     excludes_capabilities: set[str] | list[str] | None = None,
+    fixable: bool = False,
     registry: RuleRegistry | None = None,
 ) -> Callable[[Callable], Callable]:
     """Decorator that registers a rule function in the registry."""
@@ -79,6 +81,7 @@ def rule(
             min_version=min_version,
             requires_capabilities=set(requires_capabilities or []),
             excludes_capabilities=set(excludes_capabilities or []),
+            fixable=fixable,
         )
         target = registry if registry is not None else default_registry
         target.register(meta, func)

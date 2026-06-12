@@ -57,9 +57,18 @@ Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
 ## Score explained
 
+Each category score starts at 100 and loses points per **high-confidence**
+finding, where each finding deducts `tier_impact × category_weight`
+(default weight 1.0; override via `[category_weights]`). The overall score
+blends only **in-scope** categories (those with at least one active rule):
+
 ```
-overall = 0.4 × min(category_scores) + 0.6 × avg(category_scores)
+category_score = max(0, 100 − Σ(tier_impact × category_weight))
+overall        = 0.4 × min(in_scope_category_scores)
+               + 0.6 × avg(in_scope_category_scores)
 ```
+
+Tier impacts: P0 = 25, P1 = 10, P2 = 4, P3 = 1.
 
 | Label | Range |
 |-------|-------|
@@ -137,6 +146,21 @@ If you prefer `pip install`, you can run it directly:
   run: |
     pip install odoo-doctor
     odoo-doctor scan . --format github --min-score 75 --fail-on error
+```
+
+### SARIF & Baseline Mode
+
+For GitHub Code Scanning and IDE integration:
+```bash
+odoo-doctor scan . --format sarif > results.sarif
+# Then upload via github/codeql-action/upload-sarif
+```
+
+To capture current debt and block only new findings in CI:
+```bash
+odoo-doctor scan . --write-baseline .odoo-doctor-baseline.json
+# Commit the baseline, then in CI:
+odoo-doctor scan . --baseline .odoo-doctor-baseline.json --fail-on warning
 ```
 
 ### CI/PR Surfaces

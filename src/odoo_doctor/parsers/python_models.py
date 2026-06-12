@@ -18,6 +18,9 @@ class FieldInfo:
     compute: str | None = None
     depends: list[str] = field(default_factory=list)
     store: bool = True
+    required: bool = False
+    string: str | None = None
+    line: int = 0
 
 
 @dataclass
@@ -178,7 +181,7 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
         if isinstance(item, ast.Assign) and len(item.targets) == 1:
             target = item.targets[0]
             if isinstance(target, ast.Name) and isinstance(item.value, ast.Call):
-                field_info = _extract_field(target.id, item.value)
+                field_info = _extract_field(target.id, item.value, item.lineno)
                 if field_info:
                     model.fields[field_info.name] = field_info
 
@@ -202,7 +205,7 @@ def _extract_inherit(node: ast.expr) -> list[str]:
     return []
 
 
-def _extract_field(name: str, call: ast.Call) -> FieldInfo | None:
+def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None:
     func_name = _dotted_name(call.func)
     if func_name is None:
         return None
@@ -216,11 +219,17 @@ def _extract_field(name: str, call: ast.Call) -> FieldInfo | None:
     compute = None
     depends: list[str] = []
     store = True
+    required = False
+    string = None
 
     # First positional arg for relational fields is comodel
+    # For Char/etc, the first positional arg is actually the string, but Odoo 14+
+    # conventions encourage kwargs. To be safe, if we see a string as arg[0] on non-relational:
     if call.args and isinstance(call.args[0], ast.Constant):
         if short in ("Many2one", "One2many", "Many2many"):
             comodel = call.args[0].value
+        elif isinstance(call.args[0].value, str):
+            string = call.args[0].value
 
     for kw in call.keywords:
         if kw.arg == "comodel_name" and isinstance(kw.value, ast.Constant):
@@ -229,6 +238,10 @@ def _extract_field(name: str, call: ast.Call) -> FieldInfo | None:
             compute = kw.value.value
         elif kw.arg == "store" and isinstance(kw.value, ast.Constant):
             store = bool(kw.value.value)
+        elif kw.arg == "required" and isinstance(kw.value, ast.Constant):
+            required = bool(kw.value.value)
+        elif kw.arg == "string" and isinstance(kw.value, ast.Constant):
+            string = str(kw.value.value)
 
     return FieldInfo(
         name=name,
@@ -237,6 +250,9 @@ def _extract_field(name: str, call: ast.Call) -> FieldInfo | None:
         compute=compute,
         depends=depends,
         store=store if compute is None else store,
+        required=required,
+        string=string,
+        line=line,
     )
 
 

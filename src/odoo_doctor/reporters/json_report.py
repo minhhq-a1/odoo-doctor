@@ -8,6 +8,12 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from odoo_doctor.core.scoring import score_label
+from odoo_doctor.rules.registry import default_registry
+
+# Importing the rule modules triggers their @rule registration so the registry
+# knows their fixable flag. Import only what this reporter needs.
+import odoo_doctor.rules.manifest.missing_required_fields  # noqa: F401
+import odoo_doctor.rules.manifest.data_order_risk  # noqa: F401
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
@@ -63,6 +69,7 @@ def render_json(
                     "category": d.category,
                     "severity": d.severity,
                     "confidence": d.confidence,
+                    "fixable": _is_fixable(d.rule),
                 }
                 for d in top
             ],
@@ -85,3 +92,8 @@ def _project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | in
         "label": score_label(overall),
         "module_count": module_count,
     }
+
+
+def _is_fixable(rule_name: str) -> bool:
+    entry = default_registry.get(rule_name)
+    return bool(entry and entry[0].fixable)

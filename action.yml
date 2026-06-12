@@ -39,7 +39,7 @@ runs:
         
     - name: Install odoo-doctor
       shell: bash
-      run: pip install odoo-doctor
+      run: pip install "${{ github.action_path }}"
         
     - name: Run odoo-doctor
       shell: bash
@@ -56,11 +56,15 @@ runs:
         if [ "${{ inputs.advisory }}" != "true" ] && [ "${{ inputs.min-score }}" != "" ]; then
           ARGS+=(--min-score "${{ inputs.min-score }}")
         fi
-        if [ "${{ inputs.diff-base }}" != "" ]; then
-          ARGS+=(--diff "${{ inputs.diff-base }}")
+        DIFF_BASE="${{ inputs.diff-base }}"
+        if [ "$DIFF_BASE" != "" ]; then
+          if git show-ref --verify --quiet "refs/remotes/origin/$DIFF_BASE"; then
+            DIFF_BASE="origin/$DIFF_BASE"
+          fi
+          ARGS+=(--diff "$DIFF_BASE")
         fi
-        if [ "${{ inputs.pr-comment }}" == "true" ] && [ "${{ inputs.diff-base }}" != "" ]; then
-          ARGS+=(--score-delta "${{ inputs.diff-base }}")
+        if [ "${{ inputs.pr-comment }}" == "true" ] && [ "$DIFF_BASE" != "" ]; then
+          ARGS+=(--score-delta "$DIFF_BASE")
         fi
         
         odoo-doctor scan "${{ inputs.paths }}" --format github "${ARGS[@]}"
