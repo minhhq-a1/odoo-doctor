@@ -136,7 +136,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 feat(rules): add raw-sql-string-interpolation rule
 fix(parser): handle inherited views correctly
 docs(readme): update quick start section
-chore(release): bump version to 0.2.0
+chore(release): bump version to 0.3.0
 ```
 
 ### Pull Requests

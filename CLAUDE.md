@@ -213,7 +213,7 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`.
 
 ## CI/CD Integration
 
-- **GitHub Actions**: Use `.github/workflows/odoo-doctor.example.yml` or the published action `minhhq-a1/odoo-doctor@v0.2.0`.
+- **GitHub Actions**: Use `.github/workflows/odoo-doctor.example.yml` or the published action `minhhq-a1/odoo-doctor@v0.3.0`.
 - **pre-commit**: Hook defined in `.pre-commit-hooks.yaml` runs `odoo-doctor scan --diff HEAD --fail-on error` on Python/XML files.
 - **Exit Codes**: `0` = clean, `1` = findings at severity threshold, `2` = score below min, `3` = invalid args/git failure.
 
