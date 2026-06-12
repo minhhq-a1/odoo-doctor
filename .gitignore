@@ -37,3 +37,7 @@ env/
 
 # Cache
 .odoo_doctor_cache/
+
+# Temp directories
+.tmp/
+.claude/
