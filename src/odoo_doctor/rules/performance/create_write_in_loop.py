@@ -98,7 +98,14 @@ def _walk_for_loops(
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.For, ast.While)):
             _check_loop_body(
-                child, diags, file_path, module, version, method_name, rule_name, orm_vars
+                child,
+                diags,
+                file_path,
+                module,
+                version,
+                method_name,
+                rule_name,
+                orm_vars,
             )
         _walk_for_loops(
             child, diags, file_path, module, version, method_name, rule_name, orm_vars
