@@ -4,6 +4,14 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.3.1] — 2026-06-21
+
+### Added
+
+- **`unsafe-template-render` rule** (Security/P1): flags QWeb `t-raw` output that renders a value without HTML-escaping (a stored/reflected XSS risk), while ignoring the safe `t-raw="0"` `t-call` body idiom. Brings the native rule registry to 25 rules.
+
+---
+
 ## [0.3.0] — 2026-06-12
 
 ### Added
@@ -13,7 +21,7 @@ All notable changes to Odoo Doctor are documented here.
 - **SARIF Reporter**: Developed `SARIF 2.1.0` output formatter (`--format sarif`) enabling native GitHub Code Scanning and advanced IDE integration.
 - **Baseline Filtering**: Implemented a line-independent identity hash system (`--baseline` and `--write-baseline`) to freeze existing technical debt and only fail the CI on net-new issues.
 - **Ecosystem Plugins**: Shipped an entry-point system allowing third-party Python packages to inject custom rules via the `odoo_doctor.rules` group. Gated by explicit `[plugins].enabled = true` config for security.
-- **10 new native rules**: Spanning Security, Performance, and Correctness: `create-in-loop`, `write-in-loop`, `eval-usage`, `orphan-view`, `record-rule-without-domain`, `field-no-string-on-required`, `missing-translation`, `n-plus-one-read`, `sudo-without-comment`, `unsafe-template-render` (flags unescaped QWeb `t-raw` output as an XSS risk).
+- **9 new native rules**: Spanning Security, Performance, and Correctness: `create-in-loop`, `write-in-loop`, `eval-usage`, `orphan-view`, `record-rule-without-domain`, `field-no-string-on-required`, `missing-translation`, `n-plus-one-read`, `sudo-without-comment`.
 
 ### Fixed
 
