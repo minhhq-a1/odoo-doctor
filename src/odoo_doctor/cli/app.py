@@ -26,6 +26,7 @@ import odoo_doctor.rules.security.raw_sql_interpolation  # noqa: F401
 import odoo_doctor.rules.security.public_controller_sudo  # noqa: F401
 import odoo_doctor.rules.security.sudo_without_comment  # noqa: F401
 import odoo_doctor.rules.security.record_rule_without_domain  # noqa: F401
+import odoo_doctor.rules.security.unsafe_template_render  # noqa: F401
 import odoo_doctor.rules.xml.duplicate_xml_id  # noqa: F401
 import odoo_doctor.rules.xml.missing_xml_ref  # noqa: F401
 import odoo_doctor.rules.xml.view_field_not_in_model  # noqa: F401

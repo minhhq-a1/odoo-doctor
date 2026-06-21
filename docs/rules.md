@@ -274,3 +274,7 @@ def total_amount(self):
 ### sudo-without-comment [P1]
 **Detects**: .sudo() without comment.
 **Fix**: Add a comment explaining why sudo is needed.
+
+### unsafe-template-render [P1]
+**Detects**: QWeb `t-raw` output that renders a value without HTML-escaping (XSS risk). The safe `t-raw="0"` body idiom is ignored.
+**Fix**: Use `t-esc` (or `t-out` on Odoo 17+) so the value is escaped, or only render trusted Markup.
