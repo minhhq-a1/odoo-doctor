@@ -171,7 +171,7 @@ odoo-doctor scan .
 ## Testing Patterns
 
 - Test files are in `tests/` organized into subdirectories mirroring `src/`: `tests/rules/`, `tests/core/`, `tests/parsers/`, `tests/cli/`, `tests/graph/`, `tests/discovery/`, `tests/adapters/`, `tests/reporters/`, `tests/integration/`.
-- 69 test files with 384 test methods.
+- 72 test files with 414 test methods.
 - Each rule has a corresponding test file exercising positive/negative cases.
 - Fixtures use temporary addon directories with manifests and Python/XML stubs.
 - The `ModuleContext` object is the main test input — assembled from parsed files, then rules are run against it.
@@ -297,7 +297,7 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 
 - **GitHub Actions CI**: `.github/workflows/ci.yml` — runs on push/PR to `main`. Matrix: Python 3.10, 3.11, 3.12. Steps: install deps, pytest, ruff check, ruff format check.
 - **PyPI Publishing**: `.github/workflows/publish.yml` — triggers on GitHub Release. Uses Trusted Publishing (OIDC) to publish wheel to PyPI.
-- **GitHub Action**: `action.yml` at repo root — published as `minhhq-a1/odoo-doctor@v0.3.0`. Inputs: `odoo-version`, `fail-on`, `min-score`, `paths`, `diff-base`, `advisory`, `pr-comment`.
+- **GitHub Action**: `action.yml` at repo root — published as `minhhq-a1/odoo-doctor@v0.4.0`. Inputs: `odoo-version`, `fail-on`, `min-score`, `paths`, `diff-base`, `advisory`, `pr-comment`.
 - **Example workflow**: `.github/workflows/odoo-doctor.example.yml` demonstrates usage of the published action.
 - **pre-commit**: Hook defined in `.pre-commit-hooks.yaml` runs `odoo-doctor scan --diff HEAD --fail-on error` on Python/XML files.
 - **Exit Codes**: `0` = clean, `1` = findings at severity threshold, `2` = score below min, `3` = invalid args/git failure.
@@ -319,7 +319,7 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/graph/module_context.py` | Per-addon context + `build_project_graph()` |
 | `src/odoo_doctor/cli/app.py` | CLI entry point (scan, fix, rules, init, install) |
-| `tests/` | Test suite (69 files, 384 test cases) |
+| `tests/` | Test suite (72 files, 414 test cases) |
 | `action.yml` | GitHub Actions marketplace action definition |
 | `odoo-doctor.toml` | User configuration (created via `odoo-doctor init`) |
 | `docs/rules.md` | Rule documentation |
