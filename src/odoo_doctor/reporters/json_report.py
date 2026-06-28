@@ -55,8 +55,9 @@ def render_json(
     # Using version tracking for tooling compatibility
     return json.dumps(
         {
-            "version": "0.3.0",
+            "version": "0.4.0",
             "schema_version": "1.0",
+            "score_schema_version": 2,
             "project_score": _project_score(scores),
             "top_findings": [
                 {
