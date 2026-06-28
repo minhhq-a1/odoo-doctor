@@ -258,6 +258,72 @@ partner_id = fields.Many2one("res.partner", ondelete="restrict")
 
 ---
 
+## Upgrade Safety Rules
+
+### deprecated-api-usage [P1]
+
+**Detects**: Use of deprecated Odoo APIs: `from openerp` imports, `_columns` dict, `osv.osv` inheritance, and `.pool` access pattern.
+
+**Min version**: 14.0
+
+**Why**: These patterns belong to the old API (Odoo 7.0–9.0) and are removed or unsupported in modern Odoo versions.
+
+**Fix**: Migrate to the new API:
+```python
+# Bad
+from openerp import models
+_columns = {'name': fields.char('Name')}
+class MyModel(osv.osv): ...
+self.pool.get('res.partner')
+
+# Good
+from odoo import models, fields
+name = fields.Char(string="Name")
+class MyModel(models.Model): ...
+self.env['res.partner']
+```
+
+---
+
+### removed-model-still-referenced [P1]
+
+**Detects**: Models in `_inherit` declarations that cannot be resolved in the project or Odoo stubs.
+
+**Min version**: 14.0
+
+**Confidence**: Medium (won't affect scoring)
+
+**Why**: Models may be removed or renamed between Odoo versions. Inheriting a non-existent model causes import errors at runtime.
+
+**Fix**: Verify the model exists in your target Odoo version and update the `_inherit` declaration accordingly.
+
+---
+
+## Frontend Rules
+
+### asset-bundle-missing [P2]
+
+**Detects**: Asset files listed in `__manifest__.py` `assets` dict that don't exist on disk.
+
+**Min version**: 15.0
+
+**Why**: Missing asset files cause JavaScript/CSS loading errors at runtime, breaking the Odoo web client UI.
+
+**Fix**: Create the missing file or remove the reference from the manifest:
+```python
+# Manifest declares:
+'assets': {
+    'web.assets_backend': [
+        'my_module/static/src/js/missing_script.js',  # File doesn't exist!
+    ],
+}
+
+# Fix: create the file at static/src/js/missing_script.js
+# or remove the entry from the assets dict
+```
+
+---
+
 ## Summary of All Rules
 
 | Rule | Tier | Category | Fixable |
@@ -286,8 +352,11 @@ partner_id = fields.Many2one("res.partner", ondelete="restrict")
 | missing-translation | P2 | Maintainability | |
 | missing-ondelete | P1 | Data Integrity | |
 | data-noupdate-risk | P2 | Data Integrity | |
+| deprecated-api-usage | P1 | Upgrade Safety | |
+| removed-model-still-referenced | P1 | Upgrade Safety | |
 | manifest-missing-required-fields | P2 | Module Hygiene | Yes |
 | manifest-data-order-risk | P2 | Module Hygiene | Yes |
+| asset-bundle-missing | P2 | Frontend | |
 
 ## New Rules
 

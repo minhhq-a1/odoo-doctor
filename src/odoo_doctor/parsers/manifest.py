@@ -18,6 +18,7 @@ class ManifestData:
     data: list[str] = field(default_factory=list)
     license: str | None = None
     installable: bool = True
+    assets: dict[str, list[str]] = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
 
 
@@ -38,6 +39,10 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
     if not isinstance(raw, dict):
         return None
 
+    assets = raw.get("assets", {})
+    if not isinstance(assets, dict):
+        assets = {}
+
     return ManifestData(
         name=raw.get("name", addon_path.name),
         version=raw.get("version"),
@@ -45,5 +50,6 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
         data=raw.get("data", []),
         license=raw.get("license"),
         installable=raw.get("installable", True),
+        assets=assets,
         raw=raw,
     )
