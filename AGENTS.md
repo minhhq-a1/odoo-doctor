@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 24 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 29 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -17,7 +17,10 @@ odoo-doctor/
 │   │   ├── correctness/      # 4 rules (missing depends, super, translations)
 │   │   ├── performance/      # 5 rules (loops, N+1, unbounded search)
 │   │   ├── xml/              # 5 rules (broken refs, duplicate IDs, orphan views)
-│   │   └── manifest/         # 3 rules + fixers (dependencies, data order, required fields)
+│   │   ├── manifest/         # 3 rules + fixers (dependencies, data order, required fields)
+│   │   ├── data_integrity/  # 2 rules (missing ondelete, noupdate risk)
+│   │   ├── upgrade_safety/  # 2 rules (deprecated API, removed model reference)
+│   │   └── frontend/        # 1 rule (asset bundle missing)
 │   ├── parsers/              # Python AST, XML record, manifest, CSV parsing
 │   ├── graph/                # Symbol resolution engine + version stubs (17.0, 18.0, 19.0)
 │   ├── discovery/            # Addon discovery & Odoo version detection
@@ -25,7 +28,7 @@ odoo-doctor/
 │   ├── reporters/            # Output formatting (terminal, JSON, GitHub, SARIF, PR comment)
 │   ├── cli/                  # CLI entry point (Typer)
 │   └── skills/               # Agent-friendly SKILL.md documentation
-├── tests/                    # 384 test cases (~69 test files)
+├── tests/                    # 414 test cases (~72 test files)
 ├── docs/                     # Rule, custom-rules, and stubs documentation
 ├── pyproject.toml            # Build & dependency config
 ├── action.yml                # GitHub Actions marketplace action

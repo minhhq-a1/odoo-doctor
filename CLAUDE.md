@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, performance issues, and integrates with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 Key features:
-- 24 native static analysis rules across 5 active categories (Security, Correctness, Performance, Module Hygiene, Maintainability) with 3 additional reserved categories (Data Integrity, Upgrade Safety, Frontend)
+- 29 native static analysis rules across 8 categories (Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend)
 - Confidence-aware scoring (only HIGH confidence findings count toward scores)
 - Per-category scoring blended into an overall score: `0.4 × min(categories) + 0.6 × avg(categories)`
 - Config-driven rule filtering via `odoo-doctor.toml`
@@ -28,7 +28,7 @@ pip install ruff               # Code formatter/linter (required for CI)
 
 ### Testing
 ```bash
-pytest                         # Run all tests (~69 test files, 384 cases)
+pytest                         # Run all tests (~72 test files, 414 cases)
 pytest tests/test_file.py      # Run a specific test file
 pytest tests/test_file.py::TestClass::test_method  # Run a specific test
 pytest --cov=odoo_doctor      # Coverage report
@@ -78,7 +78,7 @@ The tool uses a **two-phase architecture**: a **scanner** (`core/scanner.py`) ha
 - `surfaces.py`: Output formatting configuration for GitHub Actions annotations and PR comments.
 - `source.py`: Source code reading and encoding handling.
 
-**`rules/` — Rule Engine (24 rules)**
+**`rules/` — Rule Engine (29 rules)**
 
 Rules are organized into category subdirectories:
 - `registry.py`: `@rule()` decorator and `RuleRegistry` class. Rules auto-register on import.
@@ -90,6 +90,9 @@ Rules are organized into category subdirectories:
 - `performance/` (5 rules): `create_write_in_loop` (registers both `create-in-loop` and `write-in-loop`), `n_plus_one_read`, `search_in_loop`, `unbounded_search`
 - `xml/` (5 rules): `button_method_not_found`, `duplicate_xml_id`, `missing_xml_ref`, `orphan_view`, `view_field_not_in_model`
 - `manifest/` (3 rules + fixers): `data_order_risk`, `missing_dependency`, `missing_required_fields`, plus `fixers.py` for auto-fix support
+- `data_integrity/` (2 rules): `missing_ondelete`, `data_noupdate_risk`
+- `upgrade_safety/` (2 rules): `deprecated_api_usage`, `removed_model_still_referenced`
+- `frontend/` (1 rule): `asset_bundle_missing`
 
 **`parsers/` — Code Parsing**
 - `python_models.py`: AST-based Python parser — extracts `_name`, `_inherit`, methods, ORM calls, SQL patterns, field definitions, decorators.
@@ -311,7 +314,7 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 | `src/odoo_doctor/core/fixer.py` | Fixer registry for `odoo-doctor fix` |
 | `src/odoo_doctor/core/baseline.py` | Baseline mode finding identity & suppression |
 | `src/odoo_doctor/core/cache.py` | Incremental scan cache |
-| `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |
+| `src/odoo_doctor/rules/` | Rule implementations (29 rules in 8 category dirs) |
 | `src/odoo_doctor/rules/registry.py` | `@rule()` decorator and `RuleRegistry` |
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/graph/module_context.py` | Per-addon context + `build_project_graph()` |
@@ -331,4 +334,4 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 - **Build System**: Hatchling. Stub JSON data files are included in wheels via `hatch.build`.
 - **Code Style**: Ruff enforced in CI — all files must pass `ruff format` and `ruff check`.
 - **Pre-commit**: Hook runs `odoo-doctor scan --diff HEAD --fail-on error` to catch issues early.
-- **Version**: Current version is `0.3.0`. Appears in `pyproject.toml` and `reporters/json_report.py`.
+- **Version**: Current version is `0.4.0`. Appears in `pyproject.toml` and `reporters/json_report.py`.

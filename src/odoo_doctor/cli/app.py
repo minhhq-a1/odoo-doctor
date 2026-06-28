@@ -39,6 +39,11 @@ import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
 import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
 import odoo_doctor.rules.correctness.field_no_string_on_required  # noqa: F401
 import odoo_doctor.rules.correctness.missing_translation  # noqa: F401
+import odoo_doctor.rules.data_integrity.missing_ondelete  # noqa: F401
+import odoo_doctor.rules.data_integrity.data_noupdate_risk  # noqa: F401
+import odoo_doctor.rules.upgrade_safety.deprecated_api_usage  # noqa: F401
+import odoo_doctor.rules.upgrade_safety.removed_model_still_referenced  # noqa: F401
+import odoo_doctor.rules.frontend.asset_bundle_missing  # noqa: F401
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers  # noqa: F401
