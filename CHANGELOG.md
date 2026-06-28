@@ -4,6 +4,26 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.4.0] — 2026-06-28
+
+### Added
+
+- **5 new native rules** across 3 new categories:
+  - **Data Integrity**: `missing-ondelete` (P1) — flags Many2one fields without explicit `ondelete`; `data-noupdate-risk` (P2) — flags critical model records (ir.rule, ir.config_parameter, ir.cron) not wrapped in `noupdate="1"`.
+  - **Upgrade Safety**: `deprecated-api-usage` (P1) — detects old-API patterns (`from openerp`, `_columns`, `osv.osv`, `.pool`); `removed-model-still-referenced` (P1) — flags `_inherit` references to models not found in project or stubs.
+  - **Frontend**: `asset-bundle-missing` (P2) — detects asset files listed in manifest `assets` dict that don't exist on disk (Odoo 15.0+).
+- **Default Category Weights**: Scoring now applies sensible default weights per category (Security/Correctness: 1.5, Performance/Data Integrity/Upgrade Safety: 1.0, Module Hygiene: 0.8, Maintainability/Frontend: 0.5). User config overrides merge with defaults.
+- **Score Schema Version**: JSON output now includes `score_schema_version: 2` for downstream tooling compatibility.
+- **Parser Enhancements**: `FieldInfo` now tracks `ondelete` keyword; `XmlIdInfo` now tracks `noupdate` context from ancestor XML elements.
+- **Manifest Assets Parsing**: `ManifestData` now parses the `assets` dict from `__manifest__.py` for frontend rule support.
+
+### Changed
+
+- Total native rules: 24 → 29. Active categories: 5 → 8.
+- Version bumped to 0.4.0.
+
+---
+
 ## [0.3.0] — 2026-06-12
 
 ### Added

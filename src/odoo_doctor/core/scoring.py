@@ -11,6 +11,17 @@ from odoo_doctor.core.diagnostics import CATEGORIES, TIER_IMPACT, Diagnostic
 if TYPE_CHECKING:
     pass
 
+DEFAULT_CATEGORY_WEIGHTS: dict[str, float] = {
+    "Security": 1.5,
+    "Correctness": 1.5,
+    "Performance": 1.0,
+    "Data Integrity": 1.0,
+    "Upgrade Safety": 1.0,
+    "Module Hygiene": 0.8,
+    "Maintainability": 0.5,
+    "Frontend": 0.5,
+}
+
 
 @dataclass
 class CategoryScore:
@@ -53,7 +64,10 @@ def score_diagnostics(
     Only diagnostics where eligible[i] is True are counted.
     Only in_scope_categories (those with >=1 active rule) affect the overall blend.
     """
-    weights = category_weights or {}
+    base_weights = dict(DEFAULT_CATEGORY_WEIGHTS)
+    if category_weights:
+        base_weights.update(category_weights)
+    weights = base_weights
     scope = in_scope_categories if in_scope_categories is not None else list(CATEGORIES)
 
     # Accumulate impact per category

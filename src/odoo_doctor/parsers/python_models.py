@@ -20,6 +20,7 @@ class FieldInfo:
     store: bool = True
     required: bool = False
     string: str | None = None
+    ondelete: str | None = None
     line: int = 0
 
 
@@ -221,6 +222,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
     store = True
     required = False
     string = None
+    ondelete = None
 
     # First positional arg for relational fields is comodel
     # For Char/etc, the first positional arg is actually the string, but Odoo 14+
@@ -242,6 +244,8 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
             required = bool(kw.value.value)
         elif kw.arg == "string" and isinstance(kw.value, ast.Constant):
             string = str(kw.value.value)
+        elif kw.arg == "ondelete" and isinstance(kw.value, ast.Constant):
+            ondelete = kw.value.value
 
     return FieldInfo(
         name=name,
@@ -252,6 +256,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
         store=store if compute is None else store,
         required=required,
         string=string,
+        ondelete=ondelete,
         line=line,
     )
 
