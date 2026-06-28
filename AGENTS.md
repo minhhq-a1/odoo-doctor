@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 15 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 24 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -11,18 +11,24 @@
 ```
 odoo-doctor/
 ├── src/odoo_doctor/          # Main source code
-│   ├── core/                 # Pipeline orchestration (7-stage), config, scoring
-│   ├── rules/                # Rule implementations (P0–P3 tiers)
+│   ├── core/                 # Scanner, pipeline (7-stage), config, scoring, fixer, baseline, cache
+│   ├── rules/                # Rule implementations (P0–P3 tiers, organized by category)
+│   │   ├── security/         # 7 rules (eval, SQL injection, sudo, access control)
+│   │   ├── correctness/      # 4 rules (missing depends, super, translations)
+│   │   ├── performance/      # 5 rules (loops, N+1, unbounded search)
+│   │   ├── xml/              # 5 rules (broken refs, duplicate IDs, orphan views)
+│   │   └── manifest/         # 3 rules + fixers (dependencies, data order, required fields)
 │   ├── parsers/              # Python AST, XML record, manifest, CSV parsing
-│   ├── graph/                # Symbol resolution engine
+│   ├── graph/                # Symbol resolution engine + version stubs (17.0, 18.0, 19.0)
 │   ├── discovery/            # Addon discovery & Odoo version detection
 │   ├── adapters/             # External linter integration (Ruff, Pylint-Odoo)
-│   ├── reporters/            # Output formatting (GitHub, JSON, SARIF, plain text)
+│   ├── reporters/            # Output formatting (terminal, JSON, GitHub, SARIF, PR comment)
 │   ├── cli/                  # CLI entry point (Typer)
 │   └── skills/               # Agent-friendly SKILL.md documentation
-├── tests/                    # 320+ test cases (~46 test files)
-├── docs/                     # Rule documentation
+├── tests/                    # 384 test cases (~69 test files)
+├── docs/                     # Rule, custom-rules, and stubs documentation
 ├── pyproject.toml            # Build & dependency config
+├── action.yml                # GitHub Actions marketplace action
 ├── CLAUDE.md                 # Detailed developer guide
 └── odoo-doctor.toml          # User config (generated via `odoo-doctor init`)
 ```
@@ -38,7 +44,7 @@ pip install -e ".[dev]"        # Install in editable mode with dev dependencies
 
 ### Testing
 ```bash
-pytest                         # Run all tests (~320+ cases)
+pytest                         # Run all tests (~384 cases)
 pytest tests/test_file.py      # Run a specific test file
 pytest -xvs                    # Stop on first failure, verbose, no capture
 pytest --cov=odoo_doctor       # Coverage report
@@ -57,6 +63,10 @@ odoo-doctor scan .             # Scan current directory
 odoo-doctor scan . --json      # JSON output
 odoo-doctor scan . --min-score 80  # Fail if score < 80
 odoo-doctor scan . --diff HEAD --fail-on error  # Changed files only
+odoo-doctor scan . --cache     # Incremental cached scan
+odoo-doctor fix .              # Apply deterministic fixes
+odoo-doctor fix . --fix-dry-run  # Preview fixes as unified diff
+odoo-doctor rules list         # List all rules
 odoo-doctor rules explain rule-name  # Explain a rule
 ```
 
@@ -68,7 +78,7 @@ odoo-doctor rules explain rule-name  # Explain a rule
 - **Indentation**: 4 spaces (standard Python).
 - **Line Length**: 88 characters (Ruff default).
 - **Imports**: Organized by stdlib, third-party, local (enforced by Ruff).
-- **Naming**: Snake_case for functions/variables, PascalCase for classes. Rule classes inherit from `Rule` base class.
+- **Naming**: Snake_case for functions/variables, PascalCase for classes. Rule functions use the `@rule()` decorator.
 - **Comments**: Minimal and necessary only; prefer self-documenting code.
 
 ---
@@ -77,7 +87,7 @@ odoo-doctor rules explain rule-name  # Explain a rule
 
 - **Framework**: pytest (8.0+). Test files in `tests/` with naming pattern `test_*.py`.
 - **Coverage**: Aim for high coverage; run `pytest --cov=odoo_doctor` locally before submitting PRs.
-- **Test Organization**: Each rule has a corresponding `test_rule_name.py` exercising positive/negative cases.
+- **Test Organization**: Tests mirror source structure (`tests/rules/`, `tests/core/`, `tests/parsers/`, `tests/cli/`, `tests/graph/`, `tests/discovery/`, `tests/adapters/`, `tests/reporters/`, `tests/integration/`).
 - **Fixtures**: Use temporary addon directories with manifests and Python/XML stubs. Main test input is `ModuleContext` object.
 - **Assertions**: Verify diagnostics are emitted (or not), check confidence/tier, validate message text.
 
@@ -90,29 +100,41 @@ pytest tests/test_my_rule.py -xvs
 
 ## Adding a New Rule
 
-1. Create `src/odoo_doctor/rules/my_rule.py`:
+1. Create `src/odoo_doctor/rules/<category>/my_rule.py`:
    ```python
-   from odoo_doctor.rules.base import Rule
+   from odoo_doctor.rules.registry import rule
    from odoo_doctor.core.diagnostics import Diagnostic
 
-   class MyRule(Rule):
-       """Brief description."""
-       tier = "P1"
-       category = "Correctness"
-       
-       def check(self, addon_context):
-           for issue in addon_context.my_method():
-               yield Diagnostic(
-                   rule=self.name,
-                   file=issue.path,
-                   line=issue.line,
-                   confidence="high",
-                   message="..."
-               )
+   @rule(
+       name="my-rule-name",
+       category="Correctness",
+       tier="P1",
+       severity="error",
+       default_confidence="high",
+       needs_context=True,
+   )
+   def check_my_rule(ctx):
+       for issue in ctx.some_method():
+           yield Diagnostic(
+               module=ctx.name,
+               file_path=str(issue.path),
+               line=issue.line,
+               column=0,
+               rule="my-rule-name",
+               category="Correctness",
+               severity="error",
+               tier="P1",
+               source="native",
+               confidence="high",
+               title="Short title",
+               message="Detailed explanation",
+               help="How to fix it",
+               odoo_version=ctx.odoo_version,
+           )
    ```
 
-2. Create tests in `tests/test_my_rule.py`.
-3. Rule auto-registers via `registry.py` — no manual registration needed.
+2. Create tests in `tests/rules/test_my_rule.py`.
+3. Rule auto-registers via the `@rule()` decorator — no manual registration needed.
 
 ---
 
@@ -127,8 +149,8 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 <body>
 ```
 
-**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`  
-**Scope**: Optional, e.g., `(rules)`, `(parser)`, `(cli)`  
+**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+**Scope**: Optional, e.g., `(rules)`, `(parser)`, `(cli)`
 **Subject**: Lowercase, imperative, no period. ~50 characters.
 
 **Examples**:
@@ -159,16 +181,26 @@ chore(release): bump version to 0.3.0
 
 ## Data Flow & Architecture
 
-The tool follows a **7-stage diagnostic pipeline** (all stages are pure functions):
-1. **Normalize**: Load `odoo-doctor.toml` → Config
-2. **Discover**: Find addons via `__manifest__.py`
-3. **Parse**: Extract Python AST, XML records, CSV, manifests
-4. **Index**: Build symbol resolution graph
-5. **Analyze**: Run enabled rules → raw diagnostics
-6. **Filter**: Apply suppressions, confidence thresholds, path ignores
-7. **Score**: Deduct by tier, blend per-category scores → 0–100 overall
+The tool uses a **two-phase architecture**:
 
-**Key Design**: Rules emit `Diagnostic` objects with confidence levels (HIGH/MEDIUM/LOW). Only HIGH confidence findings count toward scoring to minimize false positives.
+**Scanner Phase** (`core/scanner.py`):
+1. Load `odoo-doctor.toml` → Config
+2. Discover addons via `__manifest__.py`
+3. Build project graph (parse Python AST, XML, CSV, manifests)
+4. Run native rules (context-based + file-based) → raw diagnostics
+5. Run external adapters (Ruff, Pylint-Odoo) → additional diagnostics
+6. Collect inline suppression comments
+
+**Pipeline Phase** (`core/pipeline.py` — 7 pure transformation stages):
+1. **Normalize**: Normalize file paths to POSIX format
+2. **Deduplicate**: Group by (module, file, line, category, rule), keep highest confidence
+3. **Severity Overrides**: Apply config-driven severity changes (`"off"` removes)
+4. **Ignore Filters**: Remove by rule name, file glob, module name
+5. **Inline Suppressions**: Remove findings suppressed by inline comments
+6. **Version/Capability Gates**: Filter by Odoo version and required/excluded capabilities
+7. **Score Eligibility**: Mark HIGH-confidence findings as scoring-eligible
+
+**Key Design**: Rules emit `Diagnostic` objects with confidence levels (HIGH/MEDIUM/LOW). Only HIGH confidence findings count toward scoring to minimize false positives. Tier impacts: P0=25, P1=10, P2=4, P3=1 point deductions.
 
 ---
 
@@ -190,12 +222,14 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 
 | File/Path | Purpose |
 |-----------|---------|
-| `src/odoo_doctor/core/pipeline.py` | Main 7-stage pipeline |
-| `src/odoo_doctor/rules/` | Rule implementations |
+| `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
+| `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
+| `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
+| `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/cli/app.py` | CLI entry point |
-| `tests/` | Test suite |
+| `tests/` | Test suite (69 files, 384 cases) |
 | `CLAUDE.md` | Detailed development guide |
 
 ---
@@ -206,7 +240,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 - **Build System**: Hatchling
 - **Key Dependencies**: typer, rich, lxml, tomli
 - **Exit Codes**: 0 (clean), 1 (findings triggered), 2 (score below threshold), 3 (invalid args/git error)
-- **CI/CD**: GitHub Actions on push/PR — runs tests, linting, coverage
+- **CI/CD**: GitHub Actions on push/PR — runs tests (Python 3.10–3.12), linting, formatting
 - **pre-commit Hook**: Runs `odoo-doctor scan --diff HEAD --fail-on error` on Python/XML files
 
-See `CLAUDE.md` for advanced topics (stubs generation, adapter development, symbol resolution internals).
+See `CLAUDE.md` for advanced topics (stubs generation, adapter development, fixer implementation, baseline mode, caching).
