@@ -212,6 +212,52 @@ def total_amount(self):
 
 ---
 
+## Data Integrity Rules
+
+### missing-ondelete [P1]
+
+**Detects**: Many2one fields on non-transient, non-abstract models that lack an explicit `ondelete` keyword argument.
+
+**Why**: The default `ondelete='set null'` may not be appropriate for all relations. Explicitly declaring the ondelete policy documents the intended behavior and prevents data integrity issues when referenced records are deleted.
+
+**Fix**: Add an explicit ondelete policy:
+```python
+# Bad
+partner_id = fields.Many2one("res.partner")
+
+# Good
+partner_id = fields.Many2one("res.partner", ondelete="restrict")
+```
+
+---
+
+### data-noupdate-risk [P2]
+
+**Detects**: Records of critical models (`ir.rule`, `ir.config_parameter`, `ir.cron`) in XML data files that are not wrapped in `noupdate="1"`.
+
+**Why**: Records without `noupdate="1"` are overwritten on every module update, discarding any user modifications. This is particularly dangerous for security rules, configuration parameters, and scheduled actions.
+
+**Fix**: Wrap critical records in a `<data noupdate="1">` block:
+```xml
+<!-- Bad -->
+<odoo>
+    <record id="my_rule" model="ir.rule">
+        <field name="name">My Rule</field>
+    </record>
+</odoo>
+
+<!-- Good -->
+<odoo>
+    <data noupdate="1">
+        <record id="my_rule" model="ir.rule">
+            <field name="name">My Rule</field>
+        </record>
+    </data>
+</odoo>
+```
+
+---
+
 ## Summary of All Rules
 
 | Rule | Tier | Category | Fixable |
@@ -238,6 +284,8 @@ def total_amount(self):
 | record-rule-without-domain | P1 | Security | |
 | field-no-string-on-required | P2 | Maintainability | |
 | missing-translation | P2 | Maintainability | |
+| missing-ondelete | P1 | Data Integrity | |
+| data-noupdate-risk | P2 | Data Integrity | |
 | manifest-missing-required-fields | P2 | Module Hygiene | Yes |
 | manifest-data-order-risk | P2 | Module Hygiene | Yes |
 

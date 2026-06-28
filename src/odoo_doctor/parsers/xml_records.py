@@ -19,6 +19,7 @@ class XmlIdInfo:
     line: int
     refs: list[str] = field(default_factory=list)  # referenced xml IDs
     ref_lines: dict[str, int] = field(default_factory=dict)
+    noupdate: bool = False
 
 
 @dataclass
@@ -65,6 +66,16 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
         elif elem.tag == "template":
             model = "ir.ui.view"
 
+        # Check noupdate context — look at parent elements
+        noupdate = False
+        parent = elem.getparent()
+        while parent is not None:
+            nu = parent.get("noupdate")
+            if nu is not None:
+                noupdate = nu == "1" or nu.lower() == "true"
+                break
+            parent = parent.getparent()
+
         ref_lines: dict[str, int] = {}
         # Collect ref attributes and eval ref patterns
         for child in elem.iter():
@@ -89,6 +100,7 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
                 line=elem.sourceline or 0,
                 refs=refs,
                 ref_lines=ref_lines,
+                noupdate=noupdate,
             )
         )
 
