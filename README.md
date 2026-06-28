@@ -50,6 +50,11 @@ odoo-doctor scan . --diff main --json
 | `manifest-data-order-risk` | P2 | Module Hygiene |
 | `override-missing-super` | P1 | Correctness |
 | `compute-missing-depends` | P2 | Correctness |
+| `missing-ondelete` | P1 | Data Integrity |
+| `data-noupdate-risk` | P2 | Data Integrity |
+| `deprecated-api-usage` | P1 | Upgrade Safety |
+| `removed-model-still-referenced` | P1 | Upgrade Safety |
+| `asset-bundle-missing` | P2 | Frontend |
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
@@ -130,7 +135,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.3.0
+  uses: minhhq-a1/odoo-doctor@v0.4.0
   with:
     fail-on: warning
     min-score: 75
@@ -262,6 +267,6 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 git clone https://github.com/minhhq-a1/odoo-doctor
 cd odoo-doctor
 pip install -e ".[dev]"
-pytest                    # 324+ test cases
+pytest                    # 414 test cases
 pytest --cov=odoo_doctor  # with coverage
 ```
