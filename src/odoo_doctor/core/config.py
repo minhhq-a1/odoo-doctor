@@ -20,6 +20,7 @@ else:
 class SurfaceConfig:
     min_confidence: str | None = None
     categories: list[str] = field(default_factory=list)
+    tiers: list[str] = field(default_factory=list)  # empty = every tier
 
 
 @dataclass
@@ -33,6 +34,7 @@ class OdooDoctorConfig:
     min_score: int = 0
     capabilities: list[str] = field(default_factory=list)
     enable_plugins: bool = False
+    plugin_allowlist: list[str] | None = None  # None = every discovered plugin
 
     # 'oca' is reserved: the OCA pre-commit adapter is not implemented yet, so
     # the key is accepted (tolerated-but-inert) but never instantiates an adapter.
@@ -116,7 +118,9 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
 
     surfaces = {
         "pr_comment": SurfaceConfig(),
-        "ci_failure": SurfaceConfig(min_confidence="high"),
+        # Default CI policy: only serious (P0/P1), high-confidence findings can
+        # fail a build; style/advisory and low-confidence findings never do.
+        "ci_failure": SurfaceConfig(min_confidence="high", tiers=["P0", "P1"]),
     }
     for surface_name, surface_data in surfaces_raw.items():
         if not isinstance(surface_data, dict):
@@ -125,6 +129,7 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
         surfaces[surface_name] = SurfaceConfig(
             min_confidence=surface_data.get("min_confidence", base.min_confidence),
             categories=surface_data.get("categories", base.categories),
+            tiers=surface_data.get("tiers", base.tiers),
         )
 
     return OdooDoctorConfig(
@@ -143,4 +148,9 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
         category_weights=dict(weights_raw),
         surfaces=surfaces,
         enable_plugins=bool(plugins_raw.get("enabled", False)),
+        plugin_allowlist=(
+            [str(n) for n in plugins_raw["allow"]]
+            if isinstance(plugins_raw.get("allow"), list)
+            else None
+        ),
     )

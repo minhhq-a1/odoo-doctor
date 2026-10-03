@@ -1,7 +1,9 @@
-# Writing custom rules (experimental)
+# Writing custom rules
 
-> Status: **skeleton** in v0.3.0. The contract below is provisional and may
-> change in v0.4.0.
+> Status: **stable (plugin API v1)** since v0.5.0. Import only from
+> `odoo_doctor.plugin_api`; everything else in `odoo_doctor` is internal. Changes
+> to that module follow `PLUGIN_API_VERSION`: additions keep the version,
+> breaking changes bump it.
 
 A custom rule lives in your own Python package and registers itself via an
 entry point. Odoo Doctor imports your module at startup, which runs your
@@ -14,9 +16,9 @@ entry point. Odoo Doctor imports your module at startup, which runs your
 import ast
 from pathlib import Path
 
-from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
-from odoo_doctor.rules.registry import rule
+from odoo_doctor.plugin_api import Diagnostic, read_source, rule
+
+ODOO_DOCTOR_PLUGIN_API = 1  # the plugin API version this module targets
 
 
 @rule(
@@ -66,14 +68,19 @@ In your package's pyproject.toml:
 my_rules = "my_odoo_rules.no_print"
 ```
 
+Naming convention for shared plugins: publish the package as
+`odoo-doctor-rules-<topic>` so it is easy to find on PyPI.
+
 ## 3. Enable plugins (opt-in) and run
 
 Plugin loading runs third-party code with your full privileges, so it is OFF by
-default. Enable it explicitly in odoo-doctor.toml:
+default. Enable it explicitly in odoo-doctor.toml, optionally restricting which
+entry points may load:
 
 ```toml
 [plugins]
 enabled = true
+allow = ["my_rules"]   # optional; omit to load every discovered plugin
 ```
 
 ```bash
@@ -81,17 +88,44 @@ pip install -e .
 odoo-doctor scan .   # your rule runs only because [plugins].enabled = true
 ```
 
-## Security / trust model
+## Guarantees
 
-> Plugins are **not sandboxed** in v0.3.0. Importing a plugin executes its
-> module code. Only enable plugins from sources you trust, exactly as you would
-> for any installed Python package. A future release (v0.4.0) may add an
-> allowlist; until then `[plugins].enabled` is the only gate.
+- **Opt-in.** Nothing loads unless `[plugins].enabled = true`.
+- **Allowlist.** With `[plugins].allow`, entry points not listed are skipped
+  (a message names each skipped plugin). `allow = []` loads nothing.
+- **Validation at load time.** `category` must be one of `plugin_api.CATEGORIES`,
+  `tier` one of `plugin_api.TIERS`, `severity` one of `plugin_api.SEVERITIES`,
+  `default_confidence` one of `plugin_api.CONFIDENCES`. Otherwise `@rule` raises
+  `ValueError` and the plugin is skipped.
+- **No overrides.** A rule name already registered (built-in or another plugin)
+  is rejected; a plugin can never replace a built-in rule.
+- **Version check.** If your module sets `ODOO_DOCTOR_PLUGIN_API` and it differs
+  from `plugin_api.PLUGIN_API_VERSION`, the plugin is refused. Omitting it is
+  allowed but discouraged.
+- **Rollback and isolation.** A plugin that raises while loading is skipped with
+  a warning and every rule it had already registered is removed. A rule that
+  raises while running is reported as a warning and skipped for that module/file;
+  it never aborts the scan.
+- **Same gates as built-ins.** `min_version` and `requires_capabilities` /
+  `excludes_capabilities` are honored, and findings go through the normal
+  pipeline (severity overrides, `[ignore]`, inline suppressions, baseline).
+  Only `confidence="high"` findings affect scores.
 
 ## Rule contract
 
 - Context rules: `needs_context=True`, signature `func(ctx: ModuleContext)`.
 - File rules: `needs_context=False`, signature
-  `func(file_path: Path, module_name: str, odoo_version: str)`.
-- Return a `list[Diagnostic]`. Only `confidence="high"` findings affect scores.
-- `category` must be one of the values in `core/diagnostics.py:CATEGORIES`.
+  `func(file_path: Path, module_name: str, odoo_version: str)`; called once per
+  `.py` file of each addon.
+- Return (or yield) `Diagnostic` objects.
+- Exported helpers: `Diagnostic`, `ModuleContext`, `rule`, `read_source`,
+  `receiver_is_orm`, `node_is_orm`, plus the constants above.
+- Plugin rules are not part of the built-in rules reference (`docs/rules.md`) and
+  their findings carry no docs link unless you set `Diagnostic.url` yourself.
+
+## Security / trust model
+
+> Plugins are **not sandboxed**. Importing a plugin executes its module code.
+> Only enable plugins from sources you trust, exactly as you would for any
+> installed Python package. `[plugins].enabled` and `[plugins].allow` are the
+> only gates.

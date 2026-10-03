@@ -46,7 +46,7 @@ Please ensure your code passes both `ruff format --check src tests` and `ruff ch
 2. Write a failing test in `tests/rules/`.
 3. Implement the rule in `src/odoo_doctor/rules/`.
 4. Ensure the test passes.
-5. Add your new rule to `docs/rules.md`. Our completeness guard test (`tests/test_rule_docs_complete.py`) will fail if you forget!
+5. Document the rule: add an entry to `RULE_DOCS` in `src/odoo_doctor/rules/rule_docs.py`, then run `odoo-doctor rules docs --out docs/rules.md`. Never edit `docs/rules.md` by hand; `tests/test_rule_docs_complete.py` fails if an entry is missing or the page is stale.
 
 ## Commit and PR Workflow
 

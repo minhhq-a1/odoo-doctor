@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 29 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 30 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -28,7 +28,7 @@ odoo-doctor/
 │   ├── reporters/            # Output formatting (terminal, JSON, GitHub, SARIF, PR comment)
 │   ├── cli/                  # CLI entry point (Typer)
 │   └── skills/               # Agent-friendly SKILL.md documentation
-├── tests/                    # 414 test cases (~72 test files)
+├── tests/                    # 492 test cases (~81 test files)
 ├── docs/                     # Rule, custom-rules, and stubs documentation
 ├── pyproject.toml            # Build & dependency config
 ├── action.yml                # GitHub Actions marketplace action
@@ -71,6 +71,10 @@ odoo-doctor fix .              # Apply deterministic fixes
 odoo-doctor fix . --fix-dry-run  # Preview fixes as unified diff
 odoo-doctor rules list         # List all rules
 odoo-doctor rules explain rule-name  # Explain a rule
+odoo-doctor rules disable rule-name   # Disable a rule in odoo-doctor.toml
+odoo-doctor rules docs --out docs/rules.md  # Regenerate rules docs (never hand-edit)
+odoo-doctor scan . --history h.jsonl --badge badge.svg
+odoo-doctor history show h.jsonl --max-drop 3
 ```
 
 ---
@@ -137,7 +141,7 @@ pytest tests/test_my_rule.py -xvs
    ```
 
 2. Create tests in `tests/rules/test_my_rule.py`.
-3. Rule auto-registers via the `@rule()` decorator — no manual registration needed.
+3. Import the module in `cli/app.py` (registers the rule) and add its `RuleDoc` entry to `rules/rule_docs.py`, then run `odoo-doctor rules docs --out docs/rules.md`.
 
 ---
 
@@ -174,10 +178,10 @@ chore(release): bump version to 0.3.0
 
 ### Cut a New Release
 
-1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/reporters/json_report.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`.
+1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md` (`tests/test_version.py` checks consistency).
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag v0.4.0 && git push origin v0.4.0`).
+4. Create and push a new Git tag (e.g., `git tag v0.5.0 && git push origin v0.5.0`).
 5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
 
 ---

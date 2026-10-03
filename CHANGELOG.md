@@ -4,6 +4,70 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.5.0] — 2026-10-03
+
+Theme: close the proposal backlog and make findings explainable and trackable
+without adding a hosted service.
+
+### Added
+
+- **Rules documentation from one source.** `src/odoo_doctor/rules/rule_docs.py`
+  feeds `odoo-doctor rules explain` (now with description, why, fix and
+  before/after examples), the generated `docs/rules.md`, SARIF `helpUri` and
+  `Diagnostic.url`. New `odoo-doctor rules docs [--out FILE] [--format
+  markdown|html] [--check]`; a test fails when `docs/rules.md` is stale.
+- **Deep links.** Native findings carry a link to their rule docs, shown in the
+  terminal, GitHub annotations, the PR comment and SARIF.
+- **`rules disable|enable <rule>`** edit `[ignore] rules` in `odoo-doctor.toml`
+  (comments and other keys untouched); `rules list` marks disabled rules.
+- **Rule `expensive-nonstored-compute`** (Performance, P2, medium confidence).
+  Native rules: 29 -> 30.
+- **Score history** (`scan --history FILE`), **trend and regression detection**
+  (`history show --max-drop N`, exit 2) and **legacy ingestion** (`history import`)
+  that normalizes pre-0.4.0 reports lacking `score_schema_version` as schema 1.
+  Scores of different schema versions are never compared. See
+  `docs/score-history.md`.
+- **Score badge** (`scan --badge FILE`): SVG or shields.io endpoint JSON, generated
+  locally.
+- **Plugin API v1 (GA).** Stable `odoo_doctor.plugin_api`; `@rule` validates
+  category/tier/severity/confidence; duplicate names are rejected so plugins can't
+  override built-ins; a failing plugin is rolled back; `ODOO_DOCTOR_PLUGIN_API`
+  version check; `[plugins].allow` allowlist. `docs/custom-rules.md` rewritten.
+
+### Changed
+
+- **Default CI policy:** `--fail-on` now only counts findings admitted by
+  `[surfaces.ci_failure]`, which defaults to **P0/P1 at high confidence**. P2/P3 and
+  low-confidence findings are still reported but no longer fail the build. To keep
+  the old behavior set `[surfaces.ci_failure] tiers = []` and `min_confidence = "low"`.
+  New `tiers` key for every surface.
+- `__version__` is now the single version source (it was stale at 0.1.0) and the
+  JSON report reads it. `SCORE_SCHEMA_VERSION` and `project_score()` live in
+  `core.scoring`.
+- `rule()` registration is stricter: invalid metadata or a duplicate rule name
+  raises `ValueError`.
+
+### Roadmap decisions (explicit close-or-defer)
+
+Closed in 0.5.0: advisory mode, `--fail-on`, multi-module scoring, `--module`,
+`--odoo-version`, `rules list/disable`, `[severity]`/`[ignore]` config, version
+detection from the installed `odoo` package, CI policy, `expensive-nonstored-compute`,
+plugin API GA, rules docs, score history/badge.
+
+Deferred, with owner version:
+
+| Item | Target | Reason |
+|------|--------|--------|
+| Multi-company / multi-currency rules | 0.6.0 | needs model-level heuristics and fixtures; rule quality pass |
+| LSP server + VS Code extension | 0.6.0 | new stack (pygls + TypeScript); builds on the fixer engine and rule docs links |
+| Hosted remote score service, auth, server-side trends | 0.7.0 (needs a product decision) | serverless history/badge covers the trend use case first |
+| Odoo in-app reporting module | 0.7.0 (depends on the remote service decision) | separate codebase per Odoo version |
+| Split monorepo into `core`/`cli`/`rules`/`api` | not scheduled | high churn for users, no feature gain until `api` exists |
+| Plugin marketplace/registry | not scheduled | plugin API only just reached GA; naming convention `odoo-doctor-rules-*` documented |
+| OCA standards cross-check | not scheduled | scope undefined |
+
+---
+
 ## [0.4.0] — 2026-06-28
 
 ### Added

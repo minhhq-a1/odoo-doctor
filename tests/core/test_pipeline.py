@@ -360,3 +360,14 @@ def test_rule_is_enabled():
 
     # Excluded capability present
     assert rule_is_enabled(meta, "17.0", {"enterprise", "odoo:17", "legacy"}) is False
+
+
+def test_normalize_attaches_docs_deep_link_for_native_rules():
+    out = normalize_diagnostics([_diag(rule="eval-usage")])
+    assert out[0].url.endswith("docs/rules.md#eval-usage")
+
+
+def test_normalize_keeps_existing_url_and_skips_unknown_rules():
+    kept = normalize_diagnostics([_diag(rule="eval-usage", url="https://x.test")])
+    assert kept[0].url == "https://x.test"
+    assert normalize_diagnostics([_diag(rule="E501")])[0].url is None

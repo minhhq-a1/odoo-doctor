@@ -9,9 +9,11 @@ from typing import Optional
 
 import typer
 
-from odoo_doctor.core.config import OdooDoctorConfig, load_config
+from odoo_doctor.core.config import OdooDoctorConfig, SurfaceConfig, load_config
+from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
+from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
 from odoo_doctor.reporters.terminal import render_terminal
 
@@ -35,6 +37,7 @@ import odoo_doctor.rules.performance.search_in_loop  # noqa: F401
 import odoo_doctor.rules.performance.create_write_in_loop  # noqa: F401
 import odoo_doctor.rules.performance.n_plus_one_read  # noqa: F401
 import odoo_doctor.rules.performance.unbounded_search  # noqa: F401
+import odoo_doctor.rules.performance.expensive_nonstored_compute  # noqa: F401
 import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
 import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
 import odoo_doctor.rules.correctness.field_no_string_on_required  # noqa: F401
@@ -50,6 +53,7 @@ import odoo_doctor.rules.manifest.fixers  # noqa: F401
 
 from odoo_doctor.core.scanner import collect_scores as _collect_scores  # noqa: F401
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
+from odoo_doctor.rules.docs_gen import render_html, render_markdown, render_rule_text
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.core.diagnostics import Diagnostic
 
@@ -94,8 +98,23 @@ def scan(
     write_baseline_path: Optional[str] = typer.Option(
         None, "--write-baseline", help="Write current findings as a baseline and exit 0"
     ),
+    history_path: Optional[str] = typer.Option(
+        None, "--history", help="Append this scan's scores to a JSONL history file"
+    ),
+    badge_path: Optional[str] = typer.Option(
+        None,
+        "--badge",
+        help="Write a score badge: *.svg (image) or *.json (shields.io endpoint)",
+    ),
 ) -> None:
     """Scan Odoo addons and report health score."""
+    if (history_path or badge_path) and diff:
+        typer.echo(
+            "[ERROR] --history/--badge need a full scan; they cannot be combined "
+            "with --diff (partial scores would corrupt the trend).",
+            err=True,
+        )
+        raise typer.Exit(code=3)
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
 
     # Load config
@@ -106,12 +125,19 @@ def scan(
     _validate_min_score(cfg.min_score, "min_score in odoo-doctor.toml")
     if module:
         cfg.target_modules = [module]
+    if (history_path or badge_path) and cfg.target_modules:
+        typer.echo(
+            "[ERROR] --history/--badge need a full scan; they cannot be combined "
+            "with --module / target_modules (a partial score would corrupt the trend).",
+            err=True,
+        )
+        raise typer.Exit(code=3)
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
 
     if cfg.enable_plugins:
         from odoo_doctor.rules.plugins import load_rule_plugins
 
-        load_rule_plugins()  # imports 3rd-party rule modules — opt-in only
+        load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
 
     # Determine changed files for --diff
     changed_files: set[str] | None = None
@@ -198,6 +224,11 @@ def scan(
         if output_format == "terminal":
             typer.echo(f"Score Delta: {delta_str} (vs base {score_delta})")
 
+    if history_path or badge_path:
+        _write_score_artifacts(
+            scores, config_root, history_path=history_path, badge_path=badge_path
+        )
+
     # Output
     if output_format == "json":
         typer.echo(render_json(diags, scores))
@@ -225,8 +256,18 @@ def scan(
 
     # Fail on severity
     if fail_on:
-        if _has_severity_at_or_above(diags, fail_on):
+        ci_policy = cfg.surfaces.get("ci_failure", SurfaceConfig())
+        gating = filter_for_surface(diags, ci_policy)
+        if _has_severity_at_or_above(gating, fail_on):
             raise typer.Exit(code=1)
+        if output_format == "terminal" and _has_severity_at_or_above(diags, fail_on):
+            typer.echo(
+                f"[INFO] Findings at or above '{fail_on}' did not fail the build: "
+                "[surfaces.ci_failure] only counts "
+                f"{'/'.join(ci_policy.tiers) or 'all tiers'} at "
+                f"{ci_policy.min_confidence or 'any'} confidence.",
+                err=True,
+            )
 
     # Fail on min_score: CLI flag overrides config value
     effective_min = min_score if min_score is not None else cfg.min_score
@@ -280,7 +321,7 @@ def fix_cmd(
     if cfg.enable_plugins:
         from odoo_doctor.rules.plugins import load_rule_plugins
 
-        load_rule_plugins()  # imports 3rd-party rule modules — opt-in only
+        load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
 
     diags, _scores = _collect_scores(
         addon_paths=addons_paths,
@@ -315,25 +356,76 @@ def fix_cmd(
 
 @app.command("rules")
 def rules_cmd(
-    action: str = typer.Argument("list", help="list or explain"),
-    rule_name: Optional[str] = typer.Argument(None, help="Rule name to explain"),
+    action: str = typer.Argument("list", help="list, explain, disable, enable or docs"),
+    rule_name: Optional[str] = typer.Argument(
+        None, help="Rule name (explain, disable, enable)"
+    ),
+    path: str = typer.Option(
+        ".", "--path", help="Directory holding odoo-doctor.toml (list/disable/enable)"
+    ),
+    out: Optional[str] = typer.Option(
+        None, "--out", help="docs: write the page here instead of stdout"
+    ),
+    docs_format: str = typer.Option(
+        "markdown", "--format", help="docs: markdown or html"
+    ),
+    check: bool = typer.Option(
+        False, "--check", help="docs: exit 1 if --out is not up to date"
+    ),
 ) -> None:
-    """List rules or explain a specific rule."""
+    """List, explain, disable or enable rules, or generate the rules docs."""
     if action == "list":
+        disabled = set(load_config(Path(path).resolve()).ignore_rules)
         for meta, _ in default_registry.get_rules():
-            typer.echo(f"  {meta.name:40s} [{meta.category}, {meta.tier}]")
+            mark = "  (disabled)" if meta.name in disabled else ""
+            typer.echo(f"  {meta.name:40s} [{meta.category}, {meta.tier}]{mark}")
     elif action == "explain" and rule_name:
         if rule_name in default_registry:
             meta, _ = default_registry.get(rule_name)
-            typer.echo(f"Rule: {meta.name}")
-            typer.echo(f"Category: {meta.category}")
-            typer.echo(f"Tier: {meta.tier}")
-            typer.echo(f"Severity: {meta.severity}")
-            typer.echo(f"Confidence: {meta.default_confidence}")
-            typer.echo(f"Needs module context: {meta.needs_context}")
-            typer.echo(f"Min Odoo version: {meta.min_version or 'any'}")
+            typer.echo(render_rule_text(meta))
         else:
             typer.echo(f"Unknown rule: {rule_name}")
+    elif action in ("disable", "enable") and rule_name:
+        if rule_name not in default_registry:
+            typer.echo(f"[ERROR] Unknown rule: {rule_name}", err=True)
+            raise typer.Exit(code=3)
+        config_path = Path(path) / "odoo-doctor.toml"
+        changed = set_rule_ignored(config_path, rule_name, action == "disable")
+        verb = "Disabled" if action == "disable" else "Enabled"
+        if changed:
+            typer.echo(f"{verb} {rule_name} in {config_path}")
+        else:
+            typer.echo(f"{rule_name} already {verb.lower()} in {config_path}")
+    elif action == "docs":
+        if docs_format not in ("markdown", "html"):
+            typer.echo("[ERROR] --format must be markdown or html.", err=True)
+            raise typer.Exit(code=3)
+        rendered = render_markdown() if docs_format == "markdown" else render_html()
+        if out is None:
+            typer.echo(rendered, nl=False)
+            return
+        target = Path(out)
+        if check:
+            current = target.read_text(encoding="utf-8") if target.exists() else None
+            if current != rendered:
+                typer.echo(
+                    f"[ERROR] {target} is out of date. "
+                    f"Run: odoo-doctor rules docs --out {target}",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+            typer.echo(f"{target} is up to date.")
+            return
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(rendered, encoding="utf-8")
+        typer.echo(f"Wrote {target}")
+    else:
+        typer.echo(
+            "[ERROR] Usage: rules list | explain <rule> | disable <rule> | "
+            "enable <rule> | docs [--out FILE] [--format markdown|html] [--check]",
+            err=True,
+        )
+        raise typer.Exit(code=3)
 
 
 @app.command()
@@ -402,6 +494,147 @@ def install() -> None:
 
     typer.echo(f"Skills installed to {dest}")
     typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")
+
+
+def _write_score_artifacts(
+    scores: dict[str, object],
+    config_root: Path,
+    *,
+    history_path: str | None,
+    badge_path: str | None,
+) -> None:
+    """Persist --history / --badge outputs. Messages go to stderr."""
+    from odoo_doctor import __version__
+    from odoo_doctor.core.history import append_record, build_record, git_info
+    from odoo_doctor.core.scoring import ScoreResult, project_score
+
+    results = {k: v for k, v in scores.items() if isinstance(v, ScoreResult)}
+    if history_path:
+        info = git_info(config_root)
+        record = build_record(
+            results,
+            tool_version=__version__,
+            commit=info["commit"],
+            branch=info["branch"],
+        )
+        append_record(Path(history_path), record)
+        typer.echo(f"Appended score history to {history_path}", err=True)
+    if badge_path:
+        from odoo_doctor.reporters.badge import (
+            render_badge_endpoint,
+            render_badge_svg,
+        )
+
+        overall = float(project_score(results)["overall"])
+        target = Path(badge_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.suffix.lower() == ".json":
+            target.write_text(render_badge_endpoint(overall), encoding="utf-8")
+        else:
+            target.write_text(render_badge_svg(overall), encoding="utf-8")
+        typer.echo(f"Wrote badge to {badge_path}", err=True)
+
+
+history_app = typer.Typer(help="Score history: trend, regressions, legacy import.")
+app.add_typer(history_app, name="history")
+
+
+@history_app.command("show")
+def history_show(
+    file: str = typer.Argument(..., help="History file (JSONL)"),
+    last: int = typer.Option(10, "--last", help="Show the last N records (0 = all)"),
+    max_drop: Optional[float] = typer.Option(
+        None,
+        "--max-drop",
+        help="Exit 2 if the newest score dropped by more than this many points",
+    ),
+) -> None:
+    """Show the score trend and flag regressions vs the previous comparable scan."""
+    from odoo_doctor.core.history import detect_regressions, load_history, tail
+
+    records, skipped = load_history(Path(file))
+    if skipped:
+        typer.echo(f"[WARN] skipped {skipped} unreadable line(s) in {file}", err=True)
+    if not records:
+        typer.echo(f"No history records in {file}.")
+        return
+
+    typer.echo(f"{'when (UTC)':26s}{'branch':16s}{'commit':10s}{'score':>7s}  schema")
+    for r in tail(records, last):
+        note = "*" if r.get("score_schema_inferred") else ""
+        typer.echo(
+            f"{str(r.get('timestamp'))[:25]:26s}"
+            f"{str(r.get('branch') or '-')[:15]:16s}"
+            f"{str(r.get('commit') or '-')[:8]:10s}"
+            f"{r['project']['overall']:>7.1f}  "
+            f"v{r.get('score_schema_version')}{note} {r['project'].get('label', '')}"
+        )
+    if any(r.get("score_schema_inferred") for r in tail(records, last)):
+        typer.echo("* schema inferred from a pre-0.4.0 report (not comparable to v2)")
+
+    threshold = max_drop if max_drop is not None else 0.0
+    regressions = detect_regressions(records, threshold)
+    for reg in regressions:
+        typer.echo(
+            f"[REGRESSION] {reg['scope']}: {reg['previous']:.1f} -> "
+            f"{reg['latest']:.1f} (-{reg['drop']:.1f})",
+            err=True,
+        )
+    if regressions and max_drop is not None:
+        raise typer.Exit(code=2)
+
+
+@history_app.command("import")
+def history_import(
+    file: str = typer.Argument(..., help="History file to append to (JSONL)"),
+    reports: list[str] = typer.Argument(..., help="scan --json report file(s)"),
+    commit: Optional[str] = typer.Option(None, "--commit"),
+    branch: Optional[str] = typer.Option(None, "--branch"),
+    timestamp: Optional[str] = typer.Option(
+        None,
+        "--timestamp",
+        help="ISO-8601 time to assign (default: each report file's mtime)",
+    ),
+) -> None:
+    """Import `scan --json` reports of any version (incl. <= 0.3.0) into history."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    from odoo_doctor.core.history import append_record, normalize_report, to_utc_iso
+
+    try:
+        forced_ts = to_utc_iso(timestamp) if timestamp else None
+    except ValueError:
+        typer.echo(f"[ERROR] invalid --timestamp: {timestamp!r}", err=True)
+        raise typer.Exit(code=3)
+
+    imported = 0
+    for report_file in reports:
+        rp = Path(report_file)
+        try:
+            data = _json.loads(rp.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            typer.echo(f"[WARN] {report_file}: unreadable ({exc})", err=True)
+            continue
+        ts = forced_ts or datetime.fromtimestamp(
+            rp.stat().st_mtime, tz=timezone.utc
+        ).isoformat(timespec="seconds")
+        record = (
+            normalize_report(data, commit=commit, branch=branch, timestamp=ts)
+            if isinstance(data, dict)
+            else None
+        )
+        if record is None:
+            typer.echo(f"[WARN] {report_file}: no scored modules, skipped", err=True)
+            continue
+        append_record(Path(file), record)
+        imported += 1
+        inferred = (
+            " (schema inferred as v1)" if record.get("score_schema_inferred") else ""
+        )
+        typer.echo(f"Imported {report_file}: {record['project']['overall']}{inferred}")
+    if imported == 0:
+        raise typer.Exit(code=3)
 
 
 def _scan_base_ref(

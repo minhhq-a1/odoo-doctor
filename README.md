@@ -55,8 +55,14 @@ odoo-doctor scan . --diff main --json
 | `deprecated-api-usage` | P1 | Upgrade Safety |
 | `removed-model-still-referenced` | P1 | Upgrade Safety |
 | `asset-bundle-missing` | P2 | Frontend |
+| `expensive-nonstored-compute` | P2 | Performance |
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
+
+The full, generated reference (30 rules, with before/after examples) is in
+[`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
+with `odoo-doctor rules disable <rule-name>`; write your own with the stable
+[plugin API](docs/custom-rules.md).
 
 ---
 
@@ -135,7 +141,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.4.0
+  uses: minhhq-a1/odoo-doctor@v0.5.0
   with:
     fail-on: warning
     min-score: 75
@@ -174,6 +180,29 @@ odoo-doctor scan . --baseline .odoo-doctor-baseline.json --fail-on warning
 - **`--score-delta <base-ref>`**: Opt-in PR score delta. It does a worktree-isolated second scan and needs git history (`fetch-depth: 0` in Actions).
 - **Sticky PR comment**: Posted/updated via `gh` when `--format github` runs in a PR with a valid `GH_TOKEN`. Idempotent via a hidden marker.
 
+### CI failure policy
+
+`--fail-on <severity>` only counts findings admitted by `[surfaces.ci_failure]`,
+which defaults to **P0/P1 at high confidence**: style/advisory (P2/P3) and
+low-confidence findings are reported but never fail a build. Adjust it:
+
+```toml
+[surfaces.ci_failure]
+tiers = ["P0", "P1", "P2"]   # [] = every tier
+min_confidence = "high"
+```
+
+### Score history & badge
+
+Track the score over time and publish a badge without any server (see
+[`docs/score-history.md`](docs/score-history.md)):
+
+```bash
+odoo-doctor scan . --history .odoo-doctor/history.jsonl --badge badge.svg
+odoo-doctor history show .odoo-doctor/history.jsonl --max-drop 3   # exit 2 on regression
+odoo-doctor history import history.jsonl old-report.json           # pre-0.4.0 reports
+```
+
 ### pre-commit
 
 ```yaml
@@ -210,7 +239,7 @@ odoo-doctor scan . --diff main --json
 odoo-doctor scan . --diff main --json
 ```
 
-Use `odoo-doctor rules explain <rule-name>` to understand any finding.
+Use `odoo-doctor rules explain <rule-name>` to understand any finding (description, why, fix, examples and a docs link).
 
 ---
 
@@ -259,6 +288,8 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `2` | One or more modules score below `--min-score` |
 | `3` | Invalid argument, out-of-range `--min-score`, or git/ref failure |
 
+`odoo-doctor history show --max-drop N` also exits `2` when the score regressed.
+
 ---
 
 ## Development
@@ -267,6 +298,6 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 git clone https://github.com/minhhq-a1/odoo-doctor
 cd odoo-doctor
 pip install -e ".[dev]"
-pytest                    # 414 test cases
+pytest                    # 492 test cases
 pytest --cov=odoo_doctor  # with coverage
 ```

@@ -72,6 +72,8 @@ def render_terminal(
             )
             console.print(f"      {d.message}")
             console.print(f"      [dim]{d.help}[/dim]")
+            if d.url:
+                console.print(f"      [dim]docs: {d.url}[/dim]")
 
     # Top findings across project (multi-module only)
     if len(scores) > 1 and diagnostics:

@@ -7,7 +7,8 @@ import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-from odoo_doctor.core.scoring import score_label
+from odoo_doctor import __version__
+from odoo_doctor.core.scoring import SCORE_SCHEMA_VERSION, project_score
 from odoo_doctor.rules.registry import default_registry
 
 # Importing the rule modules triggers their @rule registration so the registry
@@ -55,10 +56,10 @@ def render_json(
     # Using version tracking for tooling compatibility
     return json.dumps(
         {
-            "version": "0.4.0",
+            "version": __version__,
             "schema_version": "1.0",
-            "score_schema_version": 2,
-            "project_score": _project_score(scores),
+            "score_schema_version": SCORE_SCHEMA_VERSION,
+            "project_score": project_score(scores),
             "top_findings": [
                 {
                     "module": d.module,
@@ -78,21 +79,6 @@ def render_json(
         },
         indent=2,
     )
-
-
-def _project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | int]:
-    """Aggregate module scores for project-level reporting."""
-    module_count = len(scores)
-    if module_count == 0:
-        overall = 100.0
-    else:
-        overall = sum(score.overall for score in scores.values()) / module_count
-    overall = round(overall, 1)
-    return {
-        "overall": overall,
-        "label": score_label(overall),
-        "module_count": module_count,
-    }
 
 
 def _is_fixable(rule_name: str) -> bool:
