@@ -115,7 +115,7 @@ def scan(
     if cfg.enable_plugins:
         from odoo_doctor.rules.plugins import load_rule_plugins
 
-        load_rule_plugins()  # imports 3rd-party rule modules — opt-in only
+        load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
 
     # Determine changed files for --diff
     changed_files: set[str] | None = None
@@ -294,7 +294,7 @@ def fix_cmd(
     if cfg.enable_plugins:
         from odoo_doctor.rules.plugins import load_rule_plugins
 
-        load_rule_plugins()  # imports 3rd-party rule modules — opt-in only
+        load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
 
     diags, _scores = _collect_scores(
         addon_paths=addons_paths,
