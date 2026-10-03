@@ -9,10 +9,11 @@ from typing import Optional
 
 import typer
 
-from odoo_doctor.core.config import OdooDoctorConfig, load_config
+from odoo_doctor.core.config import OdooDoctorConfig, SurfaceConfig, load_config
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
+from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
 from odoo_doctor.reporters.terminal import render_terminal
 
@@ -36,6 +37,7 @@ import odoo_doctor.rules.performance.search_in_loop  # noqa: F401
 import odoo_doctor.rules.performance.create_write_in_loop  # noqa: F401
 import odoo_doctor.rules.performance.n_plus_one_read  # noqa: F401
 import odoo_doctor.rules.performance.unbounded_search  # noqa: F401
+import odoo_doctor.rules.performance.expensive_nonstored_compute  # noqa: F401
 import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
 import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
 import odoo_doctor.rules.correctness.field_no_string_on_required  # noqa: F401
@@ -227,8 +229,18 @@ def scan(
 
     # Fail on severity
     if fail_on:
-        if _has_severity_at_or_above(diags, fail_on):
+        ci_policy = cfg.surfaces.get("ci_failure", SurfaceConfig())
+        gating = filter_for_surface(diags, ci_policy)
+        if _has_severity_at_or_above(gating, fail_on):
             raise typer.Exit(code=1)
+        if output_format == "terminal" and _has_severity_at_or_above(diags, fail_on):
+            typer.echo(
+                f"[INFO] Findings at or above '{fail_on}' did not fail the build: "
+                "[surfaces.ci_failure] only counts "
+                f"{'/'.join(ci_policy.tiers) or 'all tiers'} at "
+                f"{ci_policy.min_confidence or 'any'} confidence.",
+                err=True,
+            )
 
     # Fail on min_score: CLI flag overrides config value
     effective_min = min_score if min_score is not None else cfg.min_score

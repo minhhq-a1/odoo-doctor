@@ -9,7 +9,8 @@ def filter_for_surface(
 ) -> list[Diagnostic]:
     """Filter diagnostics according to surface configuration.
 
-    Drops diagnostics below `min_confidence` and outside `categories` (if non-empty).
+    Drops diagnostics below `min_confidence`, outside `categories` and outside
+    `tiers` (each ignored when empty).
     Confidence ranks: high > medium > low
     """
     conf_ranks = {"low": 1, "medium": 2, "high": 3}
@@ -28,6 +29,10 @@ def filter_for_surface(
 
         # Check categories
         if surface_cfg.categories and d.category not in surface_cfg.categories:
+            continue
+
+        # Check tiers
+        if surface_cfg.tiers and d.tier not in surface_cfg.tiers:
             continue
 
         filtered.append(d)

@@ -205,6 +205,29 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="records = self.env['res.partner'].search(\n"
         "    [('country_id', '=', cid)], limit=100\n)",
     ),
+    "expensive-nonstored-compute": RuleDoc(
+        detects="Computed fields that are not stored (`store=True` missing) "
+        "whose compute method runs `search`, `search_count`, `search_read` or "
+        "`read_group` on an ORM object.",
+        why="A non-stored field is recomputed on every read, including list "
+        "views, exports and `search_read`, so each display pays for the query.",
+        fix="Store the field with a complete `@api.depends`, or move the "
+        "aggregate into a stored field or a `read_group` at the call site.",
+        bad="total_orders = fields.Integer(compute='_compute_total_orders')\n\n"
+        "def _compute_total_orders(self):\n"
+        "    for rec in self:\n"
+        "        rec.total_orders = self.env['sale.order'].search_count(\n"
+        "            [('partner_id', '=', rec.id)]\n"
+        "        )",
+        good="total_orders = fields.Integer(\n"
+        "    compute='_compute_total_orders', store=True\n)\n\n"
+        "@api.depends('order_ids')\n"
+        "def _compute_total_orders(self):\n"
+        "    for rec in self:\n"
+        "        rec.total_orders = len(rec.order_ids)",
+        notes="Medium confidence: does not affect the score. Complements "
+        "`search-in-loop`, which flags the query-per-record pattern itself.",
+    ),
     # ----------------------------------------------------------- Module Hygiene
     "manifest-missing-required-fields": RuleDoc(
         detects="`__manifest__.py` missing one of `name`, `version`, `depends`, "

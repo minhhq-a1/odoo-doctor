@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 29 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 30 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -23,6 +23,7 @@ Odoo Doctor ships 29 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [n-plus-one-read](#n-plus-one-read) | P1 | Performance | warning | low |  |
 | [search-in-loop](#search-in-loop) | P1 | Performance | error | high |  |
 | [write-in-loop](#write-in-loop) | P1 | Performance | error | high |  |
+| [expensive-nonstored-compute](#expensive-nonstored-compute) | P2 | Performance | warning | medium |  |
 | [unbounded-search](#unbounded-search) | P2 | Performance | warning | high |  |
 | [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | high |  |
 | [data-noupdate-risk](#data-noupdate-risk) | P2 | Data Integrity | warning | high |  |
@@ -387,6 +388,43 @@ Good:
 
 ```python
 records.write({'state': 'done'})
+```
+
+### expensive-nonstored-compute
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: Computed fields that are not stored (`store=True` missing) whose compute method runs `search`, `search_count`, `search_read` or `read_group` on an ORM object.
+
+**Why**: A non-stored field is recomputed on every read, including list views, exports and `search_read`, so each display pays for the query.
+
+**Fix**: Store the field with a complete `@api.depends`, or move the aggregate into a stored field or a `read_group` at the call site.
+
+**Note**: Medium confidence: does not affect the score. Complements `search-in-loop`, which flags the query-per-record pattern itself.
+
+Bad:
+
+```python
+total_orders = fields.Integer(compute='_compute_total_orders')
+
+def _compute_total_orders(self):
+    for rec in self:
+        rec.total_orders = self.env['sale.order'].search_count(
+            [('partner_id', '=', rec.id)]
+        )
+```
+
+Good:
+
+```python
+total_orders = fields.Integer(
+    compute='_compute_total_orders', store=True
+)
+
+@api.depends('order_ids')
+def _compute_total_orders(self):
+    for rec in self:
+        rec.total_orders = len(rec.order_ids)
 ```
 
 ### unbounded-search
