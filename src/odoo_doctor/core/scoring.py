@@ -11,6 +11,11 @@ from odoo_doctor.core.diagnostics import CATEGORIES, TIER_IMPACT, Diagnostic
 if TYPE_CHECKING:
     pass
 
+# Bumped whenever the scoring formula changes in a way that makes scores from
+# different versions incomparable. 1 = <=0.3.0 (all weights 1.0), 2 = 0.4.0+
+# (default per-category weights).
+SCORE_SCHEMA_VERSION = 2
+
 DEFAULT_CATEGORY_WEIGHTS: dict[str, float] = {
     "Security": 1.5,
     "Correctness": 1.5,
@@ -118,3 +123,18 @@ def score_diagnostics(
     )
     result.label = result.compute_label()
     return result
+
+
+def project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | int]:
+    """Aggregate module scores (plain mean) for project-level reporting."""
+    module_count = len(scores)
+    if module_count == 0:
+        overall = 100.0
+    else:
+        overall = sum(score.overall for score in scores.values()) / module_count
+    overall = round(overall, 1)
+    return {
+        "overall": overall,
+        "label": score_label(overall),
+        "module_count": module_count,
+    }

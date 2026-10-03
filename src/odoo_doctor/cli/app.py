@@ -98,8 +98,23 @@ def scan(
     write_baseline_path: Optional[str] = typer.Option(
         None, "--write-baseline", help="Write current findings as a baseline and exit 0"
     ),
+    history_path: Optional[str] = typer.Option(
+        None, "--history", help="Append this scan's scores to a JSONL history file"
+    ),
+    badge_path: Optional[str] = typer.Option(
+        None,
+        "--badge",
+        help="Write a score badge: *.svg (image) or *.json (shields.io endpoint)",
+    ),
 ) -> None:
     """Scan Odoo addons and report health score."""
+    if (history_path or badge_path) and diff:
+        typer.echo(
+            "[ERROR] --history/--badge need a full scan; they cannot be combined "
+            "with --diff (partial scores would corrupt the trend).",
+            err=True,
+        )
+        raise typer.Exit(code=3)
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
 
     # Load config
@@ -201,6 +216,11 @@ def scan(
         delta_str = _compute_aggregate_delta(scores, base_scores)
         if output_format == "terminal":
             typer.echo(f"Score Delta: {delta_str} (vs base {score_delta})")
+
+    if history_path or badge_path:
+        _write_score_artifacts(
+            scores, config_root, history_path=history_path, badge_path=badge_path
+        )
 
     # Output
     if output_format == "json":
@@ -467,6 +487,147 @@ def install() -> None:
 
     typer.echo(f"Skills installed to {dest}")
     typer.echo("Run 'odoo-doctor scan --diff --json' from your agent.")
+
+
+def _write_score_artifacts(
+    scores: dict[str, object],
+    config_root: Path,
+    *,
+    history_path: str | None,
+    badge_path: str | None,
+) -> None:
+    """Persist --history / --badge outputs. Messages go to stderr."""
+    from odoo_doctor import __version__
+    from odoo_doctor.core.history import append_record, build_record, git_info
+    from odoo_doctor.core.scoring import ScoreResult, project_score
+
+    results = {k: v for k, v in scores.items() if isinstance(v, ScoreResult)}
+    if history_path:
+        info = git_info(config_root)
+        record = build_record(
+            results,
+            tool_version=__version__,
+            commit=info["commit"],
+            branch=info["branch"],
+        )
+        append_record(Path(history_path), record)
+        typer.echo(f"Appended score history to {history_path}", err=True)
+    if badge_path:
+        from odoo_doctor.reporters.badge import (
+            render_badge_endpoint,
+            render_badge_svg,
+        )
+
+        overall = float(project_score(results)["overall"])
+        target = Path(badge_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.suffix.lower() == ".json":
+            target.write_text(render_badge_endpoint(overall), encoding="utf-8")
+        else:
+            target.write_text(render_badge_svg(overall), encoding="utf-8")
+        typer.echo(f"Wrote badge to {badge_path}", err=True)
+
+
+history_app = typer.Typer(help="Score history: trend, regressions, legacy import.")
+app.add_typer(history_app, name="history")
+
+
+@history_app.command("show")
+def history_show(
+    file: str = typer.Argument(..., help="History file (JSONL)"),
+    last: int = typer.Option(10, "--last", help="Show the last N records (0 = all)"),
+    max_drop: Optional[float] = typer.Option(
+        None,
+        "--max-drop",
+        help="Exit 2 if the newest score dropped by more than this many points",
+    ),
+) -> None:
+    """Show the score trend and flag regressions vs the previous comparable scan."""
+    from odoo_doctor.core.history import detect_regressions, load_history, tail
+
+    records, skipped = load_history(Path(file))
+    if skipped:
+        typer.echo(f"[WARN] skipped {skipped} unreadable line(s) in {file}", err=True)
+    if not records:
+        typer.echo(f"No history records in {file}.")
+        return
+
+    typer.echo(f"{'when (UTC)':26s}{'branch':16s}{'commit':10s}{'score':>7s}  schema")
+    for r in tail(records, last):
+        note = "*" if r.get("score_schema_inferred") else ""
+        typer.echo(
+            f"{str(r.get('timestamp'))[:25]:26s}"
+            f"{str(r.get('branch') or '-')[:15]:16s}"
+            f"{str(r.get('commit') or '-')[:8]:10s}"
+            f"{r['project']['overall']:>7.1f}  "
+            f"v{r.get('score_schema_version')}{note} {r['project'].get('label', '')}"
+        )
+    if any(r.get("score_schema_inferred") for r in tail(records, last)):
+        typer.echo("* schema inferred from a pre-0.4.0 report (not comparable to v2)")
+
+    threshold = max_drop if max_drop is not None else 0.0
+    regressions = detect_regressions(records, threshold)
+    for reg in regressions:
+        typer.echo(
+            f"[REGRESSION] {reg['scope']}: {reg['previous']:.1f} -> "
+            f"{reg['latest']:.1f} (-{reg['drop']:.1f})",
+            err=True,
+        )
+    if regressions and max_drop is not None:
+        raise typer.Exit(code=2)
+
+
+@history_app.command("import")
+def history_import(
+    file: str = typer.Argument(..., help="History file to append to (JSONL)"),
+    reports: list[str] = typer.Argument(..., help="scan --json report file(s)"),
+    commit: Optional[str] = typer.Option(None, "--commit"),
+    branch: Optional[str] = typer.Option(None, "--branch"),
+    timestamp: Optional[str] = typer.Option(
+        None,
+        "--timestamp",
+        help="ISO-8601 time to assign (default: each report file's mtime)",
+    ),
+) -> None:
+    """Import `scan --json` reports of any version (incl. <= 0.3.0) into history."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    from odoo_doctor.core.history import append_record, normalize_report, to_utc_iso
+
+    try:
+        forced_ts = to_utc_iso(timestamp) if timestamp else None
+    except ValueError:
+        typer.echo(f"[ERROR] invalid --timestamp: {timestamp!r}", err=True)
+        raise typer.Exit(code=3)
+
+    imported = 0
+    for report_file in reports:
+        rp = Path(report_file)
+        try:
+            data = _json.loads(rp.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            typer.echo(f"[WARN] {report_file}: unreadable ({exc})", err=True)
+            continue
+        ts = forced_ts or datetime.fromtimestamp(
+            rp.stat().st_mtime, tz=timezone.utc
+        ).isoformat(timespec="seconds")
+        record = (
+            normalize_report(data, commit=commit, branch=branch, timestamp=ts)
+            if isinstance(data, dict)
+            else None
+        )
+        if record is None:
+            typer.echo(f"[WARN] {report_file}: no scored modules, skipped", err=True)
+            continue
+        append_record(Path(file), record)
+        imported += 1
+        inferred = (
+            " (schema inferred as v1)" if record.get("score_schema_inferred") else ""
+        )
+        typer.echo(f"Imported {report_file}: {record['project']['overall']}{inferred}")
+    if imported == 0:
+        raise typer.Exit(code=3)
 
 
 def _scan_base_ref(
