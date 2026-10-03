@@ -125,6 +125,13 @@ def scan(
     _validate_min_score(cfg.min_score, "min_score in odoo-doctor.toml")
     if module:
         cfg.target_modules = [module]
+    if (history_path or badge_path) and cfg.target_modules:
+        typer.echo(
+            "[ERROR] --history/--badge need a full scan; they cannot be combined "
+            "with --module / target_modules (a partial score would corrupt the trend).",
+            err=True,
+        )
+        raise typer.Exit(code=3)
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
 
     if cfg.enable_plugins:

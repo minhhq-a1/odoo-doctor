@@ -238,10 +238,13 @@ def detect_regressions(records: list[dict], max_drop: float = 0.0) -> list[dict]
     pairs: list[tuple[str, float, float]] = [
         ("project", previous["project"]["overall"], latest["project"]["overall"])
     ]
+    previous_modules = previous.get("modules", {})
     for name, mod in latest.get("modules", {}).items():
-        old = previous.get("modules", {}).get(name)
-        if old is not None:
-            pairs.append((name, old["overall"], mod["overall"]))
+        old = previous_modules.get(name)
+        old_val = old.get("overall") if isinstance(old, dict) else None
+        new_val = mod.get("overall") if isinstance(mod, dict) else None
+        if _num(old_val) and _num(new_val):
+            pairs.append((name, old_val, new_val))
 
     found = []
     for scope, old, new in pairs:

@@ -165,3 +165,12 @@ def test_comparison_stays_within_the_same_branch():
     ]
     found = detect_regressions(records)
     assert [r["drop"] for r in found] == [5.0]
+
+
+def test_malformed_module_entries_are_ignored_not_fatal():
+    prev = _rec("2026-01-01T00:00:00+00:00", 90)
+    prev["modules"] = {"a": {"overall": 90}, "b": "garbage", "c": {}}
+    last = _rec("2026-01-02T00:00:00+00:00", 80)
+    last["modules"] = {"a": {"overall": 70}, "b": {"overall": 1}, "c": None}
+    found = {r["scope"] for r in detect_regressions([prev, last])}
+    assert found == {"project", "a"}

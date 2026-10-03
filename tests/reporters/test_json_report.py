@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from odoo_doctor import __version__
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.scoring import score_diagnostics
 from odoo_doctor.reporters.json_report import render_json
@@ -47,4 +48,4 @@ def test_json_includes_score_schema_version():
     }
     output = json.loads(render_json([], scores))
     assert output["score_schema_version"] == 2
-    assert output["version"] == "0.4.0"
+    assert output["version"] == __version__

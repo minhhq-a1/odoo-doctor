@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, performance issues, and integrates with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 Key features:
-- 29 native static analysis rules across 8 categories (Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend)
+- 30 native static analysis rules across 8 categories (Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend)
 - Confidence-aware scoring (only HIGH confidence findings count toward scores)
 - Per-category scoring blended into an overall score: `0.4 × min(categories) + 0.6 × avg(categories)`
 - Config-driven rule filtering via `odoo-doctor.toml`
@@ -28,7 +28,7 @@ pip install ruff               # Code formatter/linter (required for CI)
 
 ### Testing
 ```bash
-pytest                         # Run all tests (~72 test files, 414 cases)
+pytest                         # Run all tests (~81 test files, 492 cases)
 pytest tests/test_file.py      # Run a specific test file
 pytest tests/test_file.py::TestClass::test_method  # Run a specific test
 pytest --cov=odoo_doctor      # Coverage report
@@ -55,7 +55,11 @@ odoo-doctor scan . --write-baseline baseline.json  # Save findings as baseline
 odoo-doctor fix .              # Apply deterministic fixes
 odoo-doctor fix . --fix-dry-run  # Preview fixes as unified diff
 odoo-doctor rules list         # List all rules
-odoo-doctor rules explain rule-name  # Explain a specific rule
+odoo-doctor rules explain rule-name  # Explain a specific rule (generated from rule_docs.py)
+odoo-doctor rules disable rule-name  # Add to [ignore] rules in odoo-doctor.toml (enable reverses)
+odoo-doctor rules docs --out docs/rules.md  # Regenerate the rules reference (--check to verify)
+odoo-doctor scan . --history h.jsonl --badge badge.svg  # Record score history / write badge
+odoo-doctor history show h.jsonl --max-drop 3  # Trend + regression gate (exit 2)
 odoo-doctor init               # Generate odoo-doctor.toml
 odoo-doctor install            # Install agent skills
 ```
@@ -75,19 +79,22 @@ The tool uses a **two-phase architecture**: a **scanner** (`core/scanner.py`) ha
 - `fixer.py`: Fixer registry and driver for `odoo-doctor fix`. Fixers are `(diagnostic, file_text) -> new_text | None` callables. Must be deterministic and idempotent.
 - `baseline.py`: Baseline mode — stores finding identities (rule + module + path + line snippet) as JSON, suppresses pre-existing findings on subsequent scans.
 - `cache.py`: Project-level incremental scan cache. All-or-nothing invalidation keyed by a fingerprint of all scanned files, config, version, ruleset, and tool version.
-- `surfaces.py`: Output formatting configuration for GitHub Actions annotations and PR comments.
+- `surfaces.py`: Surface filtering (confidence, categories, tiers) for PR comments and the CI failure policy (`[surfaces.ci_failure]`, default P0/P1 high-confidence, applied to `--fail-on`).
+- `history.py`: Score history (JSONL), legacy report normalization (pre-0.4.0 → schema 1), regression detection. `config_edit.py`: comment-preserving `[ignore] rules` edits.
 - `source.py`: Source code reading and encoding handling.
 
-**`rules/` — Rule Engine (29 rules)**
+**`rules/` — Rule Engine (30 rules)**
 
 Rules are organized into category subdirectories:
 - `registry.py`: `@rule()` decorator and `RuleRegistry` class. Rules auto-register on import.
 - `suppression.py`: Inline suppression scanner for Python and XML (`odoo-doctor: disable=rule-name`).
-- `plugins.py`: Third-party plugin discovery via `entry_points`.
+- `plugins.py`: Third-party plugin discovery via `entry_points` (GA API v1): allowlist, version check, rollback of failing plugins.
+- `../plugin_api.py`: the only stable import surface for plugins (`rule`, `Diagnostic`, `ModuleContext`, ...).
+- `rule_docs.py`: single source of rule documentation (`RULE_DOCS`) and `rule_doc_url()`; `docs_gen.py` renders `docs/rules.md`, HTML and `rules explain`. **Never hand-edit `docs/rules.md`** — a test enforces it is regenerated.
 - `_ast_helpers.py`: Shared AST utilities for rule implementations.
 - `security/` (7 rules): `eval_usage`, `missing_access_csv`, `raw_sql_interpolation`, `public_controller_sudo`, `record_rule_without_domain`, `sudo_without_comment`, `unknown_model_in_access_csv`
 - `correctness/` (4 rules): `compute_missing_depends`, `field_no_string_on_required`, `missing_translation`, `override_missing_super`
-- `performance/` (5 rules): `create_write_in_loop` (registers both `create-in-loop` and `write-in-loop`), `n_plus_one_read`, `search_in_loop`, `unbounded_search`
+- `performance/` (6 rules): `create_write_in_loop` (registers both `create-in-loop` and `write-in-loop`), `n_plus_one_read`, `search_in_loop`, `unbounded_search`, `expensive_nonstored_compute`
 - `xml/` (5 rules): `button_method_not_found`, `duplicate_xml_id`, `missing_xml_ref`, `orphan_view`, `view_field_not_in_model`
 - `manifest/` (3 rules + fixers): `data_order_risk`, `missing_dependency`, `missing_required_fields`, plus `fixers.py` for auto-fix support
 - `data_integrity/` (2 rules): `missing_ondelete`, `data_noupdate_risk`
@@ -122,10 +129,11 @@ Rules are organized into category subdirectories:
 - `terminal.py`: Rich-formatted terminal table output.
 - `json_report.py`: JSON output with findings, scores, and tool version.
 - `github_annotations.py`: GitHub Actions check annotations format.
-- `sarif.py`: SARIF (Static Analysis Results Interchange Format) output.
+- `sarif.py`: SARIF (Static Analysis Results Interchange Format) output (rule descriptors carry `helpUri`).
+- `badge.py`: Score badge as SVG or shields.io endpoint JSON.
 - `pr_comment.py`: GitHub PR comment formatting.
 
-**`cli/app.py`** — CLI entry point using Typer. Commands: `scan`, `fix`, `rules` (subcommands: `list`, `explain`), `init`, `install`.
+**`cli/app.py`** — CLI entry point using Typer. Commands: `scan`, `fix`, `rules` (actions: `list`, `explain`, `disable`, `enable`, `docs`), `history` (`show`, `import`), `init`, `install`.
 
 **`skills/`** — Agent-friendly SKILL.md documentation for AI coding assistants.
 - `odoo-doctor/SKILL.md`: Scan & fix skill.
@@ -171,7 +179,7 @@ odoo-doctor scan .
 ## Testing Patterns
 
 - Test files are in `tests/` organized into subdirectories mirroring `src/`: `tests/rules/`, `tests/core/`, `tests/parsers/`, `tests/cli/`, `tests/graph/`, `tests/discovery/`, `tests/adapters/`, `tests/reporters/`, `tests/integration/`.
-- 72 test files with 414 test methods.
+- 81 test files with 492 test cases.
 - Each rule has a corresponding test file exercising positive/negative cases.
 - Fixtures use temporary addon directories with manifests and Python/XML stubs.
 - The `ModuleContext` object is the main test input — assembled from parsed files, then rules are run against it.
@@ -253,14 +261,14 @@ Config files are searched upward from the scan directory (max 20 levels), with c
    ```
 
 2. Create tests in `tests/rules/test_my_rule.py`.
-3. Rule auto-registers via the `@rule()` decorator — no manual registration needed.
+3. Import the module in `cli/app.py` (that import is what registers the rule) and add its `RuleDoc` entry to `rules/rule_docs.py`, then run `odoo-doctor rules docs --out docs/rules.md`.
 
 ### Cut a New Release
 
-1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/reporters/json_report.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`.
+1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py` (the JSON report reads it; `tests/test_version.py` checks they agree and that `CHANGELOG.md` has the entry), `README.md`, `CLAUDE.md`, and `AGENTS.md`. Regenerate docs with `odoo-doctor rules docs --out docs/rules.md` if rules changed.
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag v0.4.0 && git push origin v0.4.0`).
+4. Create and push a new Git tag (e.g., `git tag v0.5.0 && git push origin v0.5.0`).
 5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
 
 ### Run a Single Test
@@ -297,7 +305,7 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 
 - **GitHub Actions CI**: `.github/workflows/ci.yml` — runs on push/PR to `main`. Matrix: Python 3.10, 3.11, 3.12. Steps: install deps, pytest, ruff check, ruff format check.
 - **PyPI Publishing**: `.github/workflows/publish.yml` — triggers on GitHub Release. Uses Trusted Publishing (OIDC) to publish wheel to PyPI.
-- **GitHub Action**: `action.yml` at repo root — published as `minhhq-a1/odoo-doctor@v0.4.0`. Inputs: `odoo-version`, `fail-on`, `min-score`, `paths`, `diff-base`, `advisory`, `pr-comment`.
+- **GitHub Action**: `action.yml` at repo root — published as `minhhq-a1/odoo-doctor@v0.5.0`. Inputs: `odoo-version`, `fail-on`, `min-score`, `paths`, `diff-base`, `advisory`, `pr-comment`.
 - **Example workflow**: `.github/workflows/odoo-doctor.example.yml` demonstrates usage of the published action.
 - **pre-commit**: Hook defined in `.pre-commit-hooks.yaml` runs `odoo-doctor scan --diff HEAD --fail-on error` on Python/XML files.
 - **Exit Codes**: `0` = clean, `1` = findings at severity threshold, `2` = score below min, `3` = invalid args/git failure.
@@ -314,15 +322,16 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 | `src/odoo_doctor/core/fixer.py` | Fixer registry for `odoo-doctor fix` |
 | `src/odoo_doctor/core/baseline.py` | Baseline mode finding identity & suppression |
 | `src/odoo_doctor/core/cache.py` | Incremental scan cache |
-| `src/odoo_doctor/rules/` | Rule implementations (29 rules in 8 category dirs) |
+| `src/odoo_doctor/rules/` | Rule implementations (30 rules in 8 category dirs) |
 | `src/odoo_doctor/rules/registry.py` | `@rule()` decorator and `RuleRegistry` |
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/graph/module_context.py` | Per-addon context + `build_project_graph()` |
 | `src/odoo_doctor/cli/app.py` | CLI entry point (scan, fix, rules, init, install) |
-| `tests/` | Test suite (72 files, 414 test cases) |
+| `tests/` | Test suite (81 files, 492 test cases) |
 | `action.yml` | GitHub Actions marketplace action definition |
 | `odoo-doctor.toml` | User configuration (created via `odoo-doctor init`) |
-| `docs/rules.md` | Rule documentation |
+| `docs/rules.md` | Rule reference (generated from `rules/rule_docs.py`) |
+| `docs/score-history.md` | Score history, trend, legacy import, badge |
 | `docs/custom-rules.md` | Custom rule / plugin documentation |
 | `docs/stubs.md` | Stub generation documentation |
 
@@ -334,4 +343,4 @@ Generated JSON lands in `src/odoo_doctor/graph/stubs/data/<version>.json`. Pre-b
 - **Build System**: Hatchling. Stub JSON data files are included in wheels via `hatch.build`.
 - **Code Style**: Ruff enforced in CI — all files must pass `ruff format` and `ruff check`.
 - **Pre-commit**: Hook runs `odoo-doctor scan --diff HEAD --fail-on error` to catch issues early.
-- **Version**: Current version is `0.4.0`. Appears in `pyproject.toml` and `reporters/json_report.py`.
+- **Version**: Current version is `0.5.0`. Single source in code: `src/odoo_doctor/__init__.py` (must match `pyproject.toml`).

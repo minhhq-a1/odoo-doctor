@@ -127,3 +127,22 @@ def test_import_rejects_bad_timestamp(tmp_path: Path):
 def test_show_on_missing_file(tmp_path: Path):
     result = runner.invoke(app, ["history", "show", str(tmp_path / "none.jsonl")])
     assert result.exit_code == 0 and "No history records" in result.output
+
+
+def test_history_refuses_partial_module_scans(tmp_path: Path):
+    addons = _addon(tmp_path, bad=False)
+    hist = tmp_path / "h.jsonl"
+    via_flag = runner.invoke(
+        app, ["scan", str(addons), "--module", "m", "--history", str(hist)]
+    )
+    assert via_flag.exit_code == 3 and not hist.exists()
+    with (tmp_path / "odoo-doctor.toml").open("a") as fh:
+        fh.write("\n")
+    cfg = (tmp_path / "odoo-doctor.toml").read_text()
+    (tmp_path / "odoo-doctor.toml").write_text(
+        cfg.replace("[odoo-doctor]\n", '[odoo-doctor]\ntarget_modules = ["m"]\n')
+    )
+    via_cfg = runner.invoke(
+        app, ["scan", str(addons), "--badge", str(tmp_path / "b.svg")]
+    )
+    assert via_cfg.exit_code == 3 and not (tmp_path / "b.svg").exists()

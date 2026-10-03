@@ -13,7 +13,7 @@ Appends one JSON line per scan (`history_schema_version`, `score_schema_version`
 `tool_version`, UTC `timestamp`, `commit`, `branch`, project score and per-module
 scores). Commit and branch come from `GITHUB_SHA` / `GITHUB_HEAD_REF` /
 `GITHUB_REF_NAME` in CI, else from `git`. `--history` and `--badge` need a full
-scan and are rejected together with `--diff`.
+scan and are rejected together with `--diff` or `--module` / `target_modules`.
 
 ## Trend and regression alerts
 
