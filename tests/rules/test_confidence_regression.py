@@ -8,13 +8,13 @@ from pathlib import Path
 from textwrap import dedent
 
 from odoo_doctor.graph.module_context import build_project_graph
-from odoo_doctor.rules.xml.view_field_not_in_model import check_view_field_not_in_model
 from odoo_doctor.rules.xml.button_method_not_found import check_button_method_not_found
+from odoo_doctor.rules.xml.view_field_not_in_model import check_view_field_not_in_model
 
 
 def _manifest(data_files: list[str]) -> str:
     files = ", ".join(f'"{f}"' for f in data_files)
-    return '{"name": "M", "depends": [], "data": [%s], "license": "LGPL-3"}' % files
+    return '{"name": "M", "depends": [], "data": [' + files + '], "license": "LGPL-3"}'
 
 
 def test_core_fields_on_partial_stub_produce_no_findings(tmp_path: Path):

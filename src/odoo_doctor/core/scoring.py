@@ -4,12 +4,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import CATEGORIES, TIER_IMPACT, Diagnostic
-
-if TYPE_CHECKING:
-    pass
 
 # Bumped whenever the scoring formula changes in a way that makes scores from
 # different versions incomparable. 1 = <=0.3.0 (all weights 1.0), 2 = 0.4.0+

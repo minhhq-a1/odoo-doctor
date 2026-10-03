@@ -13,14 +13,14 @@ from odoo_doctor.rules.registry import RuleRegistry, rule
 
 
 def _rule_kwargs(**over):
-    base = dict(
-        name="p-rule",
-        category="Maintainability",
-        tier="P3",
-        severity="info",
-        default_confidence="high",
-        needs_context=False,
-    )
+    base = {
+        "name": "p-rule",
+        "category": "Maintainability",
+        "tier": "P3",
+        "severity": "info",
+        "default_confidence": "high",
+        "needs_context": False,
+    }
     base.update(over)
     return base
 

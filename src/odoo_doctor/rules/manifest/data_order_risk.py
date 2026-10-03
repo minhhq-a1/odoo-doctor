@@ -6,8 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.rules.registry import rule
 from odoo_doctor.graph.module_context import ModuleContext
+from odoo_doctor.rules.registry import rule
 
 
 def _is_security_file(path_str: str) -> bool:

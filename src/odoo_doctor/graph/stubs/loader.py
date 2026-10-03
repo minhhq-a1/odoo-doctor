@@ -7,7 +7,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-
 _STUBS_DIR = Path(__file__).parent / "data"
 
 

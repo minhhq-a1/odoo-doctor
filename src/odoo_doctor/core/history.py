@@ -23,9 +23,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 from odoo_doctor.core.scoring import (
     SCORE_SCHEMA_VERSION,
@@ -55,7 +55,12 @@ def git_info(cwd: Path) -> dict[str, str | None]:
     def run(*args: str) -> str | None:
         try:
             out = subprocess.run(
-                ["git", *args], capture_output=True, text=True, cwd=cwd, timeout=15
+                ["git", *args],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=15,
+                check=False,
             )
         except (OSError, subprocess.TimeoutExpired):
             return None

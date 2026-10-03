@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.reporters.github_annotations import (
     render_github_annotations,

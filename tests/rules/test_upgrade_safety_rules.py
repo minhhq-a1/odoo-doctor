@@ -14,7 +14,6 @@ from odoo_doctor.rules.upgrade_safety.removed_model_still_referenced import (
     check_removed_model_still_referenced,
 )
 
-
 # ---------------------------------------------------------------------------
 # deprecated-api-usage
 # ---------------------------------------------------------------------------

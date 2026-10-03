@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from odoo_doctor.core.cache import project_fingerprint, ScanCache
+from odoo_doctor.core.cache import ScanCache, project_fingerprint
 
 
 def _addon(tmp_path: Path) -> Path:

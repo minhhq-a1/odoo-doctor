@@ -19,8 +19,8 @@ Guarantees (see docs/custom-rules.md):
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from importlib.metadata import entry_points
-from typing import Iterable
 
 from odoo_doctor.plugin_api import PLUGIN_API_VERSION
 from odoo_doctor.rules.registry import RuleRegistry, default_registry
@@ -32,7 +32,7 @@ PLUGIN_API_ATTR = "ODOO_DOCTOR_PLUGIN_API"
 def _discover() -> Iterable:
     try:
         eps = entry_points()
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # noqa: BLE001  # pragma: no cover - defensive
         return []
     # Python 3.10+ : entry_points() returns a SelectableGroups/EntryPoints.
     try:

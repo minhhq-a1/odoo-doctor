@@ -76,8 +76,7 @@ def candidate_model_names(external_id: str):
     caller can accept the first that the resolver actually knows.
     """
     name = external_id
-    if name.startswith("model_"):
-        name = name[len("model_") :]
+    name = name.removeprefix("model_")
     parts = name.split("_")
     n = len(parts)
 

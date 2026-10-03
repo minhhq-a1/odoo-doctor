@@ -8,22 +8,22 @@ from odoo_doctor.core.scoring import ScoreResult, score_diagnostics
 
 
 def _diag(**overrides) -> Diagnostic:
-    defaults = dict(
-        module="m",
-        file_path="f.py",
-        line=1,
-        column=0,
-        rule="r",
-        category="Security",
-        severity="error",
-        tier="P0",
-        source="native",
-        confidence="high",
-        title="t",
-        message="msg",
-        help="h",
-        odoo_version="17.0",
-    )
+    defaults = {
+        "module": "m",
+        "file_path": "f.py",
+        "line": 1,
+        "column": 0,
+        "rule": "r",
+        "category": "Security",
+        "severity": "error",
+        "tier": "P0",
+        "source": "native",
+        "confidence": "high",
+        "title": "t",
+        "message": "msg",
+        "help": "h",
+        "odoo_version": "17.0",
+    }
     defaults.update(overrides)
     return Diagnostic(**defaults)
 
@@ -141,7 +141,7 @@ def test_default_category_weights_applied():
     )
     result = score_diagnostics([d], [True])
     # Security weight is 1.5, P1 impact is 10, so impact = 15
-    sec = [c for c in result.categories if c.category == "Security"][0]
+    sec = next(c for c in result.categories if c.category == "Security")
     assert sec.total_impact == 15.0
 
 
@@ -164,5 +164,5 @@ def test_user_weights_override_defaults():
         odoo_version="17.0",
     )
     result = score_diagnostics([d], [True], category_weights={"Security": 3.0})
-    sec = [c for c in result.categories if c.category == "Security"][0]
+    sec = next(c for c in result.categories if c.category == "Security")
     assert sec.total_impact == 30.0

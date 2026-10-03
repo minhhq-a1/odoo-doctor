@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from odoo_doctor.cli.app import app
 import odoo_doctor.cli.app as appmod
+from odoo_doctor.cli.app import app
 
 runner = CliRunner()
 

@@ -1,5 +1,6 @@
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 def test_action_yaml_is_valid():

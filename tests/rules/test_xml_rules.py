@@ -7,10 +7,10 @@ from pathlib import Path
 from textwrap import dedent
 
 from odoo_doctor.graph.module_context import build_project_graph
+from odoo_doctor.rules.xml.button_method_not_found import check_button_method_not_found
 from odoo_doctor.rules.xml.duplicate_xml_id import check_duplicate_xml_id
 from odoo_doctor.rules.xml.missing_xml_ref import check_missing_xml_ref
 from odoo_doctor.rules.xml.view_field_not_in_model import check_view_field_not_in_model
-from odoo_doctor.rules.xml.button_method_not_found import check_button_method_not_found
 
 
 def test_duplicate_xml_id_catches_bad_addon(bad_addon: Path):

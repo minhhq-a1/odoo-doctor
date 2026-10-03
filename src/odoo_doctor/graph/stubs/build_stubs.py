@@ -23,9 +23,8 @@ from __future__ import annotations
 import ast
 import json
 import sys
-from pathlib import Path
 from collections import defaultdict
-
+from pathlib import Path
 
 # ─── AST extraction ────────────────────────────────────────────────────────
 
@@ -217,7 +216,7 @@ def parse_odoo_xml_ids(odoo_path: Path) -> dict[str, str]:
             continue
         try:
             tree = etree.parse(str(xml_file))
-        except Exception:
+        except Exception:  # noqa: BLE001, S112 - skip unparsable files
             continue
 
         module_name = _guess_module_name(xml_file, odoo_path)

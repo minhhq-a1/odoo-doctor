@@ -5,57 +5,54 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import typer
 
+import odoo_doctor.rules.correctness.compute_missing_depends
+import odoo_doctor.rules.correctness.field_no_string_on_required
+import odoo_doctor.rules.correctness.missing_translation
+import odoo_doctor.rules.correctness.override_missing_super
+import odoo_doctor.rules.data_integrity.data_noupdate_risk
+import odoo_doctor.rules.data_integrity.missing_ondelete
+import odoo_doctor.rules.frontend.asset_bundle_missing
+import odoo_doctor.rules.manifest.data_order_risk
+
+# Import fixer modules to trigger fixer registration.
+import odoo_doctor.rules.manifest.fixers
+import odoo_doctor.rules.manifest.missing_dependency
+
+# Import all rule modules to trigger @rule registration
+import odoo_doctor.rules.manifest.missing_required_fields
+import odoo_doctor.rules.performance.create_write_in_loop
+import odoo_doctor.rules.performance.expensive_nonstored_compute
+import odoo_doctor.rules.performance.n_plus_one_read
+import odoo_doctor.rules.performance.search_in_loop
+import odoo_doctor.rules.performance.unbounded_search
+import odoo_doctor.rules.security.eval_usage
+import odoo_doctor.rules.security.missing_access_csv
+import odoo_doctor.rules.security.public_controller_sudo
+import odoo_doctor.rules.security.raw_sql_interpolation
+import odoo_doctor.rules.security.record_rule_without_domain
+import odoo_doctor.rules.security.sudo_without_comment
+import odoo_doctor.rules.security.unknown_model_in_access_csv
+import odoo_doctor.rules.upgrade_safety.deprecated_api_usage
+import odoo_doctor.rules.upgrade_safety.removed_model_still_referenced
+import odoo_doctor.rules.xml.button_method_not_found
+import odoo_doctor.rules.xml.duplicate_xml_id
+import odoo_doctor.rules.xml.missing_xml_ref
+import odoo_doctor.rules.xml.orphan_view
+import odoo_doctor.rules.xml.view_field_not_in_model  # noqa: F401
 from odoo_doctor.core.config import OdooDoctorConfig, SurfaceConfig, load_config
 from odoo_doctor.core.config_edit import set_rule_ignored
-from odoo_doctor.core.diagnostics import CATEGORIES
+from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
+from odoo_doctor.core.fixer import compute_fixes, default_fixers
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
+from odoo_doctor.core.scanner import collect_scores as _collect_scores
 from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
 from odoo_doctor.reporters.terminal import render_terminal
-
-# Import all rule modules to trigger @rule registration
-import odoo_doctor.rules.manifest.missing_required_fields  # noqa: F401
-import odoo_doctor.rules.manifest.missing_dependency  # noqa: F401
-import odoo_doctor.rules.manifest.data_order_risk  # noqa: F401
-import odoo_doctor.rules.security.missing_access_csv  # noqa: F401
-import odoo_doctor.rules.security.eval_usage  # noqa: F401
-import odoo_doctor.rules.security.unknown_model_in_access_csv  # noqa: F401
-import odoo_doctor.rules.security.raw_sql_interpolation  # noqa: F401
-import odoo_doctor.rules.security.public_controller_sudo  # noqa: F401
-import odoo_doctor.rules.security.sudo_without_comment  # noqa: F401
-import odoo_doctor.rules.security.record_rule_without_domain  # noqa: F401
-import odoo_doctor.rules.xml.duplicate_xml_id  # noqa: F401
-import odoo_doctor.rules.xml.missing_xml_ref  # noqa: F401
-import odoo_doctor.rules.xml.view_field_not_in_model  # noqa: F401
-import odoo_doctor.rules.xml.button_method_not_found  # noqa: F401
-import odoo_doctor.rules.xml.orphan_view  # noqa: F401
-import odoo_doctor.rules.performance.search_in_loop  # noqa: F401
-import odoo_doctor.rules.performance.create_write_in_loop  # noqa: F401
-import odoo_doctor.rules.performance.n_plus_one_read  # noqa: F401
-import odoo_doctor.rules.performance.unbounded_search  # noqa: F401
-import odoo_doctor.rules.performance.expensive_nonstored_compute  # noqa: F401
-import odoo_doctor.rules.correctness.override_missing_super  # noqa: F401
-import odoo_doctor.rules.correctness.compute_missing_depends  # noqa: F401
-import odoo_doctor.rules.correctness.field_no_string_on_required  # noqa: F401
-import odoo_doctor.rules.correctness.missing_translation  # noqa: F401
-import odoo_doctor.rules.data_integrity.missing_ondelete  # noqa: F401
-import odoo_doctor.rules.data_integrity.data_noupdate_risk  # noqa: F401
-import odoo_doctor.rules.upgrade_safety.deprecated_api_usage  # noqa: F401
-import odoo_doctor.rules.upgrade_safety.removed_model_still_referenced  # noqa: F401
-import odoo_doctor.rules.frontend.asset_bundle_missing  # noqa: F401
-
-# Import fixer modules to trigger fixer registration.
-import odoo_doctor.rules.manifest.fixers  # noqa: F401
-
-from odoo_doctor.core.scanner import collect_scores as _collect_scores  # noqa: F401
-from odoo_doctor.core.fixer import compute_fixes, default_fixers
 from odoo_doctor.rules.docs_gen import render_html, render_markdown, render_rule_text
 from odoo_doctor.rules.registry import default_registry
-from odoo_doctor.core.diagnostics import Diagnostic
 
 app = typer.Typer(
     name="odoo-doctor", help="Unified health scoring for Odoo custom addons."
@@ -64,44 +61,42 @@ app = typer.Typer(
 
 @app.command()
 def scan(
-    path: Optional[str] = typer.Argument(
+    path: str | None = typer.Argument(
         None, help="Path to scan for addons; omit to use config addons_paths"
     ),
-    odoo_version: Optional[str] = typer.Option(
+    odoo_version: str | None = typer.Option(
         None, "--odoo-version", help="Target Odoo version"
     ),
-    module: Optional[str] = typer.Option(
-        None, "--module", help="Scan only this module"
-    ),
+    module: str | None = typer.Option(None, "--module", help="Scan only this module"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-    format_opt: Optional[str] = typer.Option(
+    format_opt: str | None = typer.Option(
         None, "--format", help="Output format (terminal, json, github, sarif)"
     ),
-    fail_on: Optional[str] = typer.Option(
+    fail_on: str | None = typer.Option(
         None, "--fail-on", help="Fail if severity found (error|warning)"
     ),
-    diff: Optional[str] = typer.Option(
+    diff: str | None = typer.Option(
         None, "--diff", help="Only scan files changed vs this branch"
     ),
-    score_delta: Optional[str] = typer.Option(
+    score_delta: str | None = typer.Option(
         None, "--score-delta", help="Compute score difference vs this base ref"
     ),
-    min_score: Optional[int] = typer.Option(
+    min_score: int | None = typer.Option(
         None, "--min-score", help="Exit 2 if any module scores below this (0-100)"
     ),
     cache_enabled: bool = typer.Option(
         False, "--cache", help="Reuse the cached result when nothing relevant changed"
     ),
-    baseline: Optional[str] = typer.Option(
+    baseline: str | None = typer.Option(
         None, "--baseline", help="Suppress findings present in this baseline file"
     ),
-    write_baseline_path: Optional[str] = typer.Option(
+    write_baseline_path: str | None = typer.Option(
         None, "--write-baseline", help="Write current findings as a baseline and exit 0"
     ),
-    history_path: Optional[str] = typer.Option(
+    history_path: str | None = typer.Option(
         None, "--history", help="Append this scan's scores to a JSONL history file"
     ),
-    badge_path: Optional[str] = typer.Option(
+    badge_path: str | None = typer.Option(
         None,
         "--badge",
         help="Write a score badge: *.svg (image) or *.json (shields.io endpoint)",
@@ -187,7 +182,7 @@ def scan(
         return
 
     if baseline:
-        from odoo_doctor.core.baseline import load_baseline, filter_against_baseline
+        from odoo_doctor.core.baseline import filter_against_baseline, load_baseline
         from odoo_doctor.core.scanner import _score_per_module  # added in plan 04
 
         ids = load_baseline(Path(baseline))
@@ -213,7 +208,7 @@ def scan(
 
     delta_str = None
     if score_delta:
-        base_diags, base_scores = _scan_base_ref(
+        _base_diags, base_scores = _scan_base_ref(
             config_root=config_root,
             base_ref=score_delta,
             addon_paths=addons_paths,
@@ -243,8 +238,8 @@ def scan(
 
         # In github output, we also want to post PR comment
         from odoo_doctor.reporters.pr_comment import (
-            render_pr_comment_body,
             post_pr_comment,
+            render_pr_comment_body,
         )
 
         body = render_pr_comment_body(
@@ -291,10 +286,10 @@ def scan(
 
 @app.command("fix")
 def fix_cmd(
-    path: Optional[str] = typer.Argument(
+    path: str | None = typer.Argument(
         None, help="Path to scan and fix; omit to use config addons_paths"
     ),
-    odoo_version: Optional[str] = typer.Option(
+    odoo_version: str | None = typer.Option(
         None, "--odoo-version", help="Target Odoo version"
     ),
     apply: bool = typer.Option(False, "--fix", help="Apply fixes in place"),
@@ -357,13 +352,13 @@ def fix_cmd(
 @app.command("rules")
 def rules_cmd(
     action: str = typer.Argument("list", help="list, explain, disable, enable or docs"),
-    rule_name: Optional[str] = typer.Argument(
+    rule_name: str | None = typer.Argument(
         None, help="Rule name (explain, disable, enable)"
     ),
     path: str = typer.Option(
         ".", "--path", help="Directory holding odoo-doctor.toml (list/disable/enable)"
     ),
-    out: Optional[str] = typer.Option(
+    out: str | None = typer.Option(
         None, "--out", help="docs: write the page here instead of stdout"
     ),
     docs_format: str = typer.Option(
@@ -468,7 +463,7 @@ modules = []
 def install() -> None:
     """Install agent skills and optional git hooks."""
     import shutil
-    from importlib.resources import files, as_file
+    from importlib.resources import as_file, files
 
     try:
         skills_traversable = files("odoo_doctor.skills")
@@ -543,7 +538,7 @@ app.add_typer(history_app, name="history")
 def history_show(
     file: str = typer.Argument(..., help="History file (JSONL)"),
     last: int = typer.Option(10, "--last", help="Show the last N records (0 = all)"),
-    max_drop: Optional[float] = typer.Option(
+    max_drop: float | None = typer.Option(
         None,
         "--max-drop",
         help="Exit 2 if the newest score dropped by more than this many points",
@@ -588,9 +583,9 @@ def history_show(
 def history_import(
     file: str = typer.Argument(..., help="History file to append to (JSONL)"),
     reports: list[str] = typer.Argument(..., help="scan --json report file(s)"),
-    commit: Optional[str] = typer.Option(None, "--commit"),
-    branch: Optional[str] = typer.Option(None, "--branch"),
-    timestamp: Optional[str] = typer.Option(
+    commit: str | None = typer.Option(None, "--commit"),
+    branch: str | None = typer.Option(None, "--branch"),
+    timestamp: str | None = typer.Option(
         None,
         "--timestamp",
         help="ISO-8601 time to assign (default: each report file's mtime)",
@@ -652,6 +647,7 @@ def _scan_base_ref(
         text=True,
         cwd=config_root,
         timeout=30,
+        check=False,
     )
     if root_result.returncode != 0:
         typer.echo("[ERROR] --score-delta: Not a git repository.", err=True)
@@ -665,6 +661,7 @@ def _scan_base_ref(
             cwd=git_root,
             capture_output=True,
             text=True,
+            check=False,
         )
         if wt_add.returncode != 0:
             typer.echo(
@@ -697,6 +694,7 @@ def _scan_base_ref(
             ["git", "worktree", "remove", "--force", str(tmpdir)],
             cwd=git_root,
             capture_output=True,
+            check=False,
         )
 
 
@@ -744,6 +742,7 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
             text=True,
             cwd=repo_path,
             timeout=30,
+            check=False,
         )
         if root_result.returncode != 0:
             return None
@@ -755,6 +754,7 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
             text=True,
             cwd=git_root,
             timeout=30,
+            check=False,
         )
         if result.returncode != 0:
             return None

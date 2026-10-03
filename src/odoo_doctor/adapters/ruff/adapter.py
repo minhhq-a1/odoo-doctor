@@ -59,6 +59,7 @@ class RuffAdapter:
                 capture_output=True,
                 text=True,
                 timeout=60,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return [

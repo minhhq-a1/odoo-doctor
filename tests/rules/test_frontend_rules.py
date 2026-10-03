@@ -28,10 +28,10 @@ def _make_addon_with_assets(tmp_path, name, assets_dict, create_files=None):
 
 
 def test_asset_bundle_missing_flags_nonexistent(tmp_path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.frontend.asset_bundle_missing import (
         check_asset_bundle_missing,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     _make_addon_with_assets(
         tmp_path,
@@ -47,10 +47,10 @@ def test_asset_bundle_missing_flags_nonexistent(tmp_path):
 
 
 def test_asset_bundle_missing_clean_when_exists(tmp_path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.frontend.asset_bundle_missing import (
         check_asset_bundle_missing,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     _make_addon_with_assets(
         tmp_path,
@@ -65,10 +65,10 @@ def test_asset_bundle_missing_clean_when_exists(tmp_path):
 
 
 def test_asset_bundle_missing_skips_glob_patterns(tmp_path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.frontend.asset_bundle_missing import (
         check_asset_bundle_missing,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     _make_addon_with_assets(
         tmp_path,
@@ -82,10 +82,10 @@ def test_asset_bundle_missing_skips_glob_patterns(tmp_path):
 
 
 def test_asset_bundle_missing_skips_other_modules(tmp_path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.frontend.asset_bundle_missing import (
         check_asset_bundle_missing,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     _make_addon_with_assets(
         tmp_path,
@@ -99,10 +99,10 @@ def test_asset_bundle_missing_skips_other_modules(tmp_path):
 
 
 def test_asset_bundle_missing_no_assets(tmp_path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.frontend.asset_bundle_missing import (
         check_asset_bundle_missing,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     mod = tmp_path / "test_mod"
     mod.mkdir()

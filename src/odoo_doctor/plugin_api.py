@@ -32,11 +32,11 @@ TIERS = tuple(TIER_IMPACT)
 __all__ = [
     "CATEGORIES",
     "CONFIDENCES",
-    "Diagnostic",
-    "ModuleContext",
     "PLUGIN_API_VERSION",
     "SEVERITIES",
     "TIERS",
+    "Diagnostic",
+    "ModuleContext",
     "node_is_orm",
     "read_source",
     "receiver_is_orm",

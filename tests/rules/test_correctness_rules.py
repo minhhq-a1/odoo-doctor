@@ -95,10 +95,10 @@ def test_non_override_method_silent(tmp_path: Path):
 
 
 def test_compute_reads_undeclared_repo_field_catches(tmp_path: Path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.correctness.compute_missing_depends import (
         check_compute_missing_depends,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     mod = tmp_path / "my_mod"
     mod.mkdir()
@@ -133,10 +133,10 @@ def test_compute_reads_undeclared_repo_field_catches(tmp_path: Path):
 
 
 def test_compute_declared_field_silent(tmp_path: Path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.correctness.compute_missing_depends import (
         check_compute_missing_depends,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     mod = tmp_path / "my_mod"
     mod.mkdir()
@@ -166,10 +166,10 @@ def test_compute_declared_field_silent(tmp_path: Path):
 
 
 def test_compute_dotted_depends_covers_first_segment(tmp_path: Path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.correctness.compute_missing_depends import (
         check_compute_missing_depends,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     mod = tmp_path / "my_mod"
     mod.mkdir()
@@ -199,10 +199,10 @@ def test_compute_dotted_depends_covers_first_segment(tmp_path: Path):
 
 
 def test_compute_undeclared_unknown_field_silent(tmp_path: Path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.correctness.compute_missing_depends import (
         check_compute_missing_depends,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     mod = tmp_path / "my_mod"
     mod.mkdir()
@@ -231,10 +231,10 @@ def test_compute_undeclared_unknown_field_silent(tmp_path: Path):
 
 
 def test_compute_ignores_method_calls(tmp_path: Path):
+    from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.correctness.compute_missing_depends import (
         check_compute_missing_depends,
     )
-    from odoo_doctor.graph.module_context import build_project_graph
 
     mod = tmp_path / "my_mod"
     mod.mkdir()

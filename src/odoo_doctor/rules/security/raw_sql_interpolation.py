@@ -6,10 +6,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
-
-
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import read_source
 from odoo_doctor.rules.registry import rule
 
 _CR_METHODS = {"execute", "executemany"}

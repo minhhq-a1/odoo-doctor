@@ -19,7 +19,7 @@ def _file_lines(path: str) -> list[str]:
         return []
 
 
-def _snippet(diag: "Diagnostic") -> str:
+def _snippet(diag: Diagnostic) -> str:
     """Whitespace-normalized content of the finding's line (empty if unreadable).
 
     Using line *content* rather than line *number* makes the identity stable
@@ -35,7 +35,7 @@ def _snippet(diag: "Diagnostic") -> str:
     return ""
 
 
-def finding_identity(diag: "Diagnostic") -> str:
+def finding_identity(diag: Diagnostic) -> str:
     """Stable identity for a finding: rule + module + path + line snippet.
 
     Line/column numbers are deliberately excluded so an edit elsewhere does not
@@ -50,7 +50,7 @@ def finding_identity(diag: "Diagnostic") -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
-def write_baseline(diagnostics: list["Diagnostic"], path: Path) -> None:
+def write_baseline(diagnostics: list[Diagnostic], path: Path) -> None:
     ids = sorted({finding_identity(d) for d in diagnostics})
     Path(path).write_text(
         json.dumps({"version": 1, "ids": ids}, indent=2), encoding="utf-8"
@@ -66,6 +66,6 @@ def load_baseline(path: Path) -> set[str]:
 
 
 def filter_against_baseline(
-    diagnostics: list["Diagnostic"], baseline_ids: set[str]
-) -> list["Diagnostic"]:
+    diagnostics: list[Diagnostic], baseline_ids: set[str]
+) -> list[Diagnostic]:
     return [d for d in diagnostics if finding_identity(d) not in baseline_ids]

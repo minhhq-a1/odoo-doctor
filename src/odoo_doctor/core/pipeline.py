@@ -234,9 +234,7 @@ def apply_version_gates(
     result: list[Diagnostic] = []
     for d in diagnostics:
         min_ver = active_rules.get(d.rule)
-        if min_ver is None:
-            result.append(d)
-        elif _version_gte(detected_version, min_ver):
+        if min_ver is None or _version_gte(detected_version, min_ver):
             result.append(d)
     return result
 

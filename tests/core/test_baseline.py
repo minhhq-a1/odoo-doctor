@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.baseline import (
-    finding_identity,
-    write_baseline,
-    load_baseline,
     filter_against_baseline,
+    finding_identity,
+    load_baseline,
+    write_baseline,
 )
+from odoo_doctor.core.diagnostics import Diagnostic
 
 
 def _src(tmp_path: Path) -> Path:

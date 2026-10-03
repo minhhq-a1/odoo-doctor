@@ -4,9 +4,9 @@ import json
 import subprocess
 from typing import Any
 
+from odoo_doctor.core.config import SurfaceConfig
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.scoring import ScoreResult, score_label
-from odoo_doctor.core.config import SurfaceConfig
 from odoo_doctor.core.surfaces import filter_for_surface
 
 
@@ -80,6 +80,7 @@ def post_pr_comment(body: str, marker: str = "<!-- odoo-doctor -->") -> None:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode != 0:
             return
@@ -102,12 +103,14 @@ def post_pr_comment(body: str, marker: str = "<!-- odoo-doctor -->") -> None:
                 ],
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
         else:
             subprocess.run(
                 ["gh", "pr", "comment", "-b", body],
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
     except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
         pass

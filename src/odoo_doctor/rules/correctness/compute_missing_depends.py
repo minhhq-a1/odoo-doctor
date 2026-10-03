@@ -7,10 +7,10 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.rules.registry import rule
-from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.core.source import read_source
+from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.graph.resolver import ResolveResult
+from odoo_doctor.rules.registry import rule
 
 # Standard ORM fields and methods that shouldn't trigger "missing depends"
 _MAGIC_FIELDS = {

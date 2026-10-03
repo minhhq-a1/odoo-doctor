@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 import typer
 
+from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
+from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.pipeline import (
@@ -22,15 +24,13 @@ from odoo_doctor.core.pipeline import (
     rule_is_enabled,
     run_pipeline,
 )
-from odoo_doctor.core.scoring import score_diagnostics, CATEGORIES
+from odoo_doctor.core.scoring import CATEGORIES, score_diagnostics
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
     scan_python_suppressions,
     scan_xml_suppressions,
 )
-from odoo_doctor.adapters.ruff.adapter import RuffAdapter
-from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
 
 
 def _path_is_relative_to(path: Path, base: Path) -> bool:
@@ -88,9 +88,10 @@ def collect_scores(
     version: str,
     changed_files: set[str] | None = None,
     config_root: Path | None = None,
-    cache: "ScanCache | None" = None,
+    cache: ScanCache | None = None,
 ) -> tuple[list[Diagnostic], dict[str, object]]:
     from dataclasses import asdict
+
     from odoo_doctor.core.cache import project_fingerprint
 
     fingerprint: str | None = None
@@ -139,7 +140,7 @@ def collect_scores(
                 produced = func(ctx)
                 context_diags.extend(produced)
                 all_diags.extend(produced)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                 typer.echo(
                     f"[WARN] rule {meta.name} crashed on {ctx.name}: {exc}",
                     err=True,
@@ -161,7 +162,7 @@ def collect_scores(
                     continue
                 try:
                     all_diags.extend(func(py_file, ctx.name, ctx.odoo_version))
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                     typer.echo(
                         f"[WARN] rule {meta.name} crashed on {py_file.name}: {exc}",
                         err=True,
@@ -183,7 +184,7 @@ def collect_scores(
         for ctx in graph.modules.values():
             try:
                 all_diags.extend(adapter.run(ctx.path, ctx.odoo_version))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                 typer.echo(
                     f"[WARN] {adapter.name} adapter crashed on {ctx.name}: {exc}",
                     err=True,

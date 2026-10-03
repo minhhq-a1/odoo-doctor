@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 from textwrap import dedent
 
@@ -11,7 +12,6 @@ from odoo_doctor.graph.stubs.build_stubs import (
     parse_odoo_source,
     parse_odoo_xml_ids,
 )
-import ast
 
 
 def _cls(src: str) -> ast.ClassDef:
@@ -26,7 +26,7 @@ def test_extract_name_and_field():
             name = fields.Char()
             amount = fields.Float()
     """)
-    name, fields, methods = _extract_class_data(node)
+    name, fields, _methods = _extract_class_data(node)
     assert name == "sale.order"
     assert "name" in fields
     assert "amount" in fields

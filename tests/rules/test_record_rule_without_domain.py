@@ -12,7 +12,7 @@ from odoo_doctor.rules.security.record_rule_without_domain import (
 
 def _manifest(files: list[str]) -> str:
     joined = ", ".join(f'"{f}"' for f in files)
-    return '{"name": "M", "depends": [], "data": [%s], "license": "LGPL-3"}' % joined
+    return '{"name": "M", "depends": [], "data": [' + joined + '], "license": "LGPL-3"}'
 
 
 def test_rule_without_domain_force_is_flagged(tmp_path: Path):

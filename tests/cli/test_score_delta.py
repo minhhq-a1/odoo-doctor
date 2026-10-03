@@ -1,8 +1,10 @@
 import subprocess
 from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
-from odoo_doctor.cli.app import app, _collect_scores
+
+from odoo_doctor.cli.app import _collect_scores, app
 from odoo_doctor.core.config import OdooDoctorConfig
 
 runner = CliRunner()
@@ -65,7 +67,11 @@ def test_score_delta_cleans_up_worktree(temp_git_repo: Path):
     runner.invoke(app, ["scan", str(temp_git_repo), "--score-delta", "main"])
     # Check worktree
     res = subprocess.run(
-        ["git", "worktree", "list"], cwd=temp_git_repo, capture_output=True, text=True
+        ["git", "worktree", "list"],
+        cwd=temp_git_repo,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert temp_git_repo.name in res.stdout
     # Should only have the main worktree
