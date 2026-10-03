@@ -46,7 +46,7 @@ def render_github_annotations(diagnostics: list[Diagnostic], repo_root: Path) ->
             rel_path = Path(d.file_path).name
 
         title = _escape_property(d.title)
-        message = _escape_data(d.message)
+        message = _escape_data(d.message + (f"\nDocs: {d.url}" if d.url else ""))
 
         line_str = f"::{level} file={rel_path},line={d.line},col={d.column},title={title}::{message}"
         lines.append(line_str)

@@ -53,8 +53,9 @@ def render_pr_comment_body(
     if top:
         lines.append("### Top Findings")
         for d in top:
+            rule_ref = f"[{d.rule}]({d.url})" if d.url else d.rule
             lines.append(
-                f"- **{d.severity.upper()}** `{d.file_path}:{d.line}`: {d.title} ({d.rule})"
+                f"- **{d.severity.upper()}** `{d.file_path}:{d.line}`: {d.title} ({rule_ref})"
             )
 
     return "\n".join(lines)

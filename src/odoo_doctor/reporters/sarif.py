@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from odoo_doctor.rules.rule_docs import rule_doc_url
+
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
 
@@ -35,7 +37,7 @@ def render_sarif(diagnostics: list[Diagnostic], base_path: Path | None) -> str:
 
     for d in diagnostics:
         if d.rule not in rules_by_id:
-            rules_by_id[d.rule] = {
+            descriptor = {
                 "id": d.rule,
                 "name": d.rule,
                 "shortDescription": {"text": d.title},
@@ -43,6 +45,10 @@ def render_sarif(diagnostics: list[Diagnostic], base_path: Path | None) -> str:
                 "defaultConfiguration": {"level": _LEVEL.get(d.severity, "warning")},
                 "properties": {"category": d.category, "tier": d.tier},
             }
+            help_uri = d.url or rule_doc_url(d.rule)
+            if help_uri:
+                descriptor["helpUri"] = help_uri
+            rules_by_id[d.rule] = descriptor
         results.append(
             {
                 "ruleId": d.rule,

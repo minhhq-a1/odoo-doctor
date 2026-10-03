@@ -54,3 +54,21 @@ def test_sarif_registers_rules_in_driver():
 def test_sarif_empty_is_valid():
     out = json.loads(render_sarif([], base_path=None))
     assert out["runs"][0]["results"] == []
+
+
+def test_sarif_rule_descriptor_has_help_uri_for_native_rule():
+    out = json.loads(render_sarif([_diag()], base_path=None))
+    desc = out["runs"][0]["tool"]["driver"]["rules"][0]
+    assert desc["helpUri"].endswith("docs/rules.md#eval-usage")
+
+
+def test_sarif_prefers_diagnostic_url_and_omits_unknown():
+    out = json.loads(
+        render_sarif(
+            [_diag(url="https://example.test/r"), _diag(rule="ZZ9", url=None)],
+            base_path=None,
+        )
+    )
+    by_id = {r["id"]: r for r in out["runs"][0]["tool"]["driver"]["rules"]}
+    assert by_id["eval-usage"]["helpUri"] == "https://example.test/r"
+    assert "helpUri" not in by_id["ZZ9"]

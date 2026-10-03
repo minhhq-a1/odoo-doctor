@@ -10,6 +10,7 @@ from typing import Optional
 import typer
 
 from odoo_doctor.core.config import OdooDoctorConfig, load_config
+from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.reporters.json_report import render_json
@@ -50,6 +51,7 @@ import odoo_doctor.rules.manifest.fixers  # noqa: F401
 
 from odoo_doctor.core.scanner import collect_scores as _collect_scores  # noqa: F401
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
+from odoo_doctor.rules.docs_gen import render_html, render_markdown, render_rule_text
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.core.diagnostics import Diagnostic
 
@@ -315,25 +317,76 @@ def fix_cmd(
 
 @app.command("rules")
 def rules_cmd(
-    action: str = typer.Argument("list", help="list or explain"),
-    rule_name: Optional[str] = typer.Argument(None, help="Rule name to explain"),
+    action: str = typer.Argument("list", help="list, explain, disable, enable or docs"),
+    rule_name: Optional[str] = typer.Argument(
+        None, help="Rule name (explain, disable, enable)"
+    ),
+    path: str = typer.Option(
+        ".", "--path", help="Directory holding odoo-doctor.toml (list/disable/enable)"
+    ),
+    out: Optional[str] = typer.Option(
+        None, "--out", help="docs: write the page here instead of stdout"
+    ),
+    docs_format: str = typer.Option(
+        "markdown", "--format", help="docs: markdown or html"
+    ),
+    check: bool = typer.Option(
+        False, "--check", help="docs: exit 1 if --out is not up to date"
+    ),
 ) -> None:
-    """List rules or explain a specific rule."""
+    """List, explain, disable or enable rules, or generate the rules docs."""
     if action == "list":
+        disabled = set(load_config(Path(path).resolve()).ignore_rules)
         for meta, _ in default_registry.get_rules():
-            typer.echo(f"  {meta.name:40s} [{meta.category}, {meta.tier}]")
+            mark = "  (disabled)" if meta.name in disabled else ""
+            typer.echo(f"  {meta.name:40s} [{meta.category}, {meta.tier}]{mark}")
     elif action == "explain" and rule_name:
         if rule_name in default_registry:
             meta, _ = default_registry.get(rule_name)
-            typer.echo(f"Rule: {meta.name}")
-            typer.echo(f"Category: {meta.category}")
-            typer.echo(f"Tier: {meta.tier}")
-            typer.echo(f"Severity: {meta.severity}")
-            typer.echo(f"Confidence: {meta.default_confidence}")
-            typer.echo(f"Needs module context: {meta.needs_context}")
-            typer.echo(f"Min Odoo version: {meta.min_version or 'any'}")
+            typer.echo(render_rule_text(meta))
         else:
             typer.echo(f"Unknown rule: {rule_name}")
+    elif action in ("disable", "enable") and rule_name:
+        if rule_name not in default_registry:
+            typer.echo(f"[ERROR] Unknown rule: {rule_name}", err=True)
+            raise typer.Exit(code=3)
+        config_path = Path(path) / "odoo-doctor.toml"
+        changed = set_rule_ignored(config_path, rule_name, action == "disable")
+        verb = "Disabled" if action == "disable" else "Enabled"
+        if changed:
+            typer.echo(f"{verb} {rule_name} in {config_path}")
+        else:
+            typer.echo(f"{rule_name} already {verb.lower()} in {config_path}")
+    elif action == "docs":
+        if docs_format not in ("markdown", "html"):
+            typer.echo("[ERROR] --format must be markdown or html.", err=True)
+            raise typer.Exit(code=3)
+        rendered = render_markdown() if docs_format == "markdown" else render_html()
+        if out is None:
+            typer.echo(rendered, nl=False)
+            return
+        target = Path(out)
+        if check:
+            current = target.read_text(encoding="utf-8") if target.exists() else None
+            if current != rendered:
+                typer.echo(
+                    f"[ERROR] {target} is out of date. "
+                    f"Run: odoo-doctor rules docs --out {target}",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+            typer.echo(f"{target} is up to date.")
+            return
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(rendered, encoding="utf-8")
+        typer.echo(f"Wrote {target}")
+    else:
+        typer.echo(
+            "[ERROR] Usage: rules list | explain <rule> | disable <rule> | "
+            "enable <rule> | docs [--out FILE] [--format markdown|html] [--check]",
+            err=True,
+        )
+        raise typer.Exit(code=3)
 
 
 @app.command()

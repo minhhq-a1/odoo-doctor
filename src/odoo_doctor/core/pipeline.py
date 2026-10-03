@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
+from odoo_doctor.rules.rule_docs import rule_doc_url
 
 if TYPE_CHECKING:
     from odoo_doctor.core.config import OdooDoctorConfig
@@ -61,11 +62,17 @@ def rule_is_enabled(
 
 
 def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
-    """Normalize paths before downstream matching and deduplication."""
+    """Normalize paths and attach the rule docs deep link before matching."""
     result: list[Diagnostic] = []
     for d in diagnostics:
         normalized_path = Path(d.file_path.replace("\\", "/")).resolve().as_posix()
-        result.append(replace(d, file_path=normalized_path))
+        result.append(
+            replace(
+                d,
+                file_path=normalized_path,
+                url=d.url or rule_doc_url(d.rule),
+            )
+        )
     return result
 
 
