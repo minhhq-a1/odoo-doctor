@@ -62,7 +62,7 @@ odoo-doctor scan . --diff main --json
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
-The full, generated reference (33 rules, with before/after examples) is in
+The full, generated reference (36 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md).

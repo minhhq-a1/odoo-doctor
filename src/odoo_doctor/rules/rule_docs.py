@@ -410,4 +410,35 @@ RULE_DOCS: dict[str, RuleDoc] = {
         notes="Medium confidence (does not affect the score). Install hooks "
         "(`*_hook` functions, `hooks.py`), `migrations/` and `tests/` are skipped.",
     ),
+    # ------------------------------------------------------------ Supply chain
+    "manifest-license-incompatible": RuleDoc(
+        detects="An addon whose manifest `license` conflicts with the license of a "
+        "scanned dependency: GPL-2 (version 2 only) combined with a GPL-3 family "
+        "license in either direction (high confidence), or a proprietary module "
+        "(OPL-1, OEEL-1) depending on GPL/AGPL code (medium confidence).",
+        why="The combination cannot be distributed under both licenses.",
+        fix="Relicense one module or drop the dependency; check with the licensing owner.",
+        notes="Only dependencies whose manifest was scanned are compared.",
+    ),
+    "missing-external-dependency": RuleDoc(
+        detects="Third-party Python packages imported by the addon but not listed "
+        "in `external_dependencies['python']` (of the addon or of a module it "
+        "depends on).",
+        why="Installing without the package fails at import time instead of with "
+        "a clear dependency error.",
+        fix='Add `"external_dependencies": {"python": ["pkg"]}` to the manifest, or '
+        "guard an optional import with `try/except ImportError`.",
+        notes="Skipped: stdlib, packages Odoo itself installs, guarded and "
+        "`TYPE_CHECKING` imports, `tests/` and `migrations/`. Medium confidence "
+        "when the dependency chain includes a module whose manifest was not scanned.",
+    ),
+    "vendored-python-code": RuleDoc(
+        detects="Third-party Python code copied into an addon: `vendor/`, `lib/` "
+        "and similar directories containing `.py` files, `*.dist-info` / "
+        "`*.egg-info`, or a well-known package (for example `six/`) at the top level.",
+        why="Copied code misses security fixes and can clash with the installed version.",
+        fix="Declare the package in `external_dependencies['python']` instead.",
+        notes="Medium confidence (does not affect the score). JavaScript libraries "
+        "under `static/` are normal in Odoo and are not reported.",
+    ),
 }

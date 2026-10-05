@@ -44,6 +44,11 @@ findings on one such repo.
     constants.
   - Behaviour change: interpolating a variable that was bound to a string
     constant is no longer reported (it cannot be injected); a parameter still is.
+- **Supply-chain rules** (native rules: 33 -> 36; kept inside the existing
+  categories so scores stay comparable): `manifest-license-incompatible`
+  (Module Hygiene), `missing-external-dependency` (Module Hygiene, skips stdlib,
+  Odoo's own requirements, guarded imports, tests) and `vendored-python-code`
+  (Maintainability, medium confidence).
 - **Multi-company / multi-currency rules** (native rules: 30 -> 33):
   - `monetary-missing-currency-field` (Correctness, P1, high): a `fields.Monetary`
     whose currency field (`currency_id` or `currency_field=`) provably does not
