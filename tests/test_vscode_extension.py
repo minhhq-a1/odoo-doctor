@@ -62,3 +62,10 @@ def test_extension_is_off_in_untrusted_workspaces(manifest: dict):
     # It runs `odoo-doctor lsp` on the workspace, which loads workspace configuration
     # and plugins (and `odooDoctor.path` can be set by the workspace itself).
     assert manifest["capabilities"]["untrustedWorkspaces"]["supported"] is False
+
+
+def test_marketplace_identity_is_stable(manifest: dict):
+    # `<publisher>.<name>` is the extension's identity on the Marketplace: changing either
+    # publishes a different extension and orphans existing installs.
+    assert manifest["publisher"] == "MinhHong"
+    assert manifest["name"] == "odoo-doctor"
