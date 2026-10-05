@@ -56,6 +56,7 @@ def render_json(
                 {"rank": rank, **asdict(fp)}
                 for rank, fp in enumerate(score.fix_priorities[:_MAX_FIX_PRIORITIES], 1)
             ],
+            "suppression_stats": getattr(score, "suppression_stats", {}),
             "diagnostics": [asdict(d) for d in module_diags],
         }
 

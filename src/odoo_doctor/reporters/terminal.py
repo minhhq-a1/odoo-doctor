@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from odoo_doctor.core.scoring import score_label
+from odoo_doctor.core.suppression_stats import actionable_count
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
@@ -26,6 +27,18 @@ _LABEL_COLORS = {
 
 # Fixes listed per module in the "Fix first" section.
 _FIX_FIRST = 5
+
+
+def _noise_hint(scores: dict[str, ScoreResult]) -> str:
+    """One line when some rule is both noisy and has advice to give (else empty)."""
+    stats = {m: getattr(s, "suppression_stats", {}) for m, s in scores.items()}
+    count = actionable_count(stats)
+    if not count:
+        return ""
+    return (
+        f"\n[yellow]{count} rule(s) look noisy[/yellow] (many suppressions). "
+        "Run: odoo-doctor rules stats"
+    )
 
 
 def render_terminal(
@@ -110,5 +123,9 @@ def render_terminal(
         console.print(
             f"\n[bold]Project Score:[/bold] [{color}]{overall:.1f}/100 ({label})[/{color}]"
         )
+
+    hint = _noise_hint(scores)
+    if hint:
+        console.print(hint, highlight=False)  # keep rich from styling the digits
 
     return buf.getvalue()
