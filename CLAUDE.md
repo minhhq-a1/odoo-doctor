@@ -21,6 +21,8 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest         # what CI runs
 ruff check src tests && ruff format --check src tests   # both must pass in CI (ruff format to fix)
 ```
 
+**Golden corpus** (`tests/corpus/`, run by `tests/test_golden_corpus.py`): each directory is a tiny sample addon scanned end to end through the CLI and compared with its `expected.json` (`[rule, file, confidence]` per finding). It guards true positives *and* known false positives. When a rule change is intentional, review the diff then refresh with `UPDATE_GOLDEN=1 pytest tests/test_golden_corpus.py`. When a real scan shows a false positive, reduce it to a corpus case first. The corpus is excluded from pytest collection (`tests/conftest.py`) and from ruff (`pyproject.toml`) because it holds scan inputs, not tests.
+
 CI (`.github/workflows/ci.yml`) runs pytest + ruff on Python 3.10–3.12; the package supports 3.10–3.13. Ruff lint rules are deliberately pinned in `pyproject.toml` (`E4,E7,E9,F`) — don't widen them casually.
 
 Useful CLI invocations while developing (entry point `odoo-doctor = odoo_doctor.cli.app:app`, Typer):

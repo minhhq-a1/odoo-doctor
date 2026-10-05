@@ -1,0 +1,17 @@
+[
+  [
+    "missing-ondelete",
+    "wiz/models/wizard.py",
+    "high"
+  ],
+  [
+    "orphan-view",
+    "wiz/views/wizard.xml",
+    "medium"
+  ],
+  [
+    "view-field-not-in-model",
+    "wiz/views/wizard.xml",
+    "high"
+  ]
+]

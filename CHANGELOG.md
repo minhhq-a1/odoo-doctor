@@ -9,6 +9,13 @@ All notable changes to Odoo Doctor are documented here.
 False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
 `purchase_request` and others): 229 -> 193 findings on one such repo (before the three debatable-rule changes below).
 
+### Added
+
+- **Golden corpus** (`tests/corpus/`, `tests/test_golden_corpus.py`): sample addons
+  scanned end to end and compared with a frozen list of findings, so both true
+  positives and previously fixed false positives are regression-guarded.
+  Refresh with `UPDATE_GOLDEN=1 pytest tests/test_golden_corpus.py`.
+
 ### Fixed
 
 - **`missing-xml-ref`** no longer flags the implicit `model_<model_name>` XML IDs

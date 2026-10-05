@@ -1,0 +1,7 @@
+{
+    "name": "shop",
+    "version": "17.0.1.0.0",
+    "depends": ['base'],
+    "data": ['security/ir.model.access.csv', 'security/rules.xml'],
+    "license": "LGPL-3",
+}
