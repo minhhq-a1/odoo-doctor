@@ -55,6 +55,9 @@ class ScoreResult:
     diagnostics_counted: int
     # Best-first fix suggestions (core.roi.FixPriority); filled by the scanner.
     fix_priorities: list = field(default_factory=list)
+    # Per-rule suppression counts for this module (core.suppression_stats):
+    # {rule: {"surfaced", "inline", "ignore_rule", "severity_off"}}; filled by the scanner.
+    suppression_stats: dict = field(default_factory=dict)
 
     def compute_label(self) -> str:
         return score_label(self.overall)
