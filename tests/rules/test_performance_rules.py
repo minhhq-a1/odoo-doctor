@@ -55,7 +55,7 @@ def test_search_in_loop_nested(tmp_path: Path):
             def nested(self):
                 for order in self:
                     for line in order.order_line:
-                        self.env["product.product"].browse(line.product_id.id)
+                        self.env["product.product"].search([("id", "=", line.product_id.id)])
     """)
     f = tmp_path / "nested.py"
     f.write_text(code)

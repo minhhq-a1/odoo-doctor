@@ -4,6 +4,41 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [Unreleased]
+
+False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
+`purchase_request` and others): 229 -> 193 findings on one such repo.
+
+### Fixed
+
+- **`missing-xml-ref`** no longer flags the implicit `model_<model_name>` XML IDs
+  Odoo generates for every model (e.g. `ref="model_my_model"` in `ir.rule` and
+  report actions).
+- **`manifest-missing-dependency`** follows `depends` transitively through every
+  manifest it has seen (scanned addons and `odoo_source_path`). When the chain
+  passes through a module with an unknown manifest, the finding is medium
+  confidence instead of high, so it no longer affects the score.
+- **`view-field-not-in-model` / `button-method-not-found`** resolve fields and
+  methods inherited through `_inherit` + a new `_name` (and `_inherits`).
+- **`missing-ondelete`** skips required `Many2one` fields (Odoo defaults them to
+  `restrict`).
+- **`search-in-loop`** no longer flags `browse()`, which does not query the
+  database.
+- **Performance rules** (`search-in-loop`, `create-in-loop`, `write-in-loop`,
+  `n-plus-one-read`, `unbounded-search`) skip files inside an addon's `tests/`
+  directory.
+- **`manifest-data-order-risk`**: a data file named like a view/action/menu is no
+  longer treated as a security file just because it lives in `security/`.
+
+### Not changed
+
+`data-noupdate-risk` on `ir.rule`, `raw-sql-string-interpolation` on
+parameterised dynamic `WHERE` clauses and `manifest-missing-required-fields`
+for `installable` are debatable rather than wrong and keep their current
+behavior.
+
+---
+
 ## [0.5.0] — 2026-10-03
 
 Theme: close the proposal backlog and make findings explainable and trackable

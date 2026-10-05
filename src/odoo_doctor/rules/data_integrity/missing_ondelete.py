@@ -36,6 +36,10 @@ def check_missing_ondelete(ctx: ModuleContext) -> list[Diagnostic]:
                 continue
             if field.ondelete is not None:
                 continue
+            # Odoo defaults a required Many2one to 'restrict' ('set null' would be
+            # rejected for it), so the default is already a deliberate-safe choice.
+            if field.required:
+                continue
 
             diags.append(
                 Diagnostic(

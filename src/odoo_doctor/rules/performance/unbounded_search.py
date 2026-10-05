@@ -7,6 +7,7 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.source import read_source
+from odoo_doctor.rules._ast_helpers import is_test_file
 from odoo_doctor.rules._ast_helpers import receiver_is_orm
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
@@ -26,6 +27,8 @@ def check_unbounded_search(
 ) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
 
+    if is_test_file(file_path, module_name):
+        return []
     source = read_source(file_path)
     if source is None:
         return []

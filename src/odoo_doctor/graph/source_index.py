@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from odoo_doctor.parsers.python_models import parse_models
@@ -14,19 +14,21 @@ from odoo_doctor.parsers.python_models import parse_models
 class SourceIndex:
     model_owners: dict[str, str]  # model_name -> owning module name
     xml_id_owners: dict[str, str]  # xml_id -> owning module name
+    module_depends: dict[str, list[str]] = field(default_factory=dict)
 
 
 def build_source_index(source_path: Path | str | None) -> SourceIndex:
     """Scan and index all addons in the Odoo source path."""
     model_owners: dict[str, str] = {}
     xml_id_owners: dict[str, str] = {}
+    module_depends: dict[str, list[str]] = {}
 
     if not source_path:
-        return SourceIndex(model_owners, xml_id_owners)
+        return SourceIndex(model_owners, xml_id_owners, module_depends)
 
     p = Path(source_path).resolve()
     if not p.is_dir():
-        return SourceIndex(model_owners, xml_id_owners)
+        return SourceIndex(model_owners, xml_id_owners, module_depends)
 
     # Odoo standard addon locations, plus direct addons roots for custom layouts.
     scan_dirs = [p / "addons", p / "odoo" / "addons"]
@@ -53,6 +55,10 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
         if not isinstance(_manifest, dict):
             continue
 
+        module_depends[module_name] = [
+            str(dep) for dep in _manifest.get("depends", []) or []
+        ]
+
         # 1. Parse models
         for py_file in addon_dir.rglob("*.py"):
             if py_file.name.startswith("__"):
@@ -68,4 +74,4 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
         # 2. XML ID indexing is deferred for odoo_source_path (model-only in spec v3)
         pass
 
-    return SourceIndex(model_owners, xml_id_owners)
+    return SourceIndex(model_owners, xml_id_owners, module_depends)

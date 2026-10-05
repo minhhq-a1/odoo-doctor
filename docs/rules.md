@@ -347,11 +347,13 @@ self.env['my.model'].create(vals_list)
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: ORM reads (`search`, `browse`, `read`, ...) inside `for` or `while` loops.
+**Detects**: ORM queries (`search`, `search_count`, `read`) inside `for` or `while` loops. `browse()` is not flagged: it only wraps ids and does not query the database.
 
 **Why**: One query per iteration scales badly with record count.
 
 **Fix**: Move the call out of the loop and batch the results.
+
+**Note**: The performance rules skip files inside an addon's `tests/` directory.
 
 Bad:
 
@@ -463,6 +465,8 @@ records = self.env['res.partner'].search(
 
 **Fix**: Declare `ondelete` explicitly.
 
+**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`.
+
 Bad:
 
 ```python
@@ -550,6 +554,8 @@ self.env['res.partner']
 **Why**: The module installs only when another module happens to be installed first.
 
 **Fix**: Add the providing module to `depends`.
+
+**Note**: A module reachable through `depends` transitively counts as available. When part of that chain is a module whose manifest is unknown (set `odoo_source_path` to index core addons), the finding is reported with medium confidence and does not affect the score.
 
 ### manifest-data-order-risk
 
