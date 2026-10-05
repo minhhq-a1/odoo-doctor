@@ -34,6 +34,7 @@ odoo-doctor scan . --cache | --baseline F | --write-baseline F | --history h.jso
 odoo-doctor fix . [--fix-dry-run]                      # deterministic auto-fixes
 odoo-doctor rules list | explain <rule> | disable <rule> | enable <rule>
 odoo-doctor rules docs --out docs/rules.md [--check]   # regenerate rules reference
+odoo-doctor rules stats [--path DIR] [--cache] [--json]   # which rules users suppress most
 odoo-doctor history show h.jsonl --max-drop 3          # regression gate (exit 2)
 ```
 
@@ -73,6 +74,7 @@ Key concepts that span files:
 - **Rule docs** are generated: `rules/rule_docs.py` (`RULE_DOCS`) is the single source for `docs/rules.md`, HTML, `rules explain` and SARIF `helpUri`.
 - **Taint analysis** (`rules/_taint.py`): `TaintVisitor` tracks SAFE/UNKNOWN/UNSAFE states per variable (lists, branches, module constants) for the Security rules; subclass it and implement `check_call` (see `eval_usage.py`, `raw_sql_interpolation.py`).
 - **Fix ROI** (`core/roi.py`): `rank_fixes` orders a module's score-eligible findings by marginal score gain per effort and fills `ScoreResult.fix_priorities` (via `scanner._score_module`, used by both the live and cached paths). Add an `EFFORT_BY_RULE` entry (1-3) for every new native rule — a test fails otherwise.
+- **Suppression analytics** (`core/suppression_stats.py`): `pipeline.run_pipeline_with_stats` counts findings dropped by inline `disable`, `[ignore] rules` and `[severity] = "off"` (first channel wins; `files/modules` and baseline are not counted). Counts live on `ScoreResult.suppression_stats` and in the scan cache (`CACHE_VERSION` 2) because they cannot be recomputed from post-pipeline findings. `--diff` scans collect none.
 - `skills/*/SKILL.md` are the agent skills installed by `odoo-doctor install`.
 
 ## Adding a Rule

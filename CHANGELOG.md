@@ -4,6 +4,26 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Suppression analytics.** `odoo-doctor rules stats [--path DIR] [--cache] [--json]`
+  counts, per rule, the findings still shown and the findings the user switched off
+  through `# odoo-doctor: disable` (inline, including file-wide), `[ignore] rules` and
+  `[severity] = "off"`, and flags rules where at least half of at least 10 findings were
+  suppressed. A rule mostly silenced inline gets a suggestion to lower it to `info`;
+  rules disabled through config are flagged but get no advice. `[ignore] files/modules`
+  and the baseline are not counted.
+  - The JSON report gains `modules.<name>.suppression_stats` (additive; `schema_version`
+    and `score_schema_version` are unchanged). `scan` prints one hint line when a rule is
+    both noisy and actionable.
+  - `core/pipeline.py::run_pipeline_with_stats` collects the counts; `run_pipeline` is
+    unchanged. The scan cache stores them too, so `CACHE_VERSION` is now 2 (older cache
+    files are ignored once). `--diff` scans do not collect stats.
+
+---
+
 ## [0.6.0] — 2026-10-05
 
 Theme: trust the findings (golden corpus, taint analysis, fix ROI) and cover
