@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 33 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 36 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -34,10 +34,13 @@ Odoo Doctor ships 33 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
 | [manifest-missing-dependency](#manifest-missing-dependency) | P1 | Module Hygiene | error | high |  |
 | [manifest-data-order-risk](#manifest-data-order-risk) | P2 | Module Hygiene | error | high | Yes |
+| [manifest-license-incompatible](#manifest-license-incompatible) | P2 | Module Hygiene | warning | high |  |
 | [manifest-missing-required-fields](#manifest-missing-required-fields) | P2 | Module Hygiene | warning | high | Yes |
+| [missing-external-dependency](#missing-external-dependency) | P2 | Module Hygiene | warning | high |  |
 | [field-no-string-on-required](#field-no-string-on-required) | P2 | Maintainability | info | medium |  |
 | [missing-translation](#missing-translation) | P2 | Maintainability | info | medium |  |
 | [orphan-view](#orphan-view) | P2 | Maintainability | warning | medium |  |
+| [vendored-python-code](#vendored-python-code) | P3 | Maintainability | info | medium |  |
 | [asset-bundle-missing](#asset-bundle-missing) | P2 | Frontend | error | high |  |
 
 ## Security
@@ -674,6 +677,18 @@ Good:
 ]
 ```
 
+### manifest-license-incompatible
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: An addon whose manifest `license` conflicts with the license of a scanned dependency: GPL-2 (version 2 only) combined with a GPL-3 family license in either direction (high confidence), or a proprietary module (OPL-1, OEEL-1) depending on GPL/AGPL code (medium confidence).
+
+**Why**: The combination cannot be distributed under both licenses.
+
+**Fix**: Relicense one module or drop the dependency; check with the licensing owner.
+
+**Note**: Only dependencies whose manifest was scanned are compared.
+
 ### manifest-missing-required-fields
 
 **Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0 · **Fixable**: yes
@@ -683,6 +698,18 @@ Good:
 **Fix**: Add the missing key. Run `odoo-doctor fix` to apply it automatically.
 
 **Note**: Fixable via `odoo-doctor fix`. `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
+
+### missing-external-dependency
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: Third-party Python packages imported by the addon but not listed in `external_dependencies['python']` (of the addon or of a module it depends on).
+
+**Why**: Installing without the package fails at import time instead of with a clear dependency error.
+
+**Fix**: Add `"external_dependencies": {"python": ["pkg"]}` to the manifest, or guard an optional import with `try/except ImportError`.
+
+**Note**: Skipped: stdlib, packages Odoo itself installs, guarded and `TYPE_CHECKING` imports, `tests/` and `migrations/`. Medium confidence when the dependency chain includes a module whose manifest was not scanned.
 
 ## Maintainability
 
@@ -743,6 +770,18 @@ raise UserError(_("Amount must be positive"))
 **Fix**: Reference the view, inherit it, or remove it if unused.
 
 **Note**: Medium confidence: the reference may live in a module that was not scanned. Does not affect the score.
+
+### vendored-python-code
+
+**Tier**: P3 (advisory) · **Severity**: info · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: Third-party Python code copied into an addon: `vendor/`, `lib/` and similar directories containing `.py` files, `*.dist-info` / `*.egg-info`, or a well-known package (for example `six/`) at the top level.
+
+**Why**: Copied code misses security fixes and can clash with the installed version.
+
+**Fix**: Declare the package in `external_dependencies['python']` instead.
+
+**Note**: Medium confidence (does not affect the score). JavaScript libraries under `static/` are normal in Odoo and are not reported.
 
 ## Frontend
 

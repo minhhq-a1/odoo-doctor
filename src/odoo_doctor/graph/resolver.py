@@ -71,6 +71,8 @@ class SymbolResolver:
         extended_fields: dict[str, dict] | None = None,
         extended_methods: dict[str, dict] | None = None,
         module_dependencies: dict[str, list[str]] | None = None,
+        module_licenses: dict[str, str] | None = None,
+        module_external_python: dict[str, set[str]] | None = None,
     ):
         self._repo_models = repo_models
         self._repo_xml_ids = repo_xml_ids
@@ -90,6 +92,11 @@ class SymbolResolver:
             self._source_index.module_depends
         )
         self._module_dependencies.update(module_dependencies or {})
+        # Manifest facts of the scanned addons (supply-chain rules).
+        self._module_licenses: dict[str, str] = dict(module_licenses or {})
+        self._module_external_python: dict[str, set[str]] = dict(
+            module_external_python or {}
+        )
 
     def resolve_model(self, model_name: str) -> SymbolLookup:
         # 1. Repo
@@ -331,3 +338,16 @@ class SymbolResolver:
             else:
                 todo.extend(deps)
         return closure, complete
+
+    def module_license(self, module: str) -> str | None:
+        """Declared manifest license of a scanned addon, if any."""
+        return self._module_licenses.get(module)
+
+    def module_external_python(self, module: str) -> set[str] | None:
+        """Lower-cased top-level names a scanned addon declares as python
+        external_dependencies, or None when its manifest was not scanned."""
+        return self._module_external_python.get(module)
+
+    def is_known_module(self, module: str) -> bool:
+        """True if the module's manifest was scanned (repo or odoo_source_path)."""
+        return module in self._module_dependencies

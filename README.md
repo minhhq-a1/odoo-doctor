@@ -62,7 +62,7 @@ odoo-doctor scan . --diff main --json
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
-The full, generated reference (33 rules, with before/after examples) is in
+The full, generated reference (36 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md).
@@ -164,7 +164,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.5.0
+  uses: minhhq-a1/odoo-doctor@v0.6.0
   with:
     fail-on: warning
     min-score: 75

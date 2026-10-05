@@ -1,0 +1,17 @@
+[
+  [
+    "manifest-license-incompatible",
+    "old_gpl/__manifest__.py",
+    "high"
+  ],
+  [
+    "missing-external-dependency",
+    "deps_demo/models/client.py",
+    "high"
+  ],
+  [
+    "vendored-python-code",
+    "vendor_demo/__manifest__.py",
+    "medium"
+  ]
+]

@@ -50,6 +50,9 @@ import odoo_doctor.rules.frontend.asset_bundle_missing  # noqa: F401
 import odoo_doctor.rules.correctness.monetary_missing_currency_field  # noqa: F401
 import odoo_doctor.rules.correctness.hardcoded_company_or_currency  # noqa: F401
 import odoo_doctor.rules.security.missing_multicompany_rule  # noqa: F401
+import odoo_doctor.rules.manifest.license_compatibility  # noqa: F401
+import odoo_doctor.rules.manifest.external_dependencies  # noqa: F401
+import odoo_doctor.rules.manifest.vendored_python_code  # noqa: F401
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers  # noqa: F401

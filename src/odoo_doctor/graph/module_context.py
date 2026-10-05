@@ -47,6 +47,17 @@ class ProjectGraph:
     resolver: SymbolResolver
 
 
+def _declared_python_packages(raw: dict) -> set[str]:
+    """Lower-cased top-level package names from `external_dependencies['python']`."""
+    external = raw.get("external_dependencies")
+    packages = external.get("python", []) if isinstance(external, dict) else []
+    return {
+        str(name).split(".")[0].strip().lower()
+        for name in packages
+        if isinstance(name, str) and name.strip()
+    }
+
+
 def build_project_graph(
     addon_paths: list[Path],
     odoo_version: str = "unknown",
@@ -174,6 +185,15 @@ def build_project_graph(
         extended_methods=extended_methods,
         module_dependencies={
             name: list(data["manifest"].depends) for name, data in module_data.items()
+        },
+        module_licenses={
+            name: str(data["manifest"].raw["license"])
+            for name, data in module_data.items()
+            if data["manifest"].raw.get("license")
+        },
+        module_external_python={
+            name: _declared_python_packages(data["manifest"].raw)
+            for name, data in module_data.items()
         },
     )
 
