@@ -108,3 +108,29 @@ def test_run_pipeline_result_is_unchanged(tmp_path: Path):
     active = {"keep": None, "ign": None}
     kept, eligible, _ = run_pipeline_with_stats(diags, cfg, set(), active, "17.0")
     assert run_pipeline(diags, cfg, set(), active, "17.0") == (kept, eligible)
+
+
+def test_scope_excluded_findings_are_not_counted_in_config_channels(tmp_path: Path):
+    vendor = tmp_path / "vendor" / "v.py"
+    keep = tmp_path / "k.py"
+    cfg = OdooDoctorConfig(
+        severity_overrides={"off_rule": "off"},
+        ignore_rules=["ign_rule"],
+        ignore_files=["**/vendor/**"],
+        ignore_modules=["legacy"],
+    )
+    diags = [
+        _diag(keep, "keep"),
+        _diag(keep, "off_rule", module="legacy"),  # excluded module
+        _diag(vendor, "off_rule"),  # excluded file
+        _diag(keep, "ign_rule", module="legacy"),
+        _diag(vendor, "ign_rule"),
+        _diag(keep, "off_rule", line=5),  # in scope: still counted
+    ]
+    _, _, stats = _run(diags, cfg)
+    assert stats == {
+        "m": {
+            "keep": _counts(surfaced=1),
+            "off_rule": _counts(severity_off=1),
+        }
+    }

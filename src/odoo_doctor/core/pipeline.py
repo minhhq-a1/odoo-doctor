@@ -295,10 +295,19 @@ def run_pipeline_with_stats(
     diags = normalize_diagnostics(diagnostics)
     diags = deduplicate(diags)
 
-    severity_off = [d for d in diags if config.severity_overrides.get(d.rule) == "off"]
+    # [ignore] files/modules are scope exclusions, not opinions about a rule: the two
+    # config channels only count findings that are still inside the scanned scope.
+    scope_config = replace(config, ignore_rules=[])
+
+    def in_scope(items: list[Diagnostic]) -> list[Diagnostic]:
+        return apply_ignore_filters(items, scope_config, base_path=base_path)
+
+    severity_off = in_scope(
+        [d for d in diags if config.severity_overrides.get(d.rule) == "off"]
+    )
     diags = apply_severity_overrides(diags, config)
 
-    ignored_rule = [d for d in diags if d.rule in config.ignore_rules]
+    ignored_rule = in_scope([d for d in diags if d.rule in config.ignore_rules])
     diags = apply_ignore_filters(diags, config, base_path=base_path)
 
     kept = apply_inline_suppressions(diags, suppressions)
