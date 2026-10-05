@@ -85,6 +85,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Intentionally flawed sample addons used as scan inputs.
 "tests/fixtures/**" = ["B018", "UP031"]
+# Side-effect imports that register rules and fixers (see the comments there).
+"src/odoo_doctor/cli/app.py" = ["F401"]
+"src/odoo_doctor/reporters/json_report.py" = ["F401"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["typer.Argument", "typer.Option"]

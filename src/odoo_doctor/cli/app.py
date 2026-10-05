@@ -8,46 +8,6 @@ from pathlib import Path
 
 import typer
 
-import odoo_doctor.rules.correctness.compute_missing_depends
-import odoo_doctor.rules.correctness.field_no_string_on_required
-import odoo_doctor.rules.correctness.hardcoded_company_or_currency
-import odoo_doctor.rules.correctness.missing_translation
-import odoo_doctor.rules.correctness.monetary_missing_currency_field
-import odoo_doctor.rules.correctness.override_missing_super
-import odoo_doctor.rules.data_integrity.data_noupdate_risk
-import odoo_doctor.rules.data_integrity.missing_ondelete
-import odoo_doctor.rules.frontend.asset_bundle_missing
-import odoo_doctor.rules.manifest.data_order_risk
-import odoo_doctor.rules.manifest.external_dependencies
-
-# Import fixer modules to trigger fixer registration.
-import odoo_doctor.rules.manifest.fixers
-import odoo_doctor.rules.manifest.license_compatibility
-import odoo_doctor.rules.manifest.missing_dependency
-
-# Import all rule modules to trigger @rule registration
-import odoo_doctor.rules.manifest.missing_required_fields
-import odoo_doctor.rules.manifest.vendored_python_code
-import odoo_doctor.rules.performance.create_write_in_loop
-import odoo_doctor.rules.performance.expensive_nonstored_compute
-import odoo_doctor.rules.performance.n_plus_one_read
-import odoo_doctor.rules.performance.search_in_loop
-import odoo_doctor.rules.performance.unbounded_search
-import odoo_doctor.rules.security.eval_usage
-import odoo_doctor.rules.security.missing_access_csv
-import odoo_doctor.rules.security.missing_multicompany_rule
-import odoo_doctor.rules.security.public_controller_sudo
-import odoo_doctor.rules.security.raw_sql_interpolation
-import odoo_doctor.rules.security.record_rule_without_domain
-import odoo_doctor.rules.security.sudo_without_comment
-import odoo_doctor.rules.security.unknown_model_in_access_csv
-import odoo_doctor.rules.upgrade_safety.deprecated_api_usage
-import odoo_doctor.rules.upgrade_safety.removed_model_still_referenced
-import odoo_doctor.rules.xml.button_method_not_found
-import odoo_doctor.rules.xml.duplicate_xml_id
-import odoo_doctor.rules.xml.missing_xml_ref
-import odoo_doctor.rules.xml.orphan_view
-import odoo_doctor.rules.xml.view_field_not_in_model  # noqa: F401
 from odoo_doctor.core.config import OdooDoctorConfig, SurfaceConfig, load_config
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
@@ -61,6 +21,51 @@ from odoo_doctor.reporters.rule_stats import render_rule_stats, render_rule_stat
 from odoo_doctor.reporters.terminal import render_terminal
 from odoo_doctor.rules.docs_gen import render_html, render_markdown, render_rule_text
 from odoo_doctor.rules.registry import default_registry
+
+# Rule and fixer registration happens as a side effect of importing the modules, and
+# registration order is import order: it decides the order of `rules list` and of
+# findings at the same location. Keep this block last and unsorted.
+# isort: off
+# Import all rule modules to trigger @rule registration
+import odoo_doctor.rules.manifest.missing_required_fields
+import odoo_doctor.rules.manifest.missing_dependency
+import odoo_doctor.rules.manifest.data_order_risk
+import odoo_doctor.rules.security.missing_access_csv
+import odoo_doctor.rules.security.eval_usage
+import odoo_doctor.rules.security.unknown_model_in_access_csv
+import odoo_doctor.rules.security.raw_sql_interpolation
+import odoo_doctor.rules.security.public_controller_sudo
+import odoo_doctor.rules.security.sudo_without_comment
+import odoo_doctor.rules.security.record_rule_without_domain
+import odoo_doctor.rules.xml.duplicate_xml_id
+import odoo_doctor.rules.xml.missing_xml_ref
+import odoo_doctor.rules.xml.view_field_not_in_model
+import odoo_doctor.rules.xml.button_method_not_found
+import odoo_doctor.rules.xml.orphan_view
+import odoo_doctor.rules.performance.search_in_loop
+import odoo_doctor.rules.performance.create_write_in_loop
+import odoo_doctor.rules.performance.n_plus_one_read
+import odoo_doctor.rules.performance.unbounded_search
+import odoo_doctor.rules.performance.expensive_nonstored_compute
+import odoo_doctor.rules.correctness.override_missing_super
+import odoo_doctor.rules.correctness.compute_missing_depends
+import odoo_doctor.rules.correctness.field_no_string_on_required
+import odoo_doctor.rules.correctness.missing_translation
+import odoo_doctor.rules.data_integrity.missing_ondelete
+import odoo_doctor.rules.data_integrity.data_noupdate_risk
+import odoo_doctor.rules.upgrade_safety.deprecated_api_usage
+import odoo_doctor.rules.upgrade_safety.removed_model_still_referenced
+import odoo_doctor.rules.frontend.asset_bundle_missing
+import odoo_doctor.rules.correctness.monetary_missing_currency_field
+import odoo_doctor.rules.correctness.hardcoded_company_or_currency
+import odoo_doctor.rules.security.missing_multicompany_rule
+import odoo_doctor.rules.manifest.license_compatibility
+import odoo_doctor.rules.manifest.external_dependencies
+import odoo_doctor.rules.manifest.vendored_python_code
+
+# Import fixer modules to trigger fixer registration.
+import odoo_doctor.rules.manifest.fixers
+# isort: on
 
 app = typer.Typer(
     name="odoo-doctor", help="Unified health scoring for Odoo custom addons."

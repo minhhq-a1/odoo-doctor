@@ -55,6 +55,13 @@ no LLM, no new scoring.
   - Docs in [`docs/lsp.md`](docs/lsp.md) (VS Code, Neovim, Helix). The language server is
     outside the stability contract until a later release lists it.
 
+### Changed
+
+- Internal: the code base now follows the ruff 0.16 default rule set (CI pins `ruff>=0.16,<0.17`)
+  instead of the old `E4,E7,E9,F` selection. No behaviour change: `scan` and `rules` output is
+  identical. The side-effect imports that register rules stay in `isort: off` blocks because
+  registration order is the order of `rules list`; `tests/test_registration_order.py` guards it.
+
 ### Roadmap decisions (explicit close-or-defer)
 
 Closed in 0.7.0: suppression analytics (local, per repo), the stability contract and

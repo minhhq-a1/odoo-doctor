@@ -7,14 +7,17 @@ import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-import odoo_doctor.rules.manifest.data_order_risk
-
-# Importing the rule modules triggers their @rule registration so the registry
-# knows their fixable flag. Import only what this reporter needs.
-import odoo_doctor.rules.manifest.missing_required_fields  # noqa: F401
 from odoo_doctor import __version__
 from odoo_doctor.core.scoring import SCORE_SCHEMA_VERSION, project_score
 from odoo_doctor.rules.registry import default_registry
+
+# Importing the rule modules triggers their @rule registration so the registry
+# knows their fixable flag. Import only what this reporter needs. Registration order is
+# import order (it decides the order of `rules list`), so keep these two as they are.
+# isort: off
+import odoo_doctor.rules.manifest.missing_required_fields
+import odoo_doctor.rules.manifest.data_order_risk
+# isort: on
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
