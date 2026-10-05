@@ -8,14 +8,12 @@ class BadModel(models.Model):
     name = fields.Char(required=True)
     partner_id = fields.Many2one("res.partner", string="Partner")
 
-    def bad_sql_method(self):
+    def bad_sql_method(self, table):
         """Raw SQL with f-string — triggers raw-sql-string-interpolation."""
-        table = "sale_order"
         self.env.cr.execute(f"SELECT * FROM {table}")
 
-    def also_bad_sql(self):
+    def also_bad_sql(self, name):
         """Raw SQL with % formatting — also bad."""
-        name = "test"
         self.env.cr.execute("SELECT * FROM res_partner WHERE name = '%s'" % name)
 
     def good_method(self):

@@ -11,6 +11,20 @@ False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
 
 ### Added
 
+- **Taint analysis for the Security rules** (`rules/_taint.py`). Values are
+  classified SAFE (provably constant), UNKNOWN (opaque, e.g. a parameter) or
+  UNSAFE (a string built from non-constant parts) and followed through local
+  variables, lists (`append`/`extend`/`+=`), `if`/`try`/loop branches (worst case
+  wins) and module-level constants.
+  - `raw-sql-string-interpolation` no longer reports SQL built only from
+    constants, `int()` casts, `self._table`, `SQL(...)` or
+    `','.join(['%s'] * n)` placeholder lists, and now reports dynamic fragments
+    that reach `execute()` through a `join()` over a list or through one branch
+    of an `if`/`else` (previously missed).
+  - `eval-usage` no longer reports `eval(expr)` when `expr` is bound only to
+    constants.
+  - Behaviour change: interpolating a variable that was bound to a string
+    constant is no longer reported (it cannot be injected); a parameter still is.
 - **Golden corpus** (`tests/corpus/`, `tests/test_golden_corpus.py`): sample addons
   scanned end to end and compared with a frozen list of findings, so both true
   positives and previously fixed false positives are regression-guarded.

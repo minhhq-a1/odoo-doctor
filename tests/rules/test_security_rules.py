@@ -21,8 +21,7 @@ def test_raw_sql_fstring(bad_addon: Path):
 def test_raw_sql_percent_format(tmp_path: Path):
     code = dedent("""\
         class M:
-            def m(self):
-                name = "x"
+            def m(self, name):
                 self.env.cr.execute("SELECT * FROM res_partner WHERE name = '%s'" % name)
     """)
     f = tmp_path / "m.py"

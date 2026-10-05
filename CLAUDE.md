@@ -71,6 +71,7 @@ Key concepts that span files:
 - **Plugins**: third-party rules load via `entry_points` (`rules/plugins.py`, only when `[plugins] enabled = true`, with `allow` list/version check/rollback). `src/odoo_doctor/plugin_api.py` is the *only* stable import surface for plugins — don't break it.
 - **Symbol resolution** (`graph/resolver.py`) answers "does this model/field/XML ID exist, and where" using parsed addons, optional `odoo_source_path` (`graph/source_index.py`) and packaged stubs in `graph/stubs/data/{17.0,18.0,19.0}.json` (loader tries exact version, then major).
 - **Rule docs** are generated: `rules/rule_docs.py` (`RULE_DOCS`) is the single source for `docs/rules.md`, HTML, `rules explain` and SARIF `helpUri`.
+- **Taint analysis** (`rules/_taint.py`): `TaintVisitor` tracks SAFE/UNKNOWN/UNSAFE states per variable (lists, branches, module constants) for the Security rules; subclass it and implement `check_call` (see `eval_usage.py`, `raw_sql_interpolation.py`).
 - `skills/*/SKILL.md` are the agent skills installed by `odoo-doctor install`.
 
 ## Adding a Rule

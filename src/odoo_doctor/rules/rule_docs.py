@@ -48,7 +48,12 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule "
         "honours: a trailing comment covers its line, a comment on its own line "
         "covers the rest of the enclosing function. "
-        "`# odoo-doctor: disable=raw-sql-string-interpolation` also works.",
+        "`# odoo-doctor: disable=raw-sql-string-interpolation` also works. "
+        "The rule follows values through local variables, lists (`append`, "
+        "`extend`, `+=`), `if`/`try`/loop branches and module constants: SQL "
+        "built only from constants, `int()` casts, `self._table`, `SQL(...)` or "
+        "`','.join(['%s'] * n)` placeholder lists is not reported, while a "
+        "fragment that reaches the query through a list or a branch is.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
@@ -70,6 +75,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         bad="result = eval(expression)",
         good="from odoo.tools.safe_eval import safe_eval\n"
         "result = safe_eval(expression, {'uid': self.env.uid})",
+        notes="An argument provably built from constants (a literal, or a "
+        "variable bound only to constants) is not reported; anything else, "
+        "including a parameter or a string with interpolated values, is.",
     ),
     "public-controller-sudo-risk": RuleDoc(
         detects="`@http.route` handlers with `auth='public'` or `auth='none'` "
