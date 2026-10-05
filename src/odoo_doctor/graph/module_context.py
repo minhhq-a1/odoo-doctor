@@ -172,6 +172,9 @@ def build_project_graph(
         source_path=odoo_source_path,
         extended_fields=extended_fields,
         extended_methods=extended_methods,
+        module_dependencies={
+            name: list(data["manifest"].depends) for name, data in module_data.items()
+        },
     )
 
     # Build per-module contexts

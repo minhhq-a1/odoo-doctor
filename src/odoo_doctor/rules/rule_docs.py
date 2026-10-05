@@ -166,14 +166,16 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ---------------------------------------------------------- Performance
     "search-in-loop": RuleDoc(
-        detects="ORM reads (`search`, `browse`, `read`, ...) inside `for` or "
-        "`while` loops.",
+        detects="ORM queries (`search`, `search_count`, `read`) inside `for` or "
+        "`while` loops. `browse()` is not flagged: it only wraps ids and does "
+        "not query the database.",
         why="One query per iteration scales badly with record count.",
         fix="Move the call out of the loop and batch the results.",
         bad="for line in lines:\n"
         "    partner = self.env['res.partner'].search([('id', '=', line.pid)])",
         good="partners = self.env['res.partner'].search([('id', 'in', lines.mapped('pid'))])\n"
         "by_id = {p.id: p for p in partners}",
+        notes="The performance rules skip files inside an addon's `tests/` directory.",
     ),
     "create-in-loop": RuleDoc(
         detects="`create()` called inside a loop.",
@@ -257,6 +259,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         why="The module installs only when another module happens to be "
         "installed first.",
         fix="Add the providing module to `depends`.",
+        notes="A module reachable through `depends` transitively counts as "
+        "available. When part of that chain is a module whose manifest is "
+        "unknown (set `odoo_source_path` to index core addons), the finding is "
+        "reported with medium confidence and does not affect the score.",
     ),
     # ------------------------------------------------------- Maintainability
     "orphan-view": RuleDoc(
@@ -291,6 +297,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         fix="Declare `ondelete` explicitly.",
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
+        notes="Required `Many2one` fields are skipped: Odoo already defaults "
+        "them to `restrict`.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "

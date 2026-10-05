@@ -35,7 +35,11 @@ def _module_from_external_id(xml_id: str) -> str | None:
 def check_missing_dependency(ctx: ModuleContext) -> list[Diagnostic]:
     """Check for missing dependencies implied by _inherit, XML references, and inherited views."""
     diags: list[Diagnostic] = []
-    depends_set = set(ctx.depends)
+    # A module reachable through depends (directly or transitively) is available.
+    # If part of that closure is opaque (a core module we have no manifest for), it
+    # might still provide the "missing" module, so we can only be medium-confident.
+    depends_set, closure_complete = ctx.resolver.dependency_closure(ctx.depends)
+    confidence = "high" if closure_complete else "medium"
     manifest_file = str(ctx.path / "__manifest__.py")
 
     missing_deps: dict[str, list[str]] = {}
@@ -106,7 +110,7 @@ def check_missing_dependency(ctx: ModuleContext) -> list[Diagnostic]:
                 severity="error",
                 tier="P1",
                 source="native",
-                confidence="high",
+                confidence=confidence,
                 title=f"Possible missing dependency for '{missing_mod}'",
                 message=f"Module '{missing_mod}' is required but not listed in depends. Evidence: {evidence_str}.",
                 help=f"Add '{missing_mod}' to the 'depends' list in __manifest__.py.",
