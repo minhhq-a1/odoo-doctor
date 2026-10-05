@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 
 def node_is_orm(node: ast.AST, orm_vars: set[str] | None = None) -> bool:
@@ -49,3 +50,17 @@ def receiver_is_orm(call: ast.Call, orm_vars: set[str] | None = None) -> bool:
     if not isinstance(call.func, ast.Attribute):
         return False
     return node_is_orm(call.func.value, orm_vars)
+
+
+def is_test_file(file_path: Path | str, module_name: str) -> bool:
+    """True if the file sits in a `tests/` directory *inside* the addon.
+
+    Only path components below the addon directory count, so an addon that lives
+    under some unrelated `tests/` folder is not mistaken for test code.
+    """
+    parts = Path(file_path).parts
+    if module_name in parts:
+        rel = parts[len(parts) - parts[::-1].index(module_name) :]
+    else:
+        rel = parts[-2:]
+    return "tests" in rel[:-1]

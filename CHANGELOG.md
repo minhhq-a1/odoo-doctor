@@ -4,6 +4,202 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.7.0] — 2026-10-05
+
+Theme: trust and reach. Tell users which rules are noisy in their own repo, state what is
+safe to rely on, and show findings in the editor. All three are local: no hosted service,
+no LLM, no new scoring.
+
+### Added
+
+- **Suppression analytics.** `odoo-doctor rules stats [--path DIR] [--cache] [--json]`
+  counts, per rule, the findings still shown and the findings the user switched off
+  through `# odoo-doctor: disable` (inline, including file-wide), `[ignore] rules` and
+  `[severity] = "off"`, and flags rules where at least half of at least 10 findings were
+  suppressed. A rule mostly silenced inline gets a suggestion to lower it to `info`;
+  rules disabled through config are flagged but get no advice. `[ignore] files/modules`
+  and the baseline are not counted.
+  - The JSON report gains `modules.<name>.suppression_stats` (additive; `schema_version`
+    and `score_schema_version` are unchanged). `scan` prints one hint line when a rule is
+    both noisy and actionable.
+  - `core/pipeline.py::run_pipeline_with_stats` collects the counts; `run_pipeline` is
+    unchanged. The scan cache stores them too, so `CACHE_VERSION` is now 2 (older cache
+    files are ignored once). `--diff` scans do not collect stats.
+- **Stability contract.** [`docs/stability.md`](docs/stability.md) states what is public
+  and what is not (CLI flags and exit codes, JSON report keys, `rules stats --json`,
+  history and baseline files, SARIF, rule IDs, inline-suppression syntax, config keys,
+  `odoo_doctor.plugin_api`) and the policy for changing it: additions are free, removals
+  go through at least one minor release marked `### Deprecated`, rule IDs are permanent.
+  `tests/test_stability_contract.py` fences it with subset checks, so adding names never
+  fails it and removing or renaming one does. No behaviour change.
+- **Language server and VS Code extension (experimental).** `odoo-doctor lsp` serves LSP
+  over stdio (pygls 2.x, optional extra `pip install 'odoo-doctor[lsp]'`, also part of
+  `dev`; without it the command exits 3 with a hint). It publishes every finding of the
+  workspace folder as diagnostics (rule name as code, link to the rule docs) and offers
+  quick fixes: the deterministic auto-fix when the rule has one, disable on this line,
+  disable in this file, and disable in `odoo-doctor.toml`. Findings refresh on startup, on
+  save and on the `odooDoctor.rescan` command; a scan covers the whole folder because
+  cross-module rules need every addon, scans never overlap and saves during a scan are
+  merged. Settings come from `odoo-doctor.toml`.
+  - Code: `odoo_doctor/lsp/` (`convert`, `actions`, `engine` are pure; `server` is the
+    pygls glue), covered by unit tests and an end-to-end JSON-RPC test.
+  - `editors/vscode/` is a TypeScript extension (`odooDoctor.enable`, `odooDoctor.path`,
+    commands to rescan and restart). Build a `.vsix` with `npm run package`; it is not
+    published to the Marketplace. CI compiles and packages it.
+  - Safety: quick fixes that depend on the finding's line are withheld while the buffer has
+    unsaved changes around it; *disable on this line* is only offered where a comment is
+    valid (not inside strings, after a backslash or inside XML tags), keeps CRLF files
+    CRLF, and extends an existing `disable=` comment instead of stacking another. The
+    extension is off in untrusted workspaces. Folders opened through a symlink,
+    nested folders and added/removed folders are handled.
+  - Docs in [`docs/lsp.md`](docs/lsp.md) (VS Code, Neovim, Helix). The language server is
+    outside the stability contract until a later release lists it.
+
+### Roadmap decisions (explicit close-or-defer)
+
+Closed in 0.7.0: suppression analytics (local, per repo), the stability contract and
+the language server with a VS Code extension (experimental). The cache is now version 2
+(see above), so the first `--cache` scan after upgrading is a full scan.
+
+Deferred, with owner version:
+
+| Item | Target | Reason |
+|------|--------|--------|
+| Language server follow-ups: hover, per-keystroke analysis, Marketplace publishing, listing it in the stability contract | 0.8.0 (candidate) | first release is deliberately small; needs real-world use first |
+| Aggregating suppression data across users; confidence calibration from a labelled corpus and a feedback channel | not scheduled | needs the remote score service decision and a labelled corpus (9 cases today) |
+| Percentile score vs. other repos | not scheduled | needs an anonymised dataset and the remote service decision |
+| LLM-assisted fix suggestions | not scheduled | needs an opt-in / privacy design (which model, cost, does source leave the machine) |
+| Hosted remote score service, auth, server-side trends; Odoo in-app reporting module | not scheduled | needs a product decision (open source or hosted) |
+| Inter-procedural / type-aware taint | not scheduled | unchanged from 0.6.0 |
+| Scan daemon / persistent cache | not scheduled | scaling is linear; the language server rescans per save at about 0.06 s per addon |
+| Abandoned-dependency warning | not scheduled | optional in 0.6.0, still no demand |
+| LTS line, security audit, performance SLA, migration guide | toward 1.0 | the stability contract is the first step |
+| Rule-alias mechanism; warning on unknown config keys | when first needed | the policy already requires an alias on a rename; unknown keys are documented as ignored |
+
+---
+
+## [0.6.0] — 2026-10-05
+
+Theme: trust the findings (golden corpus, taint analysis, fix ROI) and cover
+multi-company / multi-currency. Also false-positive fixes found by scanning real
+OCA/custom addons (`queue_job`, `purchase_request` and others): 229 -> 188
+findings on one such repo.
+
+### Performance
+
+- **Scans are about 2x faster** (0.93s -> 0.48s on 14 addons / 169 files / 18.8k
+  lines; same findings, same order, same scores). Cause, found by profiling: every
+  file-based rule read and `ast.parse`d every file itself, about 11 parses per file.
+  - `core/source.py` gains `parse_python(path)`: a small (16 entries) cache keyed
+    by path and `(mtime_ns, size)`, shared by `read_source`, so a rewritten file is
+    never served stale. Parses per scan: 1316 -> 277.
+  - The scanner runs file-based rules file-first (each file is parsed once and
+    every rule runs on it), then concatenates results in rule order, so output
+    order is unchanged and memory stays flat (peak RSS +4 MB).
+  - `raw-sql-string-interpolation` and the inline-suppression scanner no longer
+    tokenize files that cannot contain a `pylint:` / `odoo-doctor:` marker.
+  - Scaling is linear (~0.06 s per addon from 14 to 112 addons). A native (Rust)
+    core is not needed at this size: graph building is under 20% of the time.
+  - Contract: the tree returned by `parse_python` is shared, treat it as read-only.
+
+### Added
+
+- **Taint analysis for the Security rules** (`rules/_taint.py`). Values are
+  classified SAFE (provably constant), UNKNOWN (opaque, e.g. a parameter) or
+  UNSAFE (a string built from non-constant parts) and followed through local
+  variables, lists (`append`/`extend`/`+=`), `if`/`try`/loop branches (worst case
+  wins) and module-level constants.
+  - `raw-sql-string-interpolation` no longer reports SQL built only from
+    constants, `int()` casts, `self._table`, `SQL(...)` or
+    `','.join(['%s'] * n)` placeholder lists, and now reports dynamic fragments
+    that reach `execute()` through a `join()` over a list or through one branch
+    of an `if`/`else` (previously missed).
+  - `eval-usage` no longer reports `eval(expr)` when `expr` is bound only to
+    constants.
+  - Behaviour change: interpolating a variable that was bound to a string
+    constant is no longer reported (it cannot be injected); a parameter still is.
+- **Supply-chain rules** (native rules: 33 -> 36; kept inside the existing
+  categories so scores stay comparable): `manifest-license-incompatible`
+  (Module Hygiene), `missing-external-dependency` (Module Hygiene, skips stdlib,
+  Odoo's own requirements, guarded imports, tests) and `vendored-python-code`
+  (Maintainability, medium confidence).
+- **Multi-company / multi-currency rules** (native rules: 30 -> 33):
+  - `monetary-missing-currency-field` (Correctness, P1, high): a `fields.Monetary`
+    whose currency field (`currency_id` or `currency_field=`) provably does not
+    exist on the model, following `_inherit`/`_inherits` and extensions in other
+    scanned modules. Models extending an upstream model are skipped.
+  - `missing-multicompany-rule` (Security, P1, medium): a model defined in the
+    addon with a `company_id` to `res.company` that no `ir.rule` in the scanned
+    modules protects.
+  - `hardcoded-company-or-currency` (Correctness, P2, medium):
+    `env.ref('base.main_company')` / `env.ref('base.USD')` in business code
+    (install hooks, `migrations/` and `tests/` are skipped).
+  - The parser now records `currency_field` on Monetary fields and the resolver
+    can tell whether any scanned module declares an `ir.rule` for a model.
+- **Fix ROI ranking** (`core/roi.py`). Each module's score-eligible findings are
+  ranked by marginal score gain per effort (greedy on the unclamped
+  `0.4 x min + 0.6 x avg` blend, so the weakest category is attacked first).
+  Terminal: a *Fix first* list per module. JSON: `modules.<name>.fix_priorities`
+  (top 10: `rank`, `rule`, `file_path`, `line`, `tier`, `impact`, `effort`, `roi`,
+  `projected_score`, `score_gain`, `fixable`). `EFFORT_BY_RULE` holds a 1-3 effort
+  per native rule (a test enforces an entry for every rule).
+- **Golden corpus** (`tests/corpus/`, `tests/test_golden_corpus.py`): sample addons
+  scanned end to end and compared with a frozen list of findings, so both true
+  positives and previously fixed false positives are regression-guarded.
+  Refresh with `UPDATE_GOLDEN=1 pytest tests/test_golden_corpus.py`.
+
+### Fixed
+
+- **`missing-xml-ref`** no longer flags the implicit `model_<model_name>` XML IDs
+  Odoo generates for every model (e.g. `ref="model_my_model"` in `ir.rule` and
+  report actions).
+- **`manifest-missing-dependency`** follows `depends` transitively through every
+  manifest it has seen (scanned addons and `odoo_source_path`). When the chain
+  passes through a module with an unknown manifest, the finding is medium
+  confidence instead of high, so it no longer affects the score.
+- **`view-field-not-in-model` / `button-method-not-found`** resolve fields and
+  methods inherited through `_inherit` + a new `_name` (and `_inherits`).
+- **`missing-ondelete`** skips required `Many2one` fields (Odoo defaults them to
+  `restrict`).
+- **`search-in-loop`** no longer flags `browse()`, which does not query the
+  database.
+- **Performance rules** (`search-in-loop`, `create-in-loop`, `write-in-loop`,
+  `n-plus-one-read`, `unbounded-search`) skip files inside an addon's `tests/`
+  directory.
+- **`manifest-data-order-risk`**: a data file named like a view/action/menu is no
+  longer treated as a security file just because it lives in `security/`.
+- **`data-noupdate-risk`**: `ir.rule` records are reported with medium confidence
+  (not scored). Core and OCA disagree on `noupdate` for rules, so neither is a
+  defect; `ir.config_parameter` and `ir.cron` stay high confidence.
+- **`raw-sql-string-interpolation`** honours pylint-odoo's
+  `# pylint: disable=sql-injection` marker (trailing comment: that line; own-line
+  comment: the rest of the enclosing function), so explicitly vetted dynamic
+  `WHERE` fragments are no longer reported.
+- **`manifest-missing-required-fields`** no longer requires `installable` (Odoo
+  defaults it to `True`) and no longer requires `data` when the manifest declares
+  `assets` or `demo`. `odoo-doctor fix` no longer inserts `installable`.
+
+### Roadmap decisions (explicit close-or-defer)
+
+Closed in 0.6.0: multi-company / multi-currency rules, golden corpus, taint
+analysis for the Security rules, fix ROI ranking, supply-chain rules, 2x faster
+scans.
+
+Deferred, with owner version:
+
+| Item | Target | Reason |
+|------|--------|--------|
+| LSP server + VS Code extension | 0.7.0 | new stack (pygls + TypeScript); 0.6.0 spent its budget on rule trust and speed |
+| Percentile score vs. other repos | 0.7.0 | needs an anonymised dataset and the remote service decision |
+| LLM-assisted fix suggestions | 0.7.0 | deterministic fixers and ROI ranking come first; needs an opt-in/privacy design |
+| Suppression analytics and calibration | 0.7.0 | the golden corpus is the first calibration input |
+| Inter-procedural / type-aware taint | not scheduled | intra-procedural taint removed most noise; revisit with corpus evidence |
+| Scan daemon / persistent cache | not scheduled | scaling is linear and a scan of 14 addons takes about 0.5 s |
+| Hosted remote score service, auth, server-side trends | 0.7.0 (needs a product decision) | unchanged from 0.5.0 |
+| Odoo in-app reporting module | 0.7.0 (depends on the remote service decision) | unchanged from 0.5.0 |
+
+---
+
 ## [0.5.0] — 2026-10-03
 
 Theme: close the proposal backlog and make findings explainable and trackable

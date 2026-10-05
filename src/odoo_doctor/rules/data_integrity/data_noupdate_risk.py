@@ -17,6 +17,11 @@ _CRITICAL_MODELS = {
     "ir.cron",
 }
 
+# Record rules are shipped both ways in the wild: Odoo core wraps them in
+# noupdate="1" (admin edits survive), many OCA modules leave them updatable (rule
+# fixes ship with the module). Neither is a defect, so report without scoring.
+_MEDIUM_CONFIDENCE_MODELS = {"ir.rule"}
+
 
 @rule(
     name="data-noupdate-risk",
@@ -37,6 +42,7 @@ def check_data_noupdate_risk(ctx: ModuleContext) -> list[Diagnostic]:
         if rec.noupdate:
             continue
 
+        confidence = "medium" if rec.model in _MEDIUM_CONFIDENCE_MODELS else "high"
         diags.append(
             Diagnostic(
                 module=ctx.name,
@@ -48,7 +54,7 @@ def check_data_noupdate_risk(ctx: ModuleContext) -> list[Diagnostic]:
                 severity="warning",
                 tier="P2",
                 source="native",
-                confidence="high",
+                confidence=confidence,
                 title=f"'{rec.model}' record without noupdate",
                 message=f"Record '{rec.xml_id}' of model '{rec.model}' is not wrapped in noupdate='1'. It will be overwritten on every module update.",
                 help="Wrap this record in <data noupdate='1'> to prevent overwriting user modifications.",

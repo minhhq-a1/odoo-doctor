@@ -21,6 +21,10 @@ if TYPE_CHECKING:
     from odoo_doctor.core.scoring import ScoreResult
 
 
+# How many ranked fixes each module reports (the full ranking can be thousands).
+_MAX_FIX_PRIORITIES = 10
+
+
 def render_json(
     diagnostics: list[Diagnostic],
     scores: dict[str, ScoreResult],
@@ -48,6 +52,11 @@ def render_json(
                 ],
                 "diagnostics_counted": score.diagnostics_counted,
             },
+            "fix_priorities": [
+                {"rank": rank, **asdict(fp)}
+                for rank, fp in enumerate(score.fix_priorities[:_MAX_FIX_PRIORITIES], 1)
+            ],
+            "suppression_stats": getattr(score, "suppression_stats", {}),
             "diagnostics": [asdict(d) for d in module_diags],
         }
 

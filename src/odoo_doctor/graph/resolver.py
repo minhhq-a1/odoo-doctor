@@ -70,6 +70,9 @@ class SymbolResolver:
         source_path: str | None = None,
         extended_fields: dict[str, dict] | None = None,
         extended_methods: dict[str, dict] | None = None,
+        module_dependencies: dict[str, list[str]] | None = None,
+        module_licenses: dict[str, str] | None = None,
+        module_external_python: dict[str, set[str]] | None = None,
     ):
         self._repo_models = repo_models
         self._repo_xml_ids = repo_xml_ids
@@ -82,6 +85,18 @@ class SymbolResolver:
         # so an action_* button added to sale.order via _inherit resolves FOUND.
         self._extended_methods: dict[str, dict] = extended_methods or {}
         self._source_index = build_source_index(source_path)
+        self._rule_models: set[str] | None = None
+        # module -> declared depends, for modules whose manifest we have seen
+        # (scanned addons, plus the Odoo source checkout when configured).
+        self._module_dependencies: dict[str, list[str]] = dict(
+            self._source_index.module_depends
+        )
+        self._module_dependencies.update(module_dependencies or {})
+        # Manifest facts of the scanned addons (supply-chain rules).
+        self._module_licenses: dict[str, str] = dict(module_licenses or {})
+        self._module_external_python: dict[str, set[str]] = dict(
+            module_external_python or {}
+        )
 
     def resolve_model(self, model_name: str) -> SymbolLookup:
         # 1. Repo
@@ -118,7 +133,30 @@ class SymbolResolver:
 
         return SymbolLookup(ResolveResult.UNKNOWN)
 
-    def resolve_field(self, model_name: str, field_name: str) -> SymbolLookup:
+    def _ancestor_has(
+        self, model_name: str, member: str, kind: str, _seen: set[str]
+    ) -> bool:
+        """True if a repo model's _inherit/_inherits ancestor provides the member.
+
+        Covers prototype inheritance (`_inherit = "a"` + a new `_name`), where the new
+        model copies every field and method of its parents.
+        """
+        repo_model = self._repo_models.get(model_name)
+        if repo_model is None:
+            return False
+        for anc in list(repo_model.inherit) + list(repo_model.inherits.keys()):
+            if anc == model_name or anc in _seen:
+                continue
+            _seen.add(anc)
+            resolve = self.resolve_field if kind == "field" else self.resolve_method
+            if resolve(anc, member, _seen).status == ResolveResult.FOUND:
+                return True
+        return False
+
+    def resolve_field(
+        self, model_name: str, field_name: str, _seen: set[str] | None = None
+    ) -> SymbolLookup:
+        _seen = {model_name} if _seen is None else _seen | {model_name}
         # 1. Repo model's own fields
         repo_model = self._repo_models.get(model_name)
         if repo_model is not None and field_name in repo_model.fields:
@@ -133,6 +171,10 @@ class SymbolResolver:
         if field_name in ORM_MAGIC_FIELDS:
             return SymbolLookup(ResolveResult.FOUND, "builtin")
 
+        # 3b. Fields inherited from ancestors (prototype inheritance / _inherits)
+        if self._ancestor_has(model_name, field_name, "field", _seen):
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
         # 4. Stub fields (presence only)
         if self._stubs:
             stub_model = self._stubs.models.get(model_name)
@@ -146,7 +188,10 @@ class SymbolResolver:
         # 6. Otherwise we cannot prove absence.
         return SymbolLookup(ResolveResult.UNKNOWN)
 
-    def resolve_method(self, model_name: str, method_name: str) -> SymbolLookup:
+    def resolve_method(
+        self, model_name: str, method_name: str, _seen: set[str] | None = None
+    ) -> SymbolLookup:
+        _seen = {model_name} if _seen is None else _seen | {model_name}
         # 1. Repo model's own methods
         repo_model = self._repo_models.get(model_name)
         if repo_model is not None and method_name in repo_model.methods:
@@ -155,6 +200,10 @@ class SymbolResolver:
         # 2. Methods added to the model via _inherit elsewhere in the repo
         ext = self._extended_methods.get(model_name)
         if ext and method_name in ext:
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
+        # 2b. Methods inherited from ancestors (prototype inheritance / _inherits)
+        if self._ancestor_has(model_name, method_name, "method", _seen):
             return SymbolLookup(ResolveResult.FOUND, "repo")
 
         # 3. Stub methods (presence only)
@@ -207,8 +256,34 @@ class SymbolResolver:
         if self._stubs and xml_id in self._stubs.xml_ids:
             return SymbolLookup(ResolveResult.FOUND, "stub")
 
+        # 3. Implicit ir.model xml ids: Odoo registers `<module>.model_<model_name
+        #    with dots as underscores>` for every model, with no XML declaration.
+        if self._is_implicit_model_xml_id(xml_id):
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
         # XML IDs are module-scoped; we can't prove absence without full knowledge
         return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def model_has_record_rule(self, model_name: str) -> bool:
+        """True if any scanned module declares an `ir.rule` for the model."""
+        if self._rule_models is None:
+            by_suffix = {m.replace(".", "_"): m for m in self._repo_models}
+            self._rule_models = set()
+            for info in self._repo_xml_ids.values():
+                if getattr(info, "model", None) != "ir.rule":
+                    continue
+                for ref in getattr(info, "refs", []):
+                    name = ref.rpartition(".")[2]
+                    if name.startswith("model_") and name[6:] in by_suffix:
+                        self._rule_models.add(by_suffix[name[6:]])
+        return model_name in self._rule_models
+
+    def _is_implicit_model_xml_id(self, xml_id: str) -> bool:
+        _module, _, name = xml_id.rpartition(".")
+        if not name.startswith("model_"):
+            return False
+        suffix = name[len("model_") :]
+        return any(m.replace(".", "_") == suffix for m in self._repo_models)
 
     def resolve_xml_id_for_module(
         self, xml_id: str, current_module: str
@@ -238,3 +313,41 @@ class SymbolResolver:
         ):
             return True
         return False
+
+    def dependency_closure(self, depends: list[str]) -> tuple[set[str], bool]:
+        """Transitive closure of `depends` over every manifest we know about.
+
+        Returns (modules, complete). `complete` is False when some module in the
+        closure has no manifest we have seen (e.g. a core module without a
+        configured odoo_source_path), so its own dependencies are unknown and the
+        closure may be missing modules.
+        """
+        closure: set[str] = set()
+        complete = True
+        todo = list(depends)
+        while todo:
+            mod = todo.pop()
+            if mod in closure:
+                continue
+            closure.add(mod)
+            if mod in _ALWAYS_AVAILABLE:
+                continue
+            deps = self._module_dependencies.get(mod)
+            if deps is None:
+                complete = False
+            else:
+                todo.extend(deps)
+        return closure, complete
+
+    def module_license(self, module: str) -> str | None:
+        """Declared manifest license of a scanned addon, if any."""
+        return self._module_licenses.get(module)
+
+    def module_external_python(self, module: str) -> set[str] | None:
+        """Lower-cased top-level names a scanned addon declares as python
+        external_dependencies, or None when its manifest was not scanned."""
+        return self._module_external_python.get(module)
+
+    def is_known_module(self, module: str) -> bool:
+        """True if the module's manifest was scanned (repo or odoo_source_path)."""
+        return module in self._module_dependencies

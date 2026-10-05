@@ -1,0 +1,17 @@
+[
+  [
+    "data-noupdate-risk",
+    "shop/security/rules.xml",
+    "medium"
+  ],
+  [
+    "data-noupdate-risk",
+    "shop/security/rules.xml",
+    "medium"
+  ],
+  [
+    "missing-xml-ref",
+    "shop/security/rules.xml",
+    "high"
+  ]
+]

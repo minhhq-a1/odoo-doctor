@@ -7,7 +7,8 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
+from odoo_doctor.rules._taint import Taint, TaintVisitor
 from odoo_doctor.rules.registry import rule
 
 _DANGEROUS = {"eval", "exec"}
@@ -25,30 +26,36 @@ _DANGEROUS = {"eval", "exec"}
 def check_eval_usage(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
-    diags: list[Diagnostic] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
+    visitor = _EvalVisitor(file_path, module_name, odoo_version)
+    visitor.visit(tree)
+    return visitor.diagnostics
+
+
+class _EvalVisitor(TaintVisitor):
+    def __init__(self, file_path: Path, module_name: str, odoo_version: str) -> None:
+        super().__init__()
+        self.file_path = file_path
+        self.module_name = module_name
+        self.odoo_version = odoo_version
+        self.diagnostics: list[Diagnostic] = []
+
+    def check_call(self, node: ast.Call) -> None:
         # Only the bare builtin names eval / exec (not attribute calls like
         # tools.safe_eval, which is a separate, sandboxed function).
         if not (isinstance(node.func, ast.Name) and node.func.id in _DANGEROUS):
-            continue
-        # A literal-only argument (eval("1+1")) is far less risky; flag when the
-        # first arg is anything other than a constant string/number.
-        if node.args and isinstance(node.args[0], ast.Constant):
-            continue
-        diags.append(
+            return
+        # An argument provably built from constants only (a literal, or a variable
+        # bound to one) is far less risky; flag everything else.
+        if node.args and self.taint(node.args[0]) == Taint.SAFE:
+            return
+        self.diagnostics.append(
             Diagnostic(
-                module=module_name,
-                file_path=str(file_path),
+                module=self.module_name,
+                file_path=str(self.file_path),
                 line=node.lineno,
                 column=node.col_offset,
                 rule="eval-usage",
@@ -66,7 +73,6 @@ def check_eval_usage(
                     "Avoid eval/exec. For Odoo domains/expressions use "
                     "odoo.tools.safe_eval; otherwise refactor to explicit logic."
                 ),
-                odoo_version=odoo_version,
+                odoo_version=self.odoo_version,
             )
         )
-    return diags

@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import ast
+import io
+import re
+import tokenize
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python, read_source
+from odoo_doctor.rules._taint import Taint, TaintVisitor
 from odoo_doctor.rules.registry import rule
 
 _CR_METHODS = {"execute", "executemany"}
@@ -35,75 +39,89 @@ def check_raw_sql_interpolation(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
     """Find cr.execute() calls with dynamically interpolated SQL strings."""
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
-    visitor = _RawSqlVisitor(file_path, module_name, odoo_version)
+    visitor = _RawSqlVisitor(
+        file_path,
+        module_name,
+        odoo_version,
+        _pylint_disabled_ranges(read_source(file_path) or "", tree),
+    )
     visitor.visit(tree)
     return visitor.diagnostics
 
 
-class _RawSqlVisitor(ast.NodeVisitor):
-    def __init__(self, file_path: Path, module_name: str, odoo_version: str) -> None:
+# pylint-odoo's own check for this pattern. A developer who writes this marker is
+# explicitly asserting the dynamic part is not user data (e.g. a WHERE fragment
+# whose values are bound through parameters), so we honour it like pylint does.
+_PYLINT_DISABLE_RE = re.compile(r"pylint:\s*disable\s*=\s*([\w\-,\s]+)")
+
+
+def _pylint_disabled_ranges(source: str, tree: ast.AST) -> list[tuple[int, int]]:
+    """Line ranges where `# pylint: disable=sql-injection` is in effect.
+
+    A trailing comment covers its own line; a comment on its own line covers the
+    rest of the enclosing function (or module), as in pylint.
+    """
+    scopes = [
+        (n.lineno, n.end_lineno or n.lineno)
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    ranges: list[tuple[int, int]] = []
+    if "pylint" not in source:  # tokenizing every file only to find nothing is slow
+        return ranges
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError):
+        return ranges
+    for tok in tokens:
+        if tok.type != tokenize.COMMENT:
+            continue
+        match = _PYLINT_DISABLE_RE.search(tok.string)
+        if not match or "sql-injection" not in {
+            name.strip() for name in match.group(1).split(",")
+        }:
+            continue
+        line = tok.start[0]
+        if tok.line[: tok.start[1]].strip():  # trailing comment
+            ranges.append((line, line))
+            continue
+        enclosing = [end for start, end in scopes if start <= line <= end]
+        ranges.append((line, min(enclosing) if enclosing else 10**9))
+    return ranges
+
+
+class _RawSqlVisitor(TaintVisitor):
+    def __init__(
+        self,
+        file_path: Path,
+        module_name: str,
+        odoo_version: str,
+        disabled_ranges: list[tuple[int, int]] | None = None,
+    ) -> None:
+        super().__init__()
+        self._disabled_ranges = disabled_ranges or []
         self.file_path = file_path
         self.module_name = module_name
         self.odoo_version = odoo_version
         self.diagnostics: list[Diagnostic] = []
-        self._unsafe_stack: list[set[str]] = [set()]
 
-    @property
-    def _unsafe_names(self) -> set[str]:
-        return self._unsafe_stack[-1]
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self._unsafe_stack.append(set())
-        self.generic_visit(node)
-        self._unsafe_stack.pop()
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self.visit_FunctionDef(node)  # type: ignore[arg-type]
-
-    def visit_Assign(self, node: ast.Assign) -> None:
-        is_unsafe = _is_unsafe_sql_expr(node.value, self._unsafe_names)
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                if is_unsafe:
-                    self._unsafe_names.add(target.id)
-                else:
-                    self._unsafe_names.discard(target.id)
-        self.generic_visit(node)
-
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        if isinstance(node.target, ast.Name) and node.value is not None:
-            if _is_unsafe_sql_expr(node.value, self._unsafe_names):
-                self._unsafe_names.add(node.target.id)
-            else:
-                self._unsafe_names.discard(node.target.id)
-        self.generic_visit(node)
-
-    def visit_AugAssign(self, node: ast.AugAssign) -> None:
-        if isinstance(node.target, ast.Name) and isinstance(node.op, ast.Add):
-            if node.target.id in self._unsafe_names or _is_dynamic_expr(
-                node.value, self._unsafe_names
-            ):
-                self._unsafe_names.add(node.target.id)
-        self.generic_visit(node)
-
-    def visit_Call(self, node: ast.Call) -> None:
-        if _is_cursor_execute(node) and node.args:
-            sql_arg = node.args[0]
-            if _is_unsafe_sql_expr(sql_arg, self._unsafe_names):
-                self.diagnostics.append(
-                    _make_diagnostic(
-                        node, self.file_path, self.module_name, self.odoo_version
-                    )
-                )
-        self.generic_visit(node)
+    def check_call(self, node: ast.Call) -> None:
+        if not (_is_cursor_execute(node) and node.args):
+            return
+        sql_arg = node.args[0]
+        if _is_plain_text_format(sql_arg):
+            return
+        if self.taint(sql_arg) != Taint.UNSAFE:
+            return
+        if any(start <= node.lineno <= end for start, end in self._disabled_ranges):
+            return
+        self.diagnostics.append(
+            _make_diagnostic(node, self.file_path, self.module_name, self.odoo_version)
+        )
 
 
 def _is_cursor_execute(node: ast.Call) -> bool:
@@ -114,69 +132,19 @@ def _is_cursor_execute(node: ast.Call) -> bool:
     return _dotted_name(node.func.value) in _CR_OBJECTS
 
 
-def _all_constants(node: ast.expr) -> bool:
-    if isinstance(node, ast.Constant):
-        return True
-    if isinstance(node, (ast.Tuple, ast.List)):
-        return all(_all_constants(elt) for elt in node.elts)
-    return False
-
-
-def _is_unsafe_sql_expr(node: ast.expr, unsafe_names: set[str]) -> bool:
-    if isinstance(node, ast.Name):
-        return node.id in unsafe_names
-    if isinstance(node, ast.JoinedStr):
-        return not _is_safe_fstring(node)
-    if isinstance(node, ast.BinOp):
-        if isinstance(node.op, ast.Mod):
-            return not _all_constants(node.right)
-        if isinstance(node.op, ast.Add):
-            return _is_dynamic_expr(node.left, unsafe_names) or _is_dynamic_expr(
-                node.right, unsafe_names
-            )
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-        if node.func.attr == "format" and _looks_like_sql(node.func.value):
-            has_dynamic_arg = any(not _all_constants(arg) for arg in node.args)
-            has_dynamic_kwarg = any(
-                not _all_constants(kw.value) for kw in node.keywords
-            )
-            return has_dynamic_arg or has_dynamic_kwarg
-    return False
-
-
-def _is_dynamic_expr(node: ast.expr, unsafe_names: set[str]) -> bool:
-    if _is_unsafe_sql_expr(node, unsafe_names):
-        return True
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+def _is_plain_text_format(node: ast.expr) -> bool:
+    """`"some {} text".format(x)` with no SQL keyword is not a query being built."""
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
         return False
-    if _is_safe_table_name(node):
-        return False
-    return True
-
-
-def _looks_like_sql(node: ast.expr) -> bool:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return any(
-            token in node.value.upper()
+    receiver = node.func.value
+    return (
+        node.func.attr == "format"
+        and isinstance(receiver, ast.Constant)
+        and isinstance(receiver.value, str)
+        and not any(
+            token in receiver.value.upper()
             for token in ("SELECT", "UPDATE", "INSERT", "DELETE", "CREATE")
         )
-    return True
-
-
-def _is_safe_fstring(node: ast.JoinedStr) -> bool:
-    """Allow view/table DDL f-strings that only interpolate self._table or cls._table."""
-    for val in node.values:
-        if isinstance(val, ast.FormattedValue) and not _is_safe_table_name(val.value):
-            return False
-    return True
-
-
-def _is_safe_table_name(node: ast.expr) -> bool:
-    return (
-        isinstance(node, ast.Attribute)
-        and isinstance(node.value, ast.Name)
-        and node.value.id in {"self", "cls"}
-        and node.attr == "_table"
     )
 
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
+from odoo_doctor.core.suppression_stats import SuppressionStats, build_stats
 from odoo_doctor.rules.rule_docs import rule_doc_url
 
 if TYPE_CHECKING:
@@ -272,6 +273,63 @@ def mark_score_eligibility(
 # --- Composed pipeline ---
 
 
+def run_pipeline_with_stats(
+    diagnostics: list[Diagnostic],
+    config: OdooDoctorConfig,
+    suppressions: Suppressions,
+    active_rules: ActiveRules,
+    detected_version: str,
+    base_path: Path | str | None = None,
+) -> tuple[list[Diagnostic], list[bool], SuppressionStats]:
+    """Run all 7 stages and also count what the user's own switches dropped.
+
+    Dropped findings are found with one predicate per channel, in stage order, not by
+    diffing the list around a stage: stage 3 also rewrites the severity of the findings
+    it keeps. A finding counts in the first channel that drops it, and dropped findings
+    go through the version/capability gates so rules that would not run are not counted.
+    """
+    if base_path is not None:
+        base_path = Path(base_path).resolve()
+    diags = normalize_diagnostics(diagnostics)
+    diags = deduplicate(diags)
+
+    # [ignore] files/modules are scope exclusions, not opinions about a rule: the two
+    # config channels only count findings that are still inside the scanned scope.
+    scope_config = replace(config, ignore_rules=[])
+
+    def in_scope(items: list[Diagnostic]) -> list[Diagnostic]:
+        return apply_ignore_filters(items, scope_config, base_path=base_path)
+
+    severity_off = in_scope(
+        [d for d in diags if config.severity_overrides.get(d.rule) == "off"]
+    )
+    diags = apply_severity_overrides(diags, config)
+
+    ignored_rule = in_scope([d for d in diags if d.rule in config.ignore_rules])
+    diags = apply_ignore_filters(diags, config, base_path=base_path)
+
+    kept = apply_inline_suppressions(diags, suppressions)
+    kept_ids = {id(d) for d in kept}  # stage 5 only filters, so identity is safe
+    inline = [d for d in diags if id(d) not in kept_ids]
+    diags = kept
+
+    def gate(items: list[Diagnostic]) -> list[Diagnostic]:
+        items = apply_version_gates(items, active_rules, detected_version)
+        return apply_capability_gates(items, config, detected_version)
+
+    diags = gate(diags)
+    stats = build_stats(
+        diags,
+        {
+            "severity_off": gate(severity_off),
+            "ignore_rule": gate(ignored_rule),
+            "inline": gate(inline),
+        },
+    )
+    eligible = mark_score_eligibility(diags)
+    return diags, eligible, stats
+
+
 def run_pipeline(
     diagnostics: list[Diagnostic],
     config: OdooDoctorConfig,
@@ -281,14 +339,12 @@ def run_pipeline(
     base_path: Path | str | None = None,
 ) -> tuple[list[Diagnostic], list[bool]]:
     """Run all 7 pipeline stages in order. Returns (diagnostics, eligibility)."""
-    if base_path is not None:
-        base_path = Path(base_path).resolve()
-    diags = normalize_diagnostics(diagnostics)
-    diags = deduplicate(diags)
-    diags = apply_severity_overrides(diags, config)
-    diags = apply_ignore_filters(diags, config, base_path=base_path)
-    diags = apply_inline_suppressions(diags, suppressions)
-    diags = apply_version_gates(diags, active_rules, detected_version)
-    diags = apply_capability_gates(diags, config, detected_version)
-    eligible = mark_score_eligibility(diags)
+    diags, eligible, _stats = run_pipeline_with_stats(
+        diagnostics,
+        config,
+        suppressions,
+        active_rules,
+        detected_version,
+        base_path=base_path,
+    )
     return diags, eligible

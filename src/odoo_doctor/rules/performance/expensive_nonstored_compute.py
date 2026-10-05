@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
 from odoo_doctor.rules._ast_helpers import receiver_is_orm
 from odoo_doctor.rules.registry import rule
 
@@ -67,12 +67,8 @@ def _first_query(func: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.Call | Non
 def check_expensive_nonstored_compute(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     diags: list[Diagnostic] = []

@@ -2,23 +2,26 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 30 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 36 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
 | [eval-usage](#eval-usage) | P0 | Security | error | high |  |
 | [missing-access-csv](#missing-access-csv) | P0 | Security | error | high |  |
 | [raw-sql-string-interpolation](#raw-sql-string-interpolation) | P0 | Security | error | high |  |
+| [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
 | [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
 | [duplicate-xml-id](#duplicate-xml-id) | P1 | Correctness | error | high |  |
 | [missing-xml-ref](#missing-xml-ref) | P1 | Correctness | error | high |  |
+| [monetary-missing-currency-field](#monetary-missing-currency-field) | P1 | Correctness | error | high |  |
 | [override-missing-super](#override-missing-super) | P1 | Correctness | error | high |  |
 | [unknown-model-in-access-csv](#unknown-model-in-access-csv) | P1 | Correctness | error | high |  |
 | [view-field-not-in-model](#view-field-not-in-model) | P1 | Correctness | error | high |  |
 | [compute-missing-depends](#compute-missing-depends) | P2 | Correctness | warning | high |  |
+| [hardcoded-company-or-currency](#hardcoded-company-or-currency) | P2 | Correctness | warning | medium |  |
 | [create-in-loop](#create-in-loop) | P1 | Performance | error | high |  |
 | [n-plus-one-read](#n-plus-one-read) | P1 | Performance | warning | low |  |
 | [search-in-loop](#search-in-loop) | P1 | Performance | error | high |  |
@@ -31,10 +34,13 @@ Odoo Doctor ships 30 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
 | [manifest-missing-dependency](#manifest-missing-dependency) | P1 | Module Hygiene | error | high |  |
 | [manifest-data-order-risk](#manifest-data-order-risk) | P2 | Module Hygiene | error | high | Yes |
+| [manifest-license-incompatible](#manifest-license-incompatible) | P2 | Module Hygiene | warning | high |  |
 | [manifest-missing-required-fields](#manifest-missing-required-fields) | P2 | Module Hygiene | warning | high | Yes |
+| [missing-external-dependency](#missing-external-dependency) | P2 | Module Hygiene | warning | high |  |
 | [field-no-string-on-required](#field-no-string-on-required) | P2 | Maintainability | info | medium |  |
 | [missing-translation](#missing-translation) | P2 | Maintainability | info | medium |  |
 | [orphan-view](#orphan-view) | P2 | Maintainability | warning | medium |  |
+| [vendored-python-code](#vendored-python-code) | P3 | Maintainability | info | medium |  |
 | [asset-bundle-missing](#asset-bundle-missing) | P2 | Frontend | error | high |  |
 
 ## Security
@@ -48,6 +54,8 @@ Odoo Doctor ships 30 native rules. Each rule has a **tier** (P0 critical, P1 ser
 **Why**: Evaluating dynamic strings allows arbitrary code execution.
 
 **Fix**: Use `odoo.tools.safe_eval` for domains/expressions, or refactor to explicit logic.
+
+**Note**: An argument provably built from constants (a literal, or a variable bound only to constants) is not reported; anything else, including a parameter or a string with interpolated values, is.
 
 Bad:
 
@@ -95,6 +103,8 @@ access_my_model_user,my.model user,model_my_model,base.group_user,1,1,1,0
 
 **Fix**: Pass values as query parameters.
 
+**Note**: When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL(...)` or `','.join(['%s'] * n)` placeholder lists is not reported, while a fragment that reaches the query through a list or a branch is.
+
 Bad:
 
 ```python
@@ -105,6 +115,35 @@ Good:
 
 ```python
 self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))
+```
+
+### missing-multicompany-rule
+
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: Models defined in the module with a `company_id` Many2one to `res.company` that no `ir.rule` in the scanned modules protects.
+
+**Why**: Without a company record rule, users of one company can read and edit another company's records in a multi-company database.
+
+**Fix**: Add an `ir.rule` restricting records to `company_ids`.
+
+**Note**: Medium confidence (does not affect the score): the rule may live in an addon that was not scanned. Transient and abstract models are skipped.
+
+Bad:
+
+```xml
+company_id = fields.Many2one("res.company", required=True)
+# ... and no <record model="ir.rule"> for this model
+```
+
+Good:
+
+```xml
+<record id="my_model_comp_rule" model="ir.rule">
+    <field name="name">My model multi-company</field>
+    <field name="model_id" ref="model_my_model"/>
+    <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+</record>
 ```
 
 ### public-controller-sudo-risk
@@ -219,6 +258,31 @@ partner = self.env['res.partner'].sudo().browse(pid)
 
 **Fix**: Verify the referenced XML ID exists and that the providing module is listed in `depends`.
 
+### monetary-missing-currency-field
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: `fields.Monetary` fields whose currency field (`currency_id`, or the one named by `currency_field=`) provably does not exist on the model, including its `_inherit`/`_inherits` ancestors and extensions in other scanned modules.
+
+**Why**: A Monetary field needs a currency to be stored, rounded and displayed; without it Odoo raises at runtime or shows no currency.
+
+**Fix**: Add the currency field, or point `currency_field=` at an existing Many2one to `res.currency`.
+
+**Note**: Only reported when absence is provable; models that extend an upstream model you do not define here are skipped.
+
+Bad:
+
+```python
+amount = fields.Monetary(string="Amount")
+```
+
+Good:
+
+```python
+currency_id = fields.Many2one("res.currency")
+amount = fields.Monetary(string="Amount")
+```
+
 ### override-missing-super
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
@@ -306,6 +370,30 @@ def _compute_total(self):
         rec.total = rec.quantity * rec.unit_price
 ```
 
+### hardcoded-company-or-currency
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: `env.ref('base.main_company')` and `env.ref('base.USD')`-style references to a specific currency in business code.
+
+**Why**: In a multi-company or multi-currency database these pick the wrong record.
+
+**Fix**: Use `self.env.company`, `self.env.company.currency_id`, or the document's own `company_id` / `currency_id`.
+
+**Note**: Medium confidence (does not affect the score). Install hooks (`*_hook` functions, `hooks.py`), `migrations/` and `tests/` are skipped.
+
+Bad:
+
+```python
+company = self.env.ref("base.main_company")
+```
+
+Good:
+
+```python
+company = self.env.company
+```
+
 ## Performance
 
 ### create-in-loop
@@ -347,11 +435,13 @@ self.env['my.model'].create(vals_list)
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: ORM reads (`search`, `browse`, `read`, ...) inside `for` or `while` loops.
+**Detects**: ORM queries (`search`, `search_count`, `read`) inside `for` or `while` loops. `browse()` is not flagged: it only wraps ids and does not query the database.
 
 **Why**: One query per iteration scales badly with record count.
 
 **Fix**: Move the call out of the loop and batch the results.
+
+**Note**: The performance rules skip files inside an addon's `tests/` directory.
 
 Bad:
 
@@ -463,6 +553,8 @@ records = self.env['res.partner'].search(
 
 **Fix**: Declare `ondelete` explicitly.
 
+**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`.
+
 Bad:
 
 ```python
@@ -484,6 +576,8 @@ partner_id = fields.Many2one("res.partner", ondelete="restrict")
 **Why**: Records without `noupdate` are overwritten on every module update, discarding user changes.
 
 **Fix**: Wrap the records in `<data noupdate="1">`.
+
+**Note**: `ir.rule` records are reported with medium confidence (not scored): Odoo core wraps them in `noupdate` while many addons keep them updatable so rule fixes ship with the module. `ir.config_parameter` and `ir.cron` stay high confidence.
 
 Bad:
 
@@ -551,6 +645,8 @@ self.env['res.partner']
 
 **Fix**: Add the providing module to `depends`.
 
+**Note**: A module reachable through `depends` transitively counts as available. When part of that chain is a module whose manifest is unknown (set `odoo_source_path` to index core addons), the finding is reported with medium confidence and does not affect the score.
+
 ### manifest-data-order-risk
 
 **Tier**: P2 (moderate) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0 · **Fixable**: yes
@@ -581,15 +677,39 @@ Good:
 ]
 ```
 
+### manifest-license-incompatible
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: An addon whose manifest `license` conflicts with the license of a scanned dependency: GPL-2 (version 2 only) combined with a GPL-3 family license in either direction (high confidence), or a proprietary module (OPL-1, OEEL-1) depending on GPL/AGPL code (medium confidence).
+
+**Why**: The combination cannot be distributed under both licenses.
+
+**Fix**: Relicense one module or drop the dependency; check with the licensing owner.
+
+**Note**: Only dependencies whose manifest was scanned are compared.
+
 ### manifest-missing-required-fields
 
 **Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0 · **Fixable**: yes
 
-**Detects**: `__manifest__.py` missing one of `name`, `version`, `depends`, `data`, `installable`, `license`.
+**Detects**: `__manifest__.py` missing one of `name`, `version`, `depends`, `data`, `license`.
 
 **Fix**: Add the missing key. Run `odoo-doctor fix` to apply it automatically.
 
-**Note**: Fixable via `odoo-doctor fix`.
+**Note**: Fixable via `odoo-doctor fix`. `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
+
+### missing-external-dependency
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: Third-party Python packages imported by the addon but not listed in `external_dependencies['python']` (of the addon or of a module it depends on).
+
+**Why**: Installing without the package fails at import time instead of with a clear dependency error.
+
+**Fix**: Add `"external_dependencies": {"python": ["pkg"]}` to the manifest, or guard an optional import with `try/except ImportError`.
+
+**Note**: Skipped: stdlib, packages Odoo itself installs, guarded and `TYPE_CHECKING` imports, `tests/` and `migrations/`. Medium confidence when the dependency chain includes a module whose manifest was not scanned.
 
 ## Maintainability
 
@@ -650,6 +770,18 @@ raise UserError(_("Amount must be positive"))
 **Fix**: Reference the view, inherit it, or remove it if unused.
 
 **Note**: Medium confidence: the reference may live in a module that was not scanned. Does not affect the score.
+
+### vendored-python-code
+
+**Tier**: P3 (advisory) · **Severity**: info · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: Third-party Python code copied into an addon: `vendor/`, `lib/` and similar directories containing `.py` files, `*.dist-info` / `*.egg-info`, or a well-known package (for example `six/`) at the top level.
+
+**Why**: Copied code misses security fixes and can clash with the installed version.
+
+**Fix**: Declare the package in `external_dependencies['python']` instead.
+
+**Note**: Medium confidence (does not affect the score). JavaScript libraries under `static/` are normal in Odoo and are not reported.
 
 ## Frontend
 

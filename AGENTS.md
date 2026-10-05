@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 30 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 36 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -13,8 +13,8 @@ odoo-doctor/
 ├── src/odoo_doctor/          # Main source code
 │   ├── core/                 # Scanner, pipeline (7-stage), config, scoring, fixer, baseline, cache
 │   ├── rules/                # Rule implementations (P0–P3 tiers, organized by category)
-│   │   ├── security/         # 7 rules (eval, SQL injection, sudo, access control)
-│   │   ├── correctness/      # 4 rules (missing depends, super, translations)
+│   │   ├── security/         # 8 rules (eval, SQL injection, sudo, access control, multi-company rules)
+│   │   ├── correctness/      # 6 rules (missing depends, super, translations, monetary currency, hardcoded company/currency)
 │   │   ├── performance/      # 5 rules (loops, N+1, unbounded search)
 │   │   ├── xml/              # 5 rules (broken refs, duplicate IDs, orphan views)
 │   │   ├── manifest/         # 3 rules + fixers (dependencies, data order, required fields)
@@ -73,6 +73,8 @@ odoo-doctor rules list         # List all rules
 odoo-doctor rules explain rule-name  # Explain a rule
 odoo-doctor rules disable rule-name   # Disable a rule in odoo-doctor.toml
 odoo-doctor rules docs --out docs/rules.md  # Regenerate rules docs (never hand-edit)
+odoo-doctor rules stats [--path DIR] [--json]   # Which rules users suppress most
+odoo-doctor lsp                # Language server on stdio (needs the lsp extra)
 odoo-doctor scan . --history h.jsonl --badge badge.svg
 odoo-doctor history show h.jsonl --max-drop 3
 ```
@@ -178,10 +180,10 @@ chore(release): bump version to 0.3.0
 
 ### Cut a New Release
 
-1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md` (`tests/test_version.py` checks consistency).
+1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`, plus `editors/vscode/package.json` and `package-lock.json` (`tests/test_version.py` and `tests/test_vscode_extension.py` check consistency).
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag v0.5.0 && git push origin v0.5.0`).
+4. Create and push a new Git tag (e.g., `git tag v0.7.0 && git push origin v0.7.0`).
 5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
 
 ---
@@ -231,6 +233,9 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 |-----------|---------|
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
+| `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
+| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
+| `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
 | `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |

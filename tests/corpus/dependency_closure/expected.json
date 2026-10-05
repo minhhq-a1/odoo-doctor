@@ -1,0 +1,12 @@
+[
+  [
+    "manifest-missing-dependency",
+    "bare/__manifest__.py",
+    "high"
+  ],
+  [
+    "manifest-missing-dependency",
+    "opaque/__manifest__.py",
+    "medium"
+  ]
+]

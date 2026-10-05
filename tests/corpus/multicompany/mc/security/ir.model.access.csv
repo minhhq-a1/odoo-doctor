@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_bad_invoice,access_bad_invoice,model_mc_bad_invoice,,1,1,1,1
+access_good_invoice,access_good_invoice,model_mc_good_invoice,,1,1,1,1
+access_unprotected,access_unprotected,model_mc_unprotected,,1,1,1,1
+access_protected,access_protected,model_mc_protected,,1,1,1,1

@@ -8,6 +8,10 @@ import pytest
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
+# The golden corpus holds sample addons (including files named test_*.py that
+# import `odoo`); they are scan inputs, never tests to collect.
+collect_ignore = ["corpus"]
+
 
 @pytest.fixture
 def fixtures_dir() -> Path:

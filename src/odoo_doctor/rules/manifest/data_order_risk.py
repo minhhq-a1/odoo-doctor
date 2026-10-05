@@ -12,9 +12,13 @@ from odoo_doctor.rules.registry import rule
 
 def _is_security_file(path_str: str) -> bool:
     p = Path(path_str)
+    name = p.name
+    # A file name that says view/action/menu wins over the directory it sits in:
+    # `security/foo_menu.xml` adjusts menu visibility, it does not create groups/ACLs.
+    if any(k in name for k in ("view", "action", "menu")):
+        return False
     if "security" in p.parts:
         return True
-    name = p.name
     if "ir.model.access" in name or "security" in name or "groups" in name:
         return True
     return False

@@ -1,0 +1,13 @@
+<odoo>
+  <record id="view_child_wiz" model="ir.ui.view">
+    <field name="name">child.wiz.form</field>
+    <field name="model">child.wiz</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="job_ids"/>
+        <field name="nope"/>
+        <button name="action_parent" type="object" string="Go"/>
+      </form>
+    </field>
+  </record>
+</odoo>

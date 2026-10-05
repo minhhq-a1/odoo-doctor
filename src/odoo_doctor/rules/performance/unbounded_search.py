@@ -7,8 +7,8 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
-from odoo_doctor.rules._ast_helpers import receiver_is_orm
+from odoo_doctor.core.source import parse_python
+from odoo_doctor.rules._ast_helpers import is_test_file, receiver_is_orm
 from odoo_doctor.rules.registry import rule
 
 
@@ -26,12 +26,10 @@ def check_unbounded_search(
 ) -> list[Diagnostic]:
     diags: list[Diagnostic] = []
 
-    source = read_source(file_path)
-    if source is None:
+    if is_test_file(file_path, module_name):
         return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     for node in ast.walk(tree):

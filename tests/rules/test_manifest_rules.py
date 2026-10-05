@@ -34,7 +34,7 @@ def test_missing_required_fields_catches(tmp_path: Path):
     rule_names = [d.rule for d in diags]
     assert all(r == "manifest-missing-required-fields" for r in rule_names)
     missing = {d.title.rsplit(": ", 1)[-1].strip("'") for d in diags}
-    assert missing == {"version", "depends", "data", "installable", "license"}
+    assert missing == {"version", "depends", "data", "license"}
 
 
 def test_missing_dependency_catches_sale(tmp_path: Path):

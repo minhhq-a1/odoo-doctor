@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from odoo_doctor.core.diagnostics import CATEGORIES, TIER_IMPACT, Diagnostic
 
@@ -49,9 +49,40 @@ class ScoreResult:
     categories: list[CategoryScore]
     in_scope_categories: list[str]
     diagnostics_counted: int
+    # Best-first fix suggestions (core.roi.FixPriority); filled by the scanner.
+    fix_priorities: list = field(default_factory=list)
+    # Per-rule suppression counts for this module (core.suppression_stats):
+    # {rule: {"surfaced", "inline", "ignore_rule", "severity_off"}}; filled by the scanner.
+    suppression_stats: dict = field(default_factory=dict)
 
     def compute_label(self) -> str:
         return score_label(self.overall)
+
+
+def category_scores(
+    impact: dict[str, float], counts: dict[str, int]
+) -> list[CategoryScore]:
+    """Per-category scores from accumulated (weighted) impact."""
+    return [
+        CategoryScore(
+            category=cat,
+            score=max(0, int(100 - impact[cat])),
+            finding_count=counts[cat],
+            total_impact=impact[cat],
+        )
+        for cat in CATEGORIES
+    ]
+
+
+def blend_overall(cat_scores: list[CategoryScore], scope: list[str]) -> float:
+    """Overall score: blend over in-scope categories only."""
+    in_scope_scores = [cs.score for cs in cat_scores if cs.category in scope]
+    if not in_scope_scores:
+        return 100.0
+    overall = 0.4 * min(in_scope_scores) + 0.6 * (
+        sum(in_scope_scores) / len(in_scope_scores)
+    )
+    return round(overall, 1)
 
 
 def score_diagnostics(
@@ -87,28 +118,8 @@ def score_diagnostics(
         counts[d.category] += 1
         counted += 1
 
-    # Build category scores
-    cat_scores: list[CategoryScore] = []
-    for cat in CATEGORIES:
-        score = max(0, int(100 - impact[cat]))
-        cat_scores.append(
-            CategoryScore(
-                category=cat,
-                score=score,
-                finding_count=counts[cat],
-                total_impact=impact[cat],
-            )
-        )
-
-    # Overall: blend over in-scope categories only
-    in_scope_scores = [cs.score for cs in cat_scores if cs.category in scope]
-    if not in_scope_scores:
-        overall = 100.0
-    else:
-        overall = 0.4 * min(in_scope_scores) + 0.6 * (
-            sum(in_scope_scores) / len(in_scope_scores)
-        )
-    overall = round(overall, 1)
+    cat_scores = category_scores(impact, counts)
+    overall = blend_overall(cat_scores, scope)
 
     result = ScoreResult(
         overall=overall,

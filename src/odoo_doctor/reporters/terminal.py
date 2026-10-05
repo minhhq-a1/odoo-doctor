@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from odoo_doctor.core.scoring import score_label
+from odoo_doctor.core.suppression_stats import actionable_count
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
@@ -22,6 +23,22 @@ _LABEL_COLORS = {
     "Needs work": "yellow",
     "Critical": "red",
 }
+
+
+# Fixes listed per module in the "Fix first" section.
+_FIX_FIRST = 5
+
+
+def _noise_hint(scores: dict[str, ScoreResult]) -> str:
+    """One line when some rule is both noisy and has advice to give (else empty)."""
+    stats = {m: getattr(s, "suppression_stats", {}) for m, s in scores.items()}
+    count = actionable_count(stats)
+    if not count:
+        return ""
+    return (
+        f"\n[yellow]{count} rule(s) look noisy[/yellow] (many suppressions). "
+        "Run: odoo-doctor rules stats"
+    )
 
 
 def render_terminal(
@@ -53,6 +70,18 @@ def render_terminal(
                     continue
                 table.add_row(cs.category, str(cs.score), str(cs.finding_count))
             console.print(table)
+
+        fixes = getattr(score, "fix_priorities", [])[:_FIX_FIRST]
+        if fixes:
+            console.print("  [bold]Fix first[/bold] [dim](best score per effort)[/dim]")
+            for rank, fp in enumerate(fixes, 1):
+                auto = " [dim]auto-fix[/dim]" if fp.fixable else ""
+                console.print(
+                    f"   {rank}. [bold]{fp.rule}[/bold] "
+                    f"{fp.file_path}:{fp.line}  "
+                    f"[dim]->[/dim] {fp.projected_score:.1f}/100 "
+                    f"[dim](+{fp.score_gain:.1f})[/dim]{auto}"
+                )
 
     # Diagnostics grouped by module
     by_module: dict[str, list[Diagnostic]] = {}
@@ -94,5 +123,9 @@ def render_terminal(
         console.print(
             f"\n[bold]Project Score:[/bold] [{color}]{overall:.1f}/100 ({label})[/{color}]"
         )
+
+    hint = _noise_hint(scores)
+    if hint:
+        console.print(hint, highlight=False)  # keep rich from styling the digits
 
     return buf.getvalue()

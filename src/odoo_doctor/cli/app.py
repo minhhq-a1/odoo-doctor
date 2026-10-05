@@ -10,19 +10,24 @@ import typer
 
 import odoo_doctor.rules.correctness.compute_missing_depends
 import odoo_doctor.rules.correctness.field_no_string_on_required
+import odoo_doctor.rules.correctness.hardcoded_company_or_currency
 import odoo_doctor.rules.correctness.missing_translation
+import odoo_doctor.rules.correctness.monetary_missing_currency_field
 import odoo_doctor.rules.correctness.override_missing_super
 import odoo_doctor.rules.data_integrity.data_noupdate_risk
 import odoo_doctor.rules.data_integrity.missing_ondelete
 import odoo_doctor.rules.frontend.asset_bundle_missing
 import odoo_doctor.rules.manifest.data_order_risk
+import odoo_doctor.rules.manifest.external_dependencies
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers
+import odoo_doctor.rules.manifest.license_compatibility
 import odoo_doctor.rules.manifest.missing_dependency
 
 # Import all rule modules to trigger @rule registration
 import odoo_doctor.rules.manifest.missing_required_fields
+import odoo_doctor.rules.manifest.vendored_python_code
 import odoo_doctor.rules.performance.create_write_in_loop
 import odoo_doctor.rules.performance.expensive_nonstored_compute
 import odoo_doctor.rules.performance.n_plus_one_read
@@ -30,6 +35,7 @@ import odoo_doctor.rules.performance.search_in_loop
 import odoo_doctor.rules.performance.unbounded_search
 import odoo_doctor.rules.security.eval_usage
 import odoo_doctor.rules.security.missing_access_csv
+import odoo_doctor.rules.security.missing_multicompany_rule
 import odoo_doctor.rules.security.public_controller_sudo
 import odoo_doctor.rules.security.raw_sql_interpolation
 import odoo_doctor.rules.security.record_rule_without_domain
@@ -48,8 +54,10 @@ from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scanner import collect_scores as _collect_scores
+from odoo_doctor.core.suppression_stats import rule_noise
 from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
+from odoo_doctor.reporters.rule_stats import render_rule_stats, render_rule_stats_json
 from odoo_doctor.reporters.terminal import render_terminal
 from odoo_doctor.rules.docs_gen import render_html, render_markdown, render_rule_text
 from odoo_doctor.rules.registry import default_registry
@@ -191,7 +199,8 @@ def scan(
         # Re-score with the suppressed set so score + exit code reflect only new
         # findings. Reuse the SAME scoring helper that collect_scores uses, so
         # eligibility (mark_score_eligibility) and in-scope logic cannot drift.
-        scores = _score_per_module(diags, cfg, version)
+        stats = {m: s.suppression_stats for m, s in scores.items()}
+        scores = _score_per_module(diags, cfg, version, stats=stats)
 
     if not scores:
         if output_format == "json":
@@ -349,9 +358,67 @@ def fix_cmd(
     )
 
 
+def _load_lsp_runner():
+    from odoo_doctor.lsp.server import run
+
+    return run
+
+
+@app.command()
+def lsp() -> None:
+    """Run the language server on stdio (experimental; needs odoo-doctor[lsp])."""
+    try:
+        run = _load_lsp_runner()
+    except ImportError:
+        typer.echo(
+            "[ERROR] The language server needs pygls: pip install 'odoo-doctor[lsp]'",
+            err=True,
+        )
+        raise typer.Exit(code=3)
+    run()
+
+
+def _rules_stats(path: str, cache_enabled: bool, json_output: bool) -> None:
+    """Scan like `scan` and print per-rule suppression counts and noise."""
+    config_root = Path(path).resolve()
+    cfg = load_config(config_root)
+    addons_paths = _resolve_addons_paths(path, config_root, cfg)
+    version = cfg.odoo_version or "unknown"
+
+    if cfg.enable_plugins:
+        from odoo_doctor.rules.plugins import load_rule_plugins
+
+        load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
+
+    cache = None
+    if cache_enabled:
+        from odoo_doctor.core.cache import ScanCache
+
+        cache = ScanCache(config_root / ".odoo_doctor_cache")
+        cache.load()
+
+    _diags, scores = _collect_scores(
+        addon_paths=addons_paths,
+        cfg=cfg,
+        version=version,
+        config_root=config_root,
+        cache=cache,
+    )
+    if cache is not None:
+        cache.save()
+
+    rows = rule_noise({m: s.suppression_stats for m, s in scores.items()})
+    typer.echo(
+        render_rule_stats_json(rows) if json_output else render_rule_stats(rows),
+        nl=json_output,
+    )
+
+
 @app.command("rules")
 def rules_cmd(
-    action: str = typer.Argument("list", help="list, explain, disable, enable or docs"),
+    action: str = typer.Argument(
+        "list", help="list, explain, disable, enable, docs or stats"
+    ),
     rule_name: str | None = typer.Argument(
         None, help="Rule name (explain, disable, enable)"
     ),
@@ -367,8 +434,12 @@ def rules_cmd(
     check: bool = typer.Option(
         False, "--check", help="docs: exit 1 if --out is not up to date"
     ),
+    cache_enabled: bool = typer.Option(
+        False, "--cache", help="stats: reuse the cached scan when nothing changed"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="stats: output JSON"),
 ) -> None:
-    """List, explain, disable or enable rules, or generate the rules docs."""
+    """List, explain, disable or enable rules, generate the rules docs, or show suppression stats."""
     if action == "list":
         disabled = set(load_config(Path(path).resolve()).ignore_rules)
         for meta, _ in default_registry.get_rules():
@@ -391,6 +462,8 @@ def rules_cmd(
             typer.echo(f"{verb} {rule_name} in {config_path}")
         else:
             typer.echo(f"{rule_name} already {verb.lower()} in {config_path}")
+    elif action == "stats":
+        _rules_stats(path, cache_enabled, json_output)
     elif action == "docs":
         if docs_format not in ("markdown", "html"):
             typer.echo("[ERROR] --format must be markdown or html.", err=True)
@@ -417,7 +490,8 @@ def rules_cmd(
     else:
         typer.echo(
             "[ERROR] Usage: rules list | explain <rule> | disable <rule> | "
-            "enable <rule> | docs [--out FILE] [--format markdown|html] [--check]",
+            "enable <rule> | docs [--out FILE] [--format markdown|html] [--check] | "
+            "stats [--path DIR] [--cache] [--json]",
             err=True,
         )
         raise typer.Exit(code=3)

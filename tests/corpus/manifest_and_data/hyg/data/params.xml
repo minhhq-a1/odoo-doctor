@@ -1,0 +1,11 @@
+<odoo>
+  <record id="param" model="ir.config_parameter">
+    <field name="key">hyg.flag</field>
+    <field name="value">1</field>
+  </record>
+  <record id="rule" model="ir.rule">
+    <field name="name">hyg rule</field>
+    <field name="model_id" ref="base.model_res_partner"/>
+    <field name="domain_force">[('create_uid', '=', user.id)]</field>
+  </record>
+</odoo>

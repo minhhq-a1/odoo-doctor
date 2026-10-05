@@ -43,6 +43,17 @@ RULE_DOCS: dict[str, RuleDoc] = {
         fix="Pass values as query parameters.",
         bad="self.env.cr.execute(f\"SELECT * FROM res_partner WHERE name = '{name}'\")",
         good='self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))',
+        notes="When the dynamic part is not user data (for example a WHERE "
+        "fragment whose values are bound through parameters), assert it with "
+        "pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule "
+        "honours: a trailing comment covers its line, a comment on its own line "
+        "covers the rest of the enclosing function. "
+        "`# odoo-doctor: disable=raw-sql-string-interpolation` also works. "
+        "The rule follows values through local variables, lists (`append`, "
+        "`extend`, `+=`), `if`/`try`/loop branches and module constants: SQL "
+        "built only from constants, `int()` casts, `self._table`, `SQL(...)` or "
+        "`','.join(['%s'] * n)` placeholder lists is not reported, while a "
+        "fragment that reaches the query through a list or a branch is.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
@@ -64,6 +75,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         bad="result = eval(expression)",
         good="from odoo.tools.safe_eval import safe_eval\n"
         "result = safe_eval(expression, {'uid': self.env.uid})",
+        notes="An argument provably built from constants (a literal, or a "
+        "variable bound only to constants) is not reported; anything else, "
+        "including a parameter or a string with interpolated values, is.",
     ),
     "public-controller-sudo-risk": RuleDoc(
         detects="`@http.route` handlers with `auth='public'` or `auth='none'` "
@@ -166,14 +180,16 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ---------------------------------------------------------- Performance
     "search-in-loop": RuleDoc(
-        detects="ORM reads (`search`, `browse`, `read`, ...) inside `for` or "
-        "`while` loops.",
+        detects="ORM queries (`search`, `search_count`, `read`) inside `for` or "
+        "`while` loops. `browse()` is not flagged: it only wraps ids and does "
+        "not query the database.",
         why="One query per iteration scales badly with record count.",
         fix="Move the call out of the loop and batch the results.",
         bad="for line in lines:\n"
         "    partner = self.env['res.partner'].search([('id', '=', line.pid)])",
         good="partners = self.env['res.partner'].search([('id', 'in', lines.mapped('pid'))])\n"
         "by_id = {p.id: p for p in partners}",
+        notes="The performance rules skip files inside an addon's `tests/` directory.",
     ),
     "create-in-loop": RuleDoc(
         detects="`create()` called inside a loop.",
@@ -231,9 +247,11 @@ RULE_DOCS: dict[str, RuleDoc] = {
     # ----------------------------------------------------------- Module Hygiene
     "manifest-missing-required-fields": RuleDoc(
         detects="`__manifest__.py` missing one of `name`, `version`, `depends`, "
-        "`data`, `installable`, `license`.",
+        "`data`, `license`.",
         fix="Add the missing key. Run `odoo-doctor fix` to apply it automatically.",
-        notes="Fixable via `odoo-doctor fix`.",
+        notes="Fixable via `odoo-doctor fix`. `installable` is not required "
+        "(Odoo defaults it to `True`), and `data` is not required when the "
+        "manifest declares `assets` or `demo`.",
     ),
     "manifest-data-order-risk": RuleDoc(
         detects="`data` files in the manifest listed in an unsafe load order "
@@ -257,6 +275,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         why="The module installs only when another module happens to be "
         "installed first.",
         fix="Add the providing module to `depends`.",
+        notes="A module reachable through `depends` transitively counts as "
+        "available. When part of that chain is a module whose manifest is "
+        "unknown (set `odoo_source_path` to index core addons), the finding is "
+        "reported with medium confidence and does not affect the score.",
     ),
     # ------------------------------------------------------- Maintainability
     "orphan-view": RuleDoc(
@@ -291,6 +313,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         fix="Declare `ondelete` explicitly.",
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
+        notes="Required `Many2one` fields are skipped: Odoo already defaults "
+        "them to `restrict`.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "
@@ -303,6 +327,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         '    <record id="my_rule" model="ir.rule">...</record>\n'
         "</data>",
         lang="xml",
+        notes="`ir.rule` records are reported with medium confidence (not "
+        "scored): Odoo core wraps them in `noupdate` while many addons keep "
+        "them updatable so rule fixes ship with the module. "
+        "`ir.config_parameter` and `ir.cron` stay high confidence.",
     ),
     # --------------------------------------------------------- Upgrade Safety
     "deprecated-api-usage": RuleDoc(
@@ -334,5 +362,83 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "    'web.assets_backend': ['my_module/static/src/js/missing.js'],\n"
         "}",
         good="# create static/src/js/missing.js, or drop the entry above",
+    ),
+    # -------------------------------------------- Multi-company / multi-currency
+    "monetary-missing-currency-field": RuleDoc(
+        detects="`fields.Monetary` fields whose currency field (`currency_id`, "
+        "or the one named by `currency_field=`) provably does not exist on the "
+        "model, including its `_inherit`/`_inherits` ancestors and extensions in "
+        "other scanned modules.",
+        why="A Monetary field needs a currency to be stored, rounded and "
+        "displayed; without it Odoo raises at runtime or shows no currency.",
+        fix="Add the currency field, or point `currency_field=` at an existing "
+        "Many2one to `res.currency`.",
+        bad='amount = fields.Monetary(string="Amount")',
+        good='currency_id = fields.Many2one("res.currency")\n'
+        'amount = fields.Monetary(string="Amount")',
+        notes="Only reported when absence is provable; models that extend an "
+        "upstream model you do not define here are skipped.",
+    ),
+    "missing-multicompany-rule": RuleDoc(
+        detects="Models defined in the module with a `company_id` Many2one to "
+        "`res.company` that no `ir.rule` in the scanned modules protects.",
+        why="Without a company record rule, users of one company can read and "
+        "edit another company's records in a multi-company database.",
+        fix="Add an `ir.rule` restricting records to `company_ids`.",
+        bad='company_id = fields.Many2one("res.company", required=True)\n'
+        '# ... and no <record model="ir.rule"> for this model',
+        good='<record id="my_model_comp_rule" model="ir.rule">\n'
+        '    <field name="name">My model multi-company</field>\n'
+        '    <field name="model_id" ref="model_my_model"/>\n'
+        "    <field name=\"domain_force\">[('company_id', 'in', company_ids)]"
+        "</field>\n"
+        "</record>",
+        lang="xml",
+        notes="Medium confidence (does not affect the score): the rule may live "
+        "in an addon that was not scanned. Transient and abstract models are "
+        "skipped.",
+    ),
+    "hardcoded-company-or-currency": RuleDoc(
+        detects="`env.ref('base.main_company')` and `env.ref('base.USD')`-style "
+        "references to a specific currency in business code.",
+        why="In a multi-company or multi-currency database these pick the wrong "
+        "record.",
+        fix="Use `self.env.company`, `self.env.company.currency_id`, or the "
+        "document's own `company_id` / `currency_id`.",
+        bad='company = self.env.ref("base.main_company")',
+        good="company = self.env.company",
+        notes="Medium confidence (does not affect the score). Install hooks "
+        "(`*_hook` functions, `hooks.py`), `migrations/` and `tests/` are skipped.",
+    ),
+    # ------------------------------------------------------------ Supply chain
+    "manifest-license-incompatible": RuleDoc(
+        detects="An addon whose manifest `license` conflicts with the license of a "
+        "scanned dependency: GPL-2 (version 2 only) combined with a GPL-3 family "
+        "license in either direction (high confidence), or a proprietary module "
+        "(OPL-1, OEEL-1) depending on GPL/AGPL code (medium confidence).",
+        why="The combination cannot be distributed under both licenses.",
+        fix="Relicense one module or drop the dependency; check with the licensing owner.",
+        notes="Only dependencies whose manifest was scanned are compared.",
+    ),
+    "missing-external-dependency": RuleDoc(
+        detects="Third-party Python packages imported by the addon but not listed "
+        "in `external_dependencies['python']` (of the addon or of a module it "
+        "depends on).",
+        why="Installing without the package fails at import time instead of with "
+        "a clear dependency error.",
+        fix='Add `"external_dependencies": {"python": ["pkg"]}` to the manifest, or '
+        "guard an optional import with `try/except ImportError`.",
+        notes="Skipped: stdlib, packages Odoo itself installs, guarded and "
+        "`TYPE_CHECKING` imports, `tests/` and `migrations/`. Medium confidence "
+        "when the dependency chain includes a module whose manifest was not scanned.",
+    ),
+    "vendored-python-code": RuleDoc(
+        detects="Third-party Python code copied into an addon: `vendor/`, `lib/` "
+        "and similar directories containing `.py` files, `*.dist-info` / "
+        "`*.egg-info`, or a well-known package (for example `six/`) at the top level.",
+        why="Copied code misses security fixes and can clash with the installed version.",
+        fix="Declare the package in `external_dependencies['python']` instead.",
+        notes="Medium confidence (does not affect the score). JavaScript libraries "
+        "under `static/` are normal in Odoo and are not reported.",
     ),
 }

@@ -1,0 +1,6 @@
+[odoo-doctor]
+odoo_version = "17.0"
+
+[adapters]
+ruff = false
+pylint_odoo = false

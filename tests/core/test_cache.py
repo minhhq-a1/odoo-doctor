@@ -73,3 +73,27 @@ def test_cache_version_mismatch_misses(tmp_path: Path):
         assert fresh.lookup("fp123") is None
     finally:
         cache_mod.CACHE_VERSION = orig
+
+
+def test_cache_round_trip_keeps_suppression_stats(tmp_path: Path):
+    stats = {
+        "m": {"r": {"surfaced": 1, "inline": 2, "ignore_rule": 0, "severity_off": 0}}
+    }
+    cache = ScanCache(tmp_path / ".odoo_doctor_cache")
+    cache.store("fp123", [], stats)
+    cache.save()
+
+    reloaded = ScanCache(tmp_path / ".odoo_doctor_cache")
+    reloaded.load()
+    assert reloaded.lookup_stats("fp123") == stats
+
+
+def test_version_1_cache_file_misses_cleanly(tmp_path: Path):
+    cache_dir = tmp_path / ".odoo_doctor_cache"
+    cache_dir.mkdir()
+    (cache_dir / "scan_cache.json").write_text(
+        '{"cache_version": 1, "fp": "fp123", "diagnostics": []}', encoding="utf-8"
+    )
+    cache = ScanCache(cache_dir)
+    cache.load()
+    assert cache.lookup("fp123") is None

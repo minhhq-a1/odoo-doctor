@@ -7,7 +7,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python, read_source
 
 
 @dataclass
@@ -21,6 +21,7 @@ class FieldInfo:
     required: bool = False
     string: str | None = None
     ondelete: str | None = None
+    currency_field: str | None = None  # Monetary only
     line: int = 0
 
 
@@ -87,12 +88,8 @@ _LIFECYCLE_METHODS = {"create", "write", "unlink", "default_get", "read", "copy"
 
 def parse_models(file_path: Path) -> list[ModelInfo]:
     """Parse all Odoo model classes from a Python file."""
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     models: list[ModelInfo] = []
@@ -107,13 +104,10 @@ def parse_models(file_path: Path) -> list[ModelInfo]:
 
 def parse_controllers(file_path: Path) -> list[ControllerInfo]:
     """Parse all http.route controllers from a Python file."""
-    source = read_source(file_path)
-    if source is None:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
+    source = read_source(file_path) or ""
 
     controllers: list[ControllerInfo] = []
     for node in ast.walk(tree):
@@ -223,6 +217,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
     required = False
     string = None
     ondelete = None
+    currency_field = None
 
     # First positional arg for relational fields is comodel
     # For Char/etc, the first positional arg is actually the string, but Odoo 14+
@@ -246,6 +241,8 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
             string = str(kw.value.value)
         elif kw.arg == "ondelete" and isinstance(kw.value, ast.Constant):
             ondelete = kw.value.value
+        elif kw.arg == "currency_field" and isinstance(kw.value, ast.Constant):
+            currency_field = kw.value.value
 
     return FieldInfo(
         name=name,
@@ -257,6 +254,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
         required=required,
         string=string,
         ondelete=ondelete,
+        currency_field=currency_field,
         line=line,
     )
 
