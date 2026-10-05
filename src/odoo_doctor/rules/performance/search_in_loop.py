@@ -7,7 +7,7 @@ import ast
 from collections.abc import Generator
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
 from odoo_doctor.rules._ast_helpers import is_test_file
 from odoo_doctor.rules._ast_helpers import receiver_is_orm
 
@@ -34,12 +34,8 @@ def check_search_in_loop(
 
     if is_test_file(file_path, module_name):
         return []
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     _walk_for_loops(tree, diags, file_path, module_name, odoo_version)

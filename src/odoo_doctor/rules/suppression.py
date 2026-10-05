@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import io
 import re
 import tokenize
 from pathlib import Path
@@ -22,9 +23,14 @@ def scan_python_suppressions(file_path: Path) -> Suppressions:
     suppressions: Suppressions = set()
 
     try:
-        with open(file_path, "rb") as f:
-            tokens = list(tokenize.tokenize(f.readline))
-    except (tokenize.TokenError, SyntaxError, OSError):
+        data = Path(file_path).read_bytes()
+    except OSError:
+        return suppressions
+    if b"odoo-doctor:" not in data:  # nothing to find: skip the (slow) tokenizer
+        return suppressions
+    try:
+        tokens = list(tokenize.tokenize(io.BytesIO(data).readline))
+    except (tokenize.TokenError, SyntaxError):
         return suppressions
 
     for tok in tokens:

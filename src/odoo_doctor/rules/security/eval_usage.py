@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
 from odoo_doctor.rules._taint import Taint, TaintVisitor
 from odoo_doctor.rules.registry import rule
 
@@ -26,12 +26,8 @@ _DANGEROUS = {"eval", "exec"}
 def check_eval_usage(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     visitor = _EvalVisitor(file_path, module_name, odoo_version)
