@@ -48,6 +48,14 @@ Please ensure your code passes both `ruff format --check src tests` and `ruff ch
 4. Ensure the test passes.
 5. Document the rule: add an entry to `RULE_DOCS` in `src/odoo_doctor/rules/rule_docs.py`, then run `odoo-doctor rules docs --out docs/rules.md`. Never edit `docs/rules.md` by hand; `tests/test_rule_docs_complete.py` fails if an entry is missing or the page is stale.
 
+## Changing the Public Surface
+
+CLI flags, exit codes, JSON keys, rule IDs, config keys and `odoo_doctor.plugin_api` are
+covered by [`docs/stability.md`](docs/stability.md). Removing or renaming any of them fails
+`tests/test_stability_contract.py`. If a change is intentional, follow the deprecation
+policy in that document, update it and the frozen data in the test in the same PR, and add
+a `### Deprecated` entry to `CHANGELOG.md`. Adding new names never needs this.
+
 ## Commit and PR Workflow
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/):

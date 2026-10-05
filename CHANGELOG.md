@@ -21,6 +21,13 @@ All notable changes to Odoo Doctor are documented here.
   - `core/pipeline.py::run_pipeline_with_stats` collects the counts; `run_pipeline` is
     unchanged. The scan cache stores them too, so `CACHE_VERSION` is now 2 (older cache
     files are ignored once). `--diff` scans do not collect stats.
+- **Stability contract.** [`docs/stability.md`](docs/stability.md) states what is public
+  and what is not (CLI flags and exit codes, JSON report keys, `rules stats --json`,
+  history and baseline files, SARIF, rule IDs, inline-suppression syntax, config keys,
+  `odoo_doctor.plugin_api`) and the policy for changing it: additions are free, removals
+  go through at least one minor release marked `### Deprecated`, rule IDs are permanent.
+  `tests/test_stability_contract.py` fences it with subset checks, so adding names never
+  fails it and removing or renaming one does. No behaviour change.
 
 ---
 
