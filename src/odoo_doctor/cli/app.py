@@ -13,8 +13,10 @@ from odoo_doctor.core.config import OdooDoctorConfig, SurfaceConfig, load_config
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
+from odoo_doctor.core.suppression_stats import rule_noise
 from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
+from odoo_doctor.reporters.rule_stats import render_rule_stats, render_rule_stats_json
 from odoo_doctor.reporters.terminal import render_terminal
 
 # Import all rule modules to trigger @rule registration
@@ -202,7 +204,8 @@ def scan(
         # Re-score with the suppressed set so score + exit code reflect only new
         # findings. Reuse the SAME scoring helper that collect_scores uses, so
         # eligibility (mark_score_eligibility) and in-scope logic cannot drift.
-        scores = _score_per_module(diags, cfg, version)
+        stats = {m: s.suppression_stats for m, s in scores.items()}
+        scores = _score_per_module(diags, cfg, version, stats=stats)
 
     if not scores:
         if output_format == "json":
@@ -360,9 +363,47 @@ def fix_cmd(
     )
 
 
+def _rules_stats(path: str, cache_enabled: bool, json_output: bool) -> None:
+    """Scan like `scan` and print per-rule suppression counts and noise."""
+    config_root = Path(path).resolve()
+    cfg = load_config(config_root)
+    addons_paths = _resolve_addons_paths(path, config_root, cfg)
+    version = cfg.odoo_version or "unknown"
+
+    if cfg.enable_plugins:
+        from odoo_doctor.rules.plugins import load_rule_plugins
+
+        load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
+
+    cache = None
+    if cache_enabled:
+        from odoo_doctor.core.cache import ScanCache
+
+        cache = ScanCache(config_root / ".odoo_doctor_cache")
+        cache.load()
+
+    _diags, scores = _collect_scores(
+        addon_paths=addons_paths,
+        cfg=cfg,
+        version=version,
+        config_root=config_root,
+        cache=cache,
+    )
+    if cache is not None:
+        cache.save()
+
+    rows = rule_noise({m: s.suppression_stats for m, s in scores.items()})
+    typer.echo(
+        render_rule_stats_json(rows) if json_output else render_rule_stats(rows),
+        nl=json_output,
+    )
+
+
 @app.command("rules")
 def rules_cmd(
-    action: str = typer.Argument("list", help="list, explain, disable, enable or docs"),
+    action: str = typer.Argument(
+        "list", help="list, explain, disable, enable, docs or stats"
+    ),
     rule_name: Optional[str] = typer.Argument(
         None, help="Rule name (explain, disable, enable)"
     ),
@@ -378,8 +419,12 @@ def rules_cmd(
     check: bool = typer.Option(
         False, "--check", help="docs: exit 1 if --out is not up to date"
     ),
+    cache_enabled: bool = typer.Option(
+        False, "--cache", help="stats: reuse the cached scan when nothing changed"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="stats: output JSON"),
 ) -> None:
-    """List, explain, disable or enable rules, or generate the rules docs."""
+    """List, explain, disable or enable rules, generate the rules docs, or show suppression stats."""
     if action == "list":
         disabled = set(load_config(Path(path).resolve()).ignore_rules)
         for meta, _ in default_registry.get_rules():
@@ -402,6 +447,8 @@ def rules_cmd(
             typer.echo(f"{verb} {rule_name} in {config_path}")
         else:
             typer.echo(f"{rule_name} already {verb.lower()} in {config_path}")
+    elif action == "stats":
+        _rules_stats(path, cache_enabled, json_output)
     elif action == "docs":
         if docs_format not in ("markdown", "html"):
             typer.echo("[ERROR] --format must be markdown or html.", err=True)
@@ -428,7 +475,8 @@ def rules_cmd(
     else:
         typer.echo(
             "[ERROR] Usage: rules list | explain <rule> | disable <rule> | "
-            "enable <rule> | docs [--out FILE] [--format markdown|html] [--check]",
+            "enable <rule> | docs [--out FILE] [--format markdown|html] [--check] | "
+            "stats [--path DIR] [--cache] [--json]",
             err=True,
         )
         raise typer.Exit(code=3)

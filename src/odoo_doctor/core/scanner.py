@@ -20,7 +20,7 @@ from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.pipeline import (
     derive_capabilities,
     rule_is_enabled,
-    run_pipeline,
+    run_pipeline_with_stats,
 )
 from odoo_doctor.core.roi import rank_fixes
 from odoo_doctor.core.source import clear_source_cache
@@ -73,8 +73,9 @@ def _score_module(
     mod_elig: list[bool],
     cfg: OdooDoctorConfig,
     in_scope: list[str],
+    stats: dict | None = None,
 ):
-    """Score one module and attach its best-first fix priorities."""
+    """Score one module and attach its best-first fix priorities and suppression stats."""
     result = score_diagnostics(
         mod_diags,
         mod_elig,
@@ -88,22 +89,31 @@ def _score_module(
         in_scope_categories=in_scope,
         is_fixable=_is_fixable_rule,
     )
+    result.suppression_stats = stats or {}
     return result
 
 
 def _score_per_module(
-    diags: list[Diagnostic], cfg: OdooDoctorConfig, version: str
+    diags: list[Diagnostic],
+    cfg: OdooDoctorConfig,
+    version: str,
+    stats: dict | None = None,
+    extra_modules=(),
 ) -> dict[str, object]:
+    """Score every module that has findings, plus *extra_modules* (e.g. modules whose
+    findings were all suppressed). *stats* is the full {module: {rule: counts}} map."""
     from odoo_doctor.core.pipeline import mark_score_eligibility
 
     eligible = mark_score_eligibility(diags)
     in_scope = _in_scope_categories(version, cfg)
     scores: dict[str, object] = {}
-    modules = {d.module for d in diags}
+    modules = {d.module for d in diags} | set(extra_modules)
     for name in modules:
         mod_diags = [d for d in diags if d.module == name]
         mod_elig = [e for d, e in zip(diags, eligible) if d.module == name]
-        scores[name] = _score_module(mod_diags, mod_elig, cfg, in_scope)
+        scores[name] = _score_module(
+            mod_diags, mod_elig, cfg, in_scope, (stats or {}).get(name)
+        )
     return scores
 
 
@@ -133,7 +143,10 @@ def collect_scores(
         hit = cache.lookup(fingerprint)
         if hit is not None:
             diags = [Diagnostic(**d) for d in hit]
-            scores = _score_per_module(diags, cfg, version)
+            stats = cache.lookup_stats(fingerprint)
+            scores = _score_per_module(
+                diags, cfg, version, stats=stats, extra_modules=stats
+            )
             return diags, scores
 
     graph = build_project_graph(
@@ -256,7 +269,7 @@ def collect_scores(
 
     # Run pipeline
     active_rules = default_registry.active_rules_map()
-    diags, eligible = run_pipeline(
+    diags, eligible, stats = run_pipeline_with_stats(
         all_diags,
         cfg,
         suppressions,
@@ -264,9 +277,11 @@ def collect_scores(
         version,
         base_path=config_root,
     )
+    if changed_files is not None:
+        stats = {}  # a --diff scan sees only some files: partial numbers would mislead
 
     if cache is not None and fingerprint is not None:
-        cache.store(fingerprint, [asdict(d) for d in diags])
+        cache.store(fingerprint, [asdict(d) for d in diags], stats)
 
     # Determine in-scope categories
     in_scope = _in_scope_categories(version, cfg)
@@ -276,6 +291,8 @@ def collect_scores(
     for module_name in graph.modules:
         mod_diags = [d for d in diags if d.module == module_name]
         mod_elig = [elig for d, elig in zip(diags, eligible) if d.module == module_name]
-        scores[module_name] = _score_module(mod_diags, mod_elig, cfg, in_scope)
+        scores[module_name] = _score_module(
+            mod_diags, mod_elig, cfg, in_scope, stats.get(module_name)
+        )
 
     return diags, scores

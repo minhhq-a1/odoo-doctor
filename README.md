@@ -264,6 +264,8 @@ odoo-doctor scan . --diff main --json
 
 Use `odoo-doctor rules explain <rule-name>` to understand any finding (description, why, fix, examples and a docs link).
 
+Use `odoo-doctor rules stats` to see which rules your team suppresses most (inline `# odoo-doctor: disable`, `[ignore] rules`, `[severity] = "off"`). Rules where most findings are suppressed are flagged as noisy, with a suggestion to lower their severity.
+
 ---
 
 ## Generating stubs for your Odoo version

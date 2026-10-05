@@ -73,6 +73,7 @@ odoo-doctor rules list         # List all rules
 odoo-doctor rules explain rule-name  # Explain a rule
 odoo-doctor rules disable rule-name   # Disable a rule in odoo-doctor.toml
 odoo-doctor rules docs --out docs/rules.md  # Regenerate rules docs (never hand-edit)
+odoo-doctor rules stats [--path DIR] [--json]   # Which rules users suppress most
 odoo-doctor scan . --history h.jsonl --badge badge.svg
 odoo-doctor history show h.jsonl --max-drop 3
 ```
@@ -231,6 +232,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 |-----------|---------|
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
+| `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
 | `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |

@@ -19,7 +19,7 @@ from typing import Iterable
 
 # Bump when the serialized Diagnostic payload schema changes. A mismatch makes
 # any older on-disk cache miss cleanly instead of raising on Diagnostic(**old).
-CACHE_VERSION = 1
+CACHE_VERSION = 2  # v2 adds the suppression_stats payload
 
 _CACHE_FILE = "scan_cache.json"
 _SCANNED_SUFFIXES = {".py", ".xml", ".csv"}
@@ -84,6 +84,7 @@ class ScanCache:
         self.cache_dir = Path(cache_dir)
         self._fp: str | None = None
         self._diagnostics: list | None = None
+        self._suppression_stats: dict | None = None
 
     @property
     def _path(self) -> Path:
@@ -98,6 +99,7 @@ class ScanCache:
             return  # schema changed -> ignore stale cache
         self._fp = data.get("fp")
         self._diagnostics = data.get("diagnostics")
+        self._suppression_stats = data.get("suppression_stats")
 
     def save(self) -> None:
         if self._fp is None:
@@ -109,6 +111,7 @@ class ScanCache:
                     "cache_version": CACHE_VERSION,
                     "fp": self._fp,
                     "diagnostics": self._diagnostics or [],
+                    "suppression_stats": self._suppression_stats or {},
                 }
             ),
             encoding="utf-8",
@@ -119,6 +122,18 @@ class ScanCache:
             return self._diagnostics
         return None
 
-    def store(self, fingerprint: str, diagnostics: list) -> None:
+    def lookup_stats(self, fingerprint: str) -> dict:
+        """Suppression stats stored with the entry for *fingerprint* ({} on a miss)."""
+        if self._fp == fingerprint:
+            return self._suppression_stats or {}
+        return {}
+
+    def store(
+        self,
+        fingerprint: str,
+        diagnostics: list,
+        suppression_stats: dict | None = None,
+    ) -> None:
         self._fp = fingerprint
         self._diagnostics = diagnostics
+        self._suppression_stats = suppression_stats or {}
