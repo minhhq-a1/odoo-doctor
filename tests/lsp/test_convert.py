@@ -9,7 +9,11 @@ pytest.importorskip("lsprotocol")
 from lsprotocol import types as lsp  # noqa: E402
 
 from odoo_doctor.core.diagnostics import Diagnostic  # noqa: E402
-from odoo_doctor.lsp.convert import diff_edits, to_lsp_diagnostic  # noqa: E402
+from odoo_doctor.lsp.convert import (  # noqa: E402
+    diff_edits,
+    split_lines,
+    to_lsp_diagnostic,
+)
 
 
 def _diag(**over) -> Diagnostic:
@@ -36,7 +40,7 @@ def _diag(**over) -> Diagnostic:
 
 def apply_edits(text: str, edits: list[lsp.TextEdit]) -> str:
     """Apply LSP edits (all line based) to *text*, the way an editor would."""
-    lines = text.splitlines(keepends=True)
+    lines = split_lines(text)
     starts = [0]
     for line in lines:
         starts.append(starts[-1] + len(line))
@@ -139,3 +143,19 @@ def test_edits_touch_only_the_changed_lines():
     edits = diff_edits("a\nb\nc\nd\n", "a\nb\nC\nd\n")
     assert len(edits) == 1
     assert edits[0].range.start.line == 2 and edits[0].range.end.line == 3
+
+
+# --- line splitting follows Python / LSP, not str.splitlines ------------------
+
+
+def test_split_lines_only_breaks_on_real_line_endings():
+    assert split_lines("a\x0cb\nc\r\nd\re") == ["a\x0cb\n", "c\r\n", "d\r", "e"]
+    assert split_lines("") == []
+    assert split_lines("x\n") == ["x\n"]
+
+
+def test_diff_edits_are_not_confused_by_form_feeds():
+    old = "a\x0cb\nc\n"
+    new = "a\x0cb\nC\n"
+    edits = diff_edits(old, new)
+    assert len(edits) == 1 and edits[0].range.start.line == 1

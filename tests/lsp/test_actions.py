@@ -208,3 +208,92 @@ def test_a_csv_finding_can_only_be_disabled_in_the_config(tmp_path: Path):
     assert _titles(actions) == [
         "Odoo Doctor: disable missing-access-csv in odoo-doctor.toml"
     ]
+
+
+# --- review fixes: never insert a comment where it breaks the code -----------
+
+
+def test_no_disable_line_inside_a_multiline_string(tmp_path: Path):
+    text = 'q = """\nSELECT 1\nFROM t\n"""\nx = 1\n'
+    assert disable_line_edit("r", str(tmp_path / "a.py"), 3, text) is None
+    assert disable_line_edit("r", str(tmp_path / "a.py"), 5, text) is not None
+
+
+def test_no_disable_line_after_a_backslash_continuation(tmp_path: Path):
+    text = "total = 1 + \\\n    2\nx = 1\n"
+    assert disable_line_edit("r", str(tmp_path / "a.py"), 2, text) is None
+    assert disable_line_edit("r", str(tmp_path / "a.py"), 3, text) is not None
+
+
+def test_disable_line_is_fine_between_bracketed_arguments(tmp_path: Path):
+    f = tmp_path / "a.py"
+    text = "call(\n    1,\n    2,\n)\n"
+    edit = disable_line_edit("r", str(f), 3, text)
+    assert edit is not None
+    new = apply_edits(text, [edit])
+    compile(new, "a.py", "exec")  # still valid Python
+
+
+def test_no_disable_line_when_python_cannot_be_tokenized(tmp_path: Path):
+    assert disable_line_edit("r", str(tmp_path / "a.py"), 2, "x = (\ny = 1\n") is None
+
+
+def test_form_feed_does_not_shift_the_target_line(tmp_path: Path):
+    text = "a = 1 \x0c b = 2\nprint(x)\n"
+    edit = disable_line_edit("r", str(tmp_path / "a.py"), 2, text)
+    assert apply_edits(text, [edit]) == (
+        "a = 1 \x0c b = 2\n# odoo-doctor: disable=r\nprint(x)\n"
+    )
+
+
+def test_no_disable_line_on_xml_continuation_or_declaration(tmp_path: Path):
+    f = str(tmp_path / "v.xml")
+    text = '<?xml version="1.0"?>\n<odoo>\n  <record\n      id="x"/>\n</odoo>\n'
+    assert disable_line_edit("r", f, 1, text) is None  # before the declaration
+    assert disable_line_edit("r", f, 4, text) is None  # inside a tag
+    assert disable_line_edit("r", f, 3, text) is not None
+
+
+def test_crlf_files_keep_their_line_endings(tmp_path: Path):
+    f = str(tmp_path / "a.py")
+    text = "def f():\r\n    eval(x)\r\n"
+    new = apply_edits(text, [disable_line_edit("r", f, 2, text)])
+    assert new == "def f():\r\n    # odoo-doctor: disable=r\r\n    eval(x)\r\n"
+    merged = apply_edits(new, [disable_line_edit("s", f, 3, new)])
+    assert "disable=r,s\r\n" in merged and "\n" not in merged.replace("\r\n", "")
+    top = apply_edits(text, [disable_file_edit("r", f, text)])
+    assert top.startswith("# odoo-doctor: disable-file=r\r\n")
+
+
+# --- stale buffers -------------------------------------------------------------
+
+
+def test_line_in_sync_compares_the_buffer_line_with_the_disk_line():
+    from odoo_doctor.lsp.actions import line_in_sync
+
+    disk = "a\nb\nc\n"
+    assert line_in_sync(2, "a\nb\nc\n", disk)
+    assert line_in_sync(2, "a\nb\nX\n", disk)  # edits elsewhere do not matter
+    assert not line_in_sync(2, "new\na\nb\nc\n", disk)  # lines inserted above
+    assert not line_in_sync(2, "a\nB\nc\n", disk)  # the flagged line itself changed
+    assert not line_in_sync(9, disk, disk)
+    assert not line_in_sync(2, disk, None)
+    assert line_in_sync(0, "a\nb\n", "a\nb\n")  # module-level findings use line 1
+
+
+def test_a_stale_buffer_only_keeps_the_actions_that_do_not_depend_on_the_line(
+    tmp_path: Path,
+):
+    f = tmp_path / "__manifest__.py"
+    finding = _finding(f, rule="manifest-missing-required-fields", line=1)
+    actions = code_actions_for(
+        finding,
+        MANIFEST,
+        f.as_uri(),
+        to_lsp_diagnostic(finding, MANIFEST),
+        in_sync=False,
+    )
+    assert _titles(actions) == [
+        "Odoo Doctor: disable manifest-missing-required-fields in this file",
+        "Odoo Doctor: disable manifest-missing-required-fields in odoo-doctor.toml",
+    ]

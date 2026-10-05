@@ -42,6 +42,12 @@ All notable changes to Odoo Doctor are documented here.
   - `editors/vscode/` is a TypeScript extension (`odooDoctor.enable`, `odooDoctor.path`,
     commands to rescan and restart). Build a `.vsix` with `npm run package`; it is not
     published to the Marketplace. CI compiles and packages it.
+  - Safety: quick fixes that depend on the finding's line are withheld while the buffer has
+    unsaved changes around it; *disable on this line* is only offered where a comment is
+    valid (not inside strings, after a backslash or inside XML tags), keeps CRLF files
+    CRLF, and extends an existing `disable=` comment instead of stacking another. The
+    extension is off in untrusted workspaces. Folders opened through a symlink,
+    nested folders and added/removed folders are handled.
   - Docs in [`docs/lsp.md`](docs/lsp.md) (VS Code, Neovim, Helix). The language server is
     outside the stability contract until a later release lists it.
 

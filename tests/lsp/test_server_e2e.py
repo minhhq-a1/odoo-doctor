@@ -6,6 +6,7 @@ import json
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -22,6 +23,8 @@ class Client:
     """Just enough of an LSP client: framing, request/response, notifications."""
 
     def __init__(self, cwd: Path) -> None:
+        # a file, not a pipe nobody reads: a chatty server must never block on stderr
+        self._stderr = tempfile.TemporaryFile()
         self.proc = subprocess.Popen(
             [
                 sys.executable,
@@ -30,7 +33,7 @@ class Client:
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=self._stderr,
             cwd=cwd,
         )
         self.inbox: queue.Queue = queue.Queue()
@@ -183,5 +186,89 @@ def test_diagnostics_actions_command_and_rescan(tmp_path: Path):
         client.wait_for(
             "textDocument/publishDiagnostics", lambda p: _has(p, uri, RULE, False)
         )
+    finally:
+        assert client.close() == 0
+
+
+def _start(client: Client, folder: Path) -> None:
+    uri = folder.as_uri()
+    client.request(
+        "initialize",
+        {
+            "processId": None,
+            "rootUri": uri,
+            "workspaceFolders": [{"uri": uri, "name": "project"}],
+            "capabilities": {},
+        },
+    )
+    client.notify("initialized", {})
+
+
+def _titles(client: Client, uri: str, diagnostic: dict) -> list[str]:
+    actions = client.request(
+        "textDocument/codeAction",
+        {
+            "textDocument": {"uri": uri},
+            "range": diagnostic["range"],
+            "context": {"diagnostics": [diagnostic]},
+        },
+    )
+    return [a["title"] for a in actions]
+
+
+def test_a_folder_opened_through_a_symlink_gets_its_diagnostics_there(tmp_path: Path):
+    real = tmp_path / "real"
+    real.mkdir()
+    _project(real)
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    uri = (link / "mod" / "models" / "m.py").as_uri()  # the path the editor opened
+    client = Client(real)
+    try:
+        _start(client, link)
+        params = client.wait_for(
+            "textDocument/publishDiagnostics", lambda p: _has(p, uri, RULE, True)
+        )
+        diagnostic = next(d for d in params["diagnostics"] if d["code"] == RULE)
+        titles = _titles(client, uri, diagnostic)
+        assert f"Odoo Doctor: disable {RULE} on this line" in titles
+    finally:
+        assert client.close() == 0
+
+
+def test_actions_that_depend_on_the_line_are_withheld_for_a_stale_buffer(
+    tmp_path: Path,
+):
+    root = _project(tmp_path)
+    source = root / "mod" / "models" / "m.py"
+    uri = source.resolve().as_uri()
+    disk = source.read_text()
+    client = Client(root)
+    try:
+        _start(client, root.resolve())
+        params = client.wait_for(
+            "textDocument/publishDiagnostics", lambda p: _has(p, uri, RULE, True)
+        )
+        diagnostic = next(d for d in params["diagnostics"] if d["code"] == RULE)
+
+        in_sync = {"uri": uri, "languageId": "python", "version": 1, "text": disk}
+        client.notify("textDocument/didOpen", {"textDocument": in_sync})
+        assert f"Odoo Doctor: disable {RULE} on this line" in _titles(
+            client, uri, diagnostic
+        )
+
+        # three lines were typed above the finding and not saved yet
+        stale = {"uri": uri, "version": 2}
+        client.notify(
+            "textDocument/didChange",
+            {
+                "textDocument": stale,
+                "contentChanges": [{"text": "# a\n# b\n# c\n" + disk}],
+            },
+        )
+        titles = _titles(client, uri, diagnostic)
+        assert f"Odoo Doctor: disable {RULE} on this line" not in titles
+        assert f"Odoo Doctor: disable {RULE} in this file" in titles
+        assert f"Odoo Doctor: disable {RULE} in odoo-doctor.toml" in titles
     finally:
         assert client.close() == 0

@@ -1,11 +1,23 @@
 import * as vscode from 'vscode';
 import {
+  ExecuteCommandRequest,
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
 } from 'vscode-languageclient/node';
 
+// Command the language server registers (see odoo_doctor/lsp/server.py).
+const SERVER_RESCAN_COMMAND = 'odooDoctor.rescan';
+
 let client: LanguageClient | undefined;
+
+// Start, stop and restart requests run one after another, so two quick events (a
+// settings change and the restart command, say) can never start two servers.
+let pending: Promise<void> = Promise.resolve();
+function enqueue(task: () => Promise<void>): Promise<void> {
+  pending = pending.then(task).catch(() => undefined);
+  return pending;
+}
 
 async function startClient(): Promise<void> {
   const config = vscode.workspace.getConfiguration('odooDoctor');
@@ -49,22 +61,36 @@ async function stopClient(): Promise<void> {
   }
 }
 
+function restart(): Promise<void> {
+  return enqueue(async () => {
+    await stopClient();
+    await startClient();
+  });
+}
+
+async function rescan(): Promise<void> {
+  if (!client) {
+    void vscode.window.showInformationMessage('Odoo Doctor is not running.');
+    return;
+  }
+  await client.sendRequest(ExecuteCommandRequest.type, {
+    command: SERVER_RESCAN_COMMAND,
+  });
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   context.subscriptions.push(
-    vscode.commands.registerCommand('odooDoctor.restart', async () => {
-      await stopClient();
-      await startClient();
-    }),
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
+    vscode.commands.registerCommand('odooDoctor.restart', restart),
+    vscode.commands.registerCommand('odooDoctor.rescanWorkspace', rescan),
+    vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('odooDoctor')) {
-        await stopClient();
-        await startClient();
+        void restart();
       }
     }),
   );
-  await startClient();
+  await enqueue(startClient);
 }
 
-export async function deactivate(): Promise<void> {
-  await stopClient();
+export function deactivate(): Promise<void> {
+  return enqueue(stopClient);
 }

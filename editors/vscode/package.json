@@ -43,7 +43,7 @@
     },
     "commands": [
       {
-        "command": "odooDoctor.rescan",
+        "command": "odooDoctor.rescanWorkspace",
         "title": "Odoo Doctor: Rescan workspace"
       },
       {
@@ -66,5 +66,11 @@
     "@types/vscode": "1.91.0",
     "@vscode/vsce": "^3.0.0",
     "typescript": "^5.6.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Odoo Doctor runs the odoo-doctor executable on the workspace, which loads configuration and plugins from the workspace. Trust the workspace to enable it."
+    }
   }
 }

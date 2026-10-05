@@ -3,3 +3,4 @@ src/**
 **/*.map
 tsconfig.json
 .gitignore
+package-lock.json

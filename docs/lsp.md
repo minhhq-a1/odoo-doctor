@@ -38,10 +38,24 @@ Configuration (addons paths, `[ignore]`, `[severity]`, plugins, ...) comes from
 - Analysis reads files **from disk**. Findings are computed when the workspace opens, when
   a file is **saved**, and on `odooDoctor.rescan`; not while you type. Quick fixes are
   applied to the editor buffer.
+- **Unsaved edits:** a finding's line number comes from the last save. If the flagged line
+  moved or changed in the buffer since then, the actions that depend on that line (the
+  auto-fix and *disable on this line*) are not offered until you save; *disable in this
+  file* and *disable in odoo-doctor.toml* always are.
+- *Disable on this line* is offered only where a comment is safe: not inside a multi-line
+  string, not after a backslash continuation, not inside an XML tag, and not in a file that
+  cannot be tokenized.
 - Each refresh scans the whole workspace folder, because cross-module rules need every
   addon. A scan takes roughly 0.06 s per addon. Scans never overlap; saves that arrive
-  during a scan are merged into one rerun.
-- Findings are published for every file in the project, not only the open ones.
+  during a scan are merged into one rerun, and a failed scan is logged and does not stop
+  the next one.
+- Findings are published for every file in the project, not only the open ones, under the
+  path the editor opened the folder with (so symlinked folders work). A folder nested in
+  another workspace folder is covered by the outer one and not scanned twice; folders
+  added or removed while the editor is open are picked up.
+- Limitation: an addon that is a symlink pointing **outside** the workspace folder is
+  scanned, but its diagnostics are published under the real path, so the editor may not
+  show them on the file you opened through the link.
 - The server only speaks LSP on stdout. Rule crashes are logged to stderr and do not stop
   the server.
 
@@ -59,6 +73,10 @@ code --install-extension odoo-doctor-*.vsix
 Settings: `odooDoctor.enable` (default `true`) and `odooDoctor.path` (default
 `odoo-doctor`; set it to the full path when the executable is in a virtualenv VS Code does
 not see). Commands: *Odoo Doctor: Rescan workspace*, *Odoo Doctor: Restart language server*.
+
+The extension does not run in an untrusted workspace (Restricted Mode): it launches
+`odoo-doctor` on the folder, which reads that folder's configuration and plugins. Trust the
+workspace to enable it.
 
 ## Other editors
 

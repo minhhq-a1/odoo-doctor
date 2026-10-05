@@ -43,12 +43,22 @@ def test_extension_starts_the_command_the_package_installs(manifest: dict):
     assert re.search(r"args:\s*\['lsp'\]", source)
 
 
-def test_contributed_commands_cover_the_server_commands(manifest: dict):
+def test_contributed_commands_do_not_clash_with_the_server_commands(manifest: dict):
     pytest.importorskip("pygls")
     from odoo_doctor.lsp.actions import DISABLE_RULE_COMMAND
     from odoo_doctor.lsp.server import RESCAN_COMMAND
 
     contributed = {c["command"] for c in manifest["contributes"]["commands"]}
-    assert RESCAN_COMMAND in contributed
-    # the disable command is only invoked from code actions, never from the palette
+    # The language client registers the server's commands itself, so contributing the
+    # same ids would clash; the extension has its own palette commands instead.
+    assert RESCAN_COMMAND not in contributed
     assert DISABLE_RULE_COMMAND not in contributed
+    assert {"odooDoctor.rescanWorkspace", "odooDoctor.restart"} <= contributed
+    source = (EXTENSION / "src" / "extension.ts").read_text(encoding="utf-8")
+    assert f"'{RESCAN_COMMAND}'" in source  # forwarded to the server command
+
+
+def test_extension_is_off_in_untrusted_workspaces(manifest: dict):
+    # It runs `odoo-doctor lsp` on the workspace, which loads workspace configuration
+    # and plugins (and `odooDoctor.path` can be set by the workspace itself).
+    assert manifest["capabilities"]["untrustedWorkspaces"]["supported"] is False

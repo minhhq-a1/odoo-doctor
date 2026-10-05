@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 from pathlib import Path
 
 from lsprotocol import types as lsp
@@ -12,6 +13,18 @@ from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import default_registry
 
 SOURCE = "odoo-doctor"
+
+_LINES = re.compile(r"[^\r\n]*(?:\r\n|\n|\r)|[^\r\n]+")
+
+
+def split_lines(text: str) -> list[str]:
+    """Lines with their terminators, split like Python and LSP do (\\n, \\r\\n, \\r).
+
+    Not ``str.splitlines``: that also breaks on form feed, \\x1c-\\x1e, \\x85 and the
+    Unicode separators, which would shift every line number after one of them.
+    """
+    return _LINES.findall(text)
+
 
 _SEVERITY = {
     "error": lsp.DiagnosticSeverity.Error,
@@ -61,8 +74,8 @@ def position_at(lines: list[str], index: int) -> lsp.Position:
 
 def diff_edits(old: str, new: str) -> list[lsp.TextEdit]:
     """Minimal line-based edits turning *old* into *new* (empty when equal)."""
-    old_lines = old.splitlines(keepends=True)
-    new_lines = new.splitlines(keepends=True)
+    old_lines = split_lines(old)
+    new_lines = split_lines(new)
     matcher = difflib.SequenceMatcher(a=old_lines, b=new_lines, autojunk=False)
     edits: list[lsp.TextEdit] = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -89,7 +102,8 @@ def file_diagnostics(
 ) -> list[lsp.Diagnostic]:
     """LSP diagnostics for all findings in one file (reads the file for the ranges)."""
     try:
-        lines = Path(file_path).read_text(encoding="utf-8").splitlines()
+        text = Path(file_path).read_text(encoding="utf-8")
+        lines = [line.rstrip("\r\n") for line in split_lines(text)]
     except (OSError, UnicodeDecodeError):
         lines = None
     result = []
