@@ -6,6 +6,13 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- The VS Code extension is bundled with esbuild: the `.vsix` goes from 358 files (583 KB) to
+  6 files (140 KB), which also makes it start faster. `npm run compile` now type-checks with
+  `tsc` and bundles; `vscode-languageclient` moved to `devDependencies` because it is part
+  of the bundle. Checked by running the packaged extension in VS Code 1.140.
+
 ### Added
 
 - **Rule `unsafe-template-render`** (Security, P1, medium confidence, Odoo 14+): flags QWeb
