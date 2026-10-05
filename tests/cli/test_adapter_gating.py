@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+
 from typer.testing import CliRunner
 
 from odoo_doctor.cli.app import app

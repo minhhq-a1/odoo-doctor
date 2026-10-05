@@ -9,22 +9,22 @@ from odoo_doctor.reporters.terminal import render_terminal
 
 
 def _diag(**overrides) -> Diagnostic:
-    defaults = dict(
-        module="sale_custom",
-        file_path="models/sale.py",
-        line=42,
-        column=0,
-        rule="raw-sql",
-        category="Security",
-        severity="error",
-        tier="P0",
-        source="native",
-        confidence="high",
-        title="SQL injection",
-        message="cr.execute uses f-string",
-        help="Use params",
-        odoo_version="17.0",
-    )
+    defaults = {
+        "module": "sale_custom",
+        "file_path": "models/sale.py",
+        "line": 42,
+        "column": 0,
+        "rule": "raw-sql",
+        "category": "Security",
+        "severity": "error",
+        "tier": "P0",
+        "source": "native",
+        "confidence": "high",
+        "title": "SQL injection",
+        "message": "cr.execute uses f-string",
+        "help": "Use params",
+        "odoo_version": "17.0",
+    }
     defaults.update(overrides)
     return Diagnostic(**defaults)
 

@@ -10,10 +10,10 @@ import pytest
 
 pytest.importorskip("pygls")
 
-from pygls.uris import from_fs_path  # noqa: E402
+from pygls.uris import from_fs_path
 
-from odoo_doctor.core.diagnostics import Diagnostic  # noqa: E402
-from odoo_doctor.lsp import server as srv  # noqa: E402
+from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.lsp import server as srv
 
 
 def _finding(path: Path, rule: str = "eval-usage", line: int = 1) -> Diagnostic:

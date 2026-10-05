@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic

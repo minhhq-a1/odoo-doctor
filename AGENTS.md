@@ -83,7 +83,7 @@ odoo-doctor history show h.jsonl --max-drop 3
 
 ## Coding Style & Naming Conventions
 
-- **Python**: Python 3.10–3.13, enforced by Ruff in CI. All files must pass `ruff format` and `ruff check`.
+- **Python**: Python 3.10–3.13, enforced by Ruff in CI (0.16 default rule set, pinned `ruff>=0.16,<0.17`). All files must pass `ruff format` and `ruff check`. Do not let isort reorder the rule-registration imports in `cli/app.py` and `reporters/json_report.py` (`isort: off` blocks; `tests/test_registration_order.py` guards the order).
 - **Indentation**: 4 spaces (standard Python).
 - **Line Length**: 88 characters (Ruff default).
 - **Imports**: Organized by stdlib, third-party, local (enforced by Ruff).

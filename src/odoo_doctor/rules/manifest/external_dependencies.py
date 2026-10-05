@@ -18,11 +18,33 @@ if TYPE_CHECKING:
 # Standard-library modules removed in recent Pythons: this tool may run on a newer
 # Python than the Odoo it analyses.
 _REMOVED_STDLIB = frozenset(
-    """
-    imp distutils asyncore asynchat smtpd telnetlib cgi cgitb crypt pipes nntplib
-    imghdr sndhdr audioop aifc chunk mailcap msilib nis ossaudiodev spwd sunau uu
-    xdrlib lib2to3
-    """.split()
+    [
+        "imp",
+        "distutils",
+        "asyncore",
+        "asynchat",
+        "smtpd",
+        "telnetlib",
+        "cgi",
+        "cgitb",
+        "crypt",
+        "pipes",
+        "nntplib",
+        "imghdr",
+        "sndhdr",
+        "audioop",
+        "aifc",
+        "chunk",
+        "mailcap",
+        "msilib",
+        "nis",
+        "ossaudiodev",
+        "spwd",
+        "sunau",
+        "uu",
+        "xdrlib",
+        "lib2to3",
+    ]
 )
 _STDLIB = set(sys.stdlib_module_names) | _REMOVED_STDLIB | {"__future__"}
 

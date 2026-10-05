@@ -9,22 +9,22 @@ from odoo_doctor.reporters.sarif import render_sarif
 
 
 def _diag(**over) -> Diagnostic:
-    base = dict(
-        module="m",
-        file_path="m/models/x.py",
-        line=12,
-        column=4,
-        rule="eval-usage",
-        category="Security",
-        severity="error",
-        tier="P0",
-        source="native",
-        confidence="high",
-        title="Use of builtin eval()",
-        message="eval is dangerous",
-        help="avoid eval",
-        odoo_version="17.0",
-    )
+    base = {
+        "module": "m",
+        "file_path": "m/models/x.py",
+        "line": 12,
+        "column": 4,
+        "rule": "eval-usage",
+        "category": "Security",
+        "severity": "error",
+        "tier": "P0",
+        "source": "native",
+        "confidence": "high",
+        "title": "Use of builtin eval()",
+        "message": "eval is dangerous",
+        "help": "avoid eval",
+        "odoo_version": "17.0",
+    }
     base.update(over)
     return Diagnostic(**base)
 

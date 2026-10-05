@@ -68,6 +68,7 @@ class PylintOdooAdapter:
                 capture_output=True,
                 text=True,
                 timeout=120,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return [

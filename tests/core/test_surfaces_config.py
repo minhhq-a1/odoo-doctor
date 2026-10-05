@@ -1,6 +1,6 @@
-from odoo_doctor.core.config import _build_config, SurfaceConfig
-from odoo_doctor.core.surfaces import filter_for_surface
+from odoo_doctor.core.config import SurfaceConfig, _build_config
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.surfaces import filter_for_surface
 
 
 def test_surfaces_defaults_when_absent():

@@ -7,11 +7,9 @@ import ast
 from collections.abc import Generator
 from pathlib import Path
 
-from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import is_test_file
-from odoo_doctor.rules._ast_helpers import receiver_is_orm
-
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import parse_python
+from odoo_doctor.rules._ast_helpers import is_test_file, receiver_is_orm
 from odoo_doctor.rules.registry import rule
 
 # browse() only wraps ids in a recordset; it does not hit the database.

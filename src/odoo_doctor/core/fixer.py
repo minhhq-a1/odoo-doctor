@@ -10,9 +10,9 @@ the same result as applying once.
 from __future__ import annotations
 
 import difflib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from odoo_doctor.core.diagnostics import Diagnostic
 
@@ -44,7 +44,7 @@ class FixResult:
     fixed_count: int
     skipped_count: int  # fixable rule, but fixer returned None for that diag
 
-    def unified_diff(self, original: dict[str, str], root: "Path | None" = None) -> str:
+    def unified_diff(self, original: dict[str, str], root: Path | None = None) -> str:
         """Render a unified diff. Paths are shown relative to *root* when given,
         so the diff is readable regardless of where the repo lives on disk."""
         chunks: list[str] = []
@@ -61,7 +61,7 @@ class FixResult:
         return "".join(chunks)
 
 
-def _display_path(path: str, root: "Path | None") -> str:
+def _display_path(path: str, root: Path | None) -> str:
     norm = path.replace("\\", "/")
     if root is not None:
         try:
@@ -75,7 +75,7 @@ def compute_fixes(
     diagnostics: list[Diagnostic],
     fixable_rules: set[str],
     registry: FixerRegistry,
-    root: "Path | None" = None,
+    root: Path | None = None,
     read_text: Callable[[str], str] | None = None,
 ) -> tuple[FixResult, dict[str, str]]:
     """Apply fixers for fixable, high-confidence diagnostics.

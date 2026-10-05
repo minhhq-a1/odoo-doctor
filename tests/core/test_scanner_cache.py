@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.cache import ScanCache
+from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.scanner import _score_per_module, collect_scores
 
 
@@ -26,13 +26,13 @@ def test_cache_populated_on_first_scan_and_hit_on_second(tmp_path: Path):
     cfg = OdooDoctorConfig(odoo_version="17.0")
     cache = ScanCache(tmp_path / ".odoo_doctor_cache")
 
-    diags1, scores1 = collect_scores(
+    diags1, _scores1 = collect_scores(
         addon_paths=[root], cfg=cfg, version="17.0", config_root=root, cache=cache
     )
     # The single cache entry is now populated.
-    assert cache._fp is not None  # noqa: SLF001 - white-box check is fine in tests
+    assert cache._fp is not None
 
-    diags2, scores2 = collect_scores(
+    diags2, _scores2 = collect_scores(
         addon_paths=[root], cfg=cfg, version="17.0", config_root=root, cache=cache
     )
     assert sorted(d.rule for d in diags1) == sorted(d.rule for d in diags2)
@@ -46,7 +46,7 @@ def test_cache_invalidated_when_a_file_changes(tmp_path: Path):
     collect_scores(
         addon_paths=[root], cfg=cfg, version="17.0", config_root=root, cache=cache
     )
-    fp_before = cache._fp  # noqa: SLF001
+    fp_before = cache._fp
 
     # Add a license so the missing-required-fields finding disappears.
     (root / "my_addon" / "__manifest__.py").write_text(
@@ -56,7 +56,7 @@ def test_cache_invalidated_when_a_file_changes(tmp_path: Path):
     diags2, _ = collect_scores(
         addon_paths=[root], cfg=cfg, version="17.0", config_root=root, cache=cache
     )
-    assert cache._fp != fp_before  # noqa: SLF001 - fingerprint changed -> miss
+    assert cache._fp != fp_before
     assert not any(d.rule == "manifest-missing-required-fields" for d in diags2)
 
 

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from odoo_doctor.graph.stubs.loader import load_stubs
 from odoo_doctor.graph.source_index import build_source_index
+from odoo_doctor.graph.stubs.loader import load_stubs
 
 if TYPE_CHECKING:
     from odoo_doctor.parsers.python_models import ModelInfo

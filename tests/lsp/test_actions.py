@@ -8,43 +8,43 @@ import pytest
 
 pytest.importorskip("lsprotocol")
 
-from lsprotocol import types as lsp  # noqa: E402
-from lxml import etree  # noqa: E402
+from lsprotocol import types as lsp
+from lxml import etree
 
-import odoo_doctor.cli.app  # noqa: E402,F401  (registers rules and fixers)
-from odoo_doctor.core.diagnostics import Diagnostic  # noqa: E402
-from odoo_doctor.lsp.actions import (  # noqa: E402
+import odoo_doctor.cli.app  # noqa: F401  (registers rules and fixers)
+from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.lsp.actions import (
     code_actions_for,
     disable_file_edit,
     disable_line_edit,
     fix_edits,
 )
-from odoo_doctor.lsp.convert import to_lsp_diagnostic  # noqa: E402
-from odoo_doctor.rules.suppression import (  # noqa: E402
+from odoo_doctor.lsp.convert import to_lsp_diagnostic
+from odoo_doctor.rules.suppression import (
     scan_python_suppressions,
     scan_xml_suppressions,
 )
-from tests.lsp.test_convert import apply_edits  # noqa: E402
+from tests.lsp.test_convert import apply_edits
 
 
 def _finding(path: Path, rule: str = "eval-usage", line: int = 3, **over) -> Diagnostic:
-    base = dict(
-        module="m",
-        file_path=str(path),
-        line=line,
-        column=0,
-        rule=rule,
-        category="Security",
-        severity="error",
-        tier="P0",
-        source="native",
-        confidence="high",
-        title="t",
-        message="msg",
-        help="h",
-        odoo_version="17.0",
-        url="https://example.test/x",
-    )
+    base = {
+        "module": "m",
+        "file_path": str(path),
+        "line": line,
+        "column": 0,
+        "rule": rule,
+        "category": "Security",
+        "severity": "error",
+        "tier": "P0",
+        "source": "native",
+        "confidence": "high",
+        "title": "t",
+        "message": "msg",
+        "help": "h",
+        "odoo_version": "17.0",
+        "url": "https://example.test/x",
+    }
     base.update(over)
     return Diagnostic(**base)
 

@@ -8,11 +8,11 @@ import pytest
 
 pytest.importorskip("lsprotocol")
 
-from lsprotocol import types as lsp  # noqa: E402
+from lsprotocol import types as lsp
 
-from odoo_doctor.lsp.actions import find_finding  # noqa: E402
-from odoo_doctor.lsp.convert import file_diagnostics  # noqa: E402
-from odoo_doctor.lsp.engine import scan_project  # noqa: E402
+from odoo_doctor.lsp.actions import find_finding
+from odoo_doctor.lsp.convert import file_diagnostics
+from odoo_doctor.lsp.engine import scan_project
 
 RULE = "raw-sql-string-interpolation"
 

@@ -6,10 +6,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import is_test_file
-from odoo_doctor.rules._ast_helpers import receiver_is_orm
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import parse_python
+from odoo_doctor.rules._ast_helpers import is_test_file, receiver_is_orm
 from odoo_doctor.rules.registry import rule
 
 
@@ -45,11 +44,7 @@ def check_unbounded_search(
 def _is_risky_context(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     # Check compute naming or cron naming
     name = func.name
-    if (
-        name.startswith("_compute_")
-        or name.startswith("_cron")
-        or name.startswith("cron_")
-    ):
+    if name.startswith(("_compute_", "_cron", "cron_")):
         return True
 
     # Check decorators for @api.depends or @http.route

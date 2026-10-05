@@ -9,10 +9,8 @@ import re
 import tokenize
 from pathlib import Path
 
-from odoo_doctor.core.source import parse_python, read_source
-
-
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import parse_python, read_source
 from odoo_doctor.rules._taint import Taint, TaintVisitor
 from odoo_doctor.rules.registry import rule
 

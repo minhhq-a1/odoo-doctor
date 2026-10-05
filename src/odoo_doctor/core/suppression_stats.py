@@ -10,8 +10,9 @@ signal: inline ``# odoo-doctor: disable``, ``[ignore] rules`` and
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
@@ -29,13 +30,13 @@ SuppressionStats = dict[str, dict[str, dict[str, int]]]
 
 
 def build_stats(
-    surfaced: Iterable["Diagnostic"],
-    dropped: dict[str, Iterable["Diagnostic"]],
+    surfaced: Iterable[Diagnostic],
+    dropped: dict[str, Iterable[Diagnostic]],
 ) -> SuppressionStats:
     """Count surviving findings and the findings dropped by each channel."""
     stats: SuppressionStats = {}
 
-    def bucket(d: "Diagnostic") -> dict[str, int]:
+    def bucket(d: Diagnostic) -> dict[str, int]:
         counts = {"surfaced": 0, **{channel: 0 for channel in CHANNELS}}
         return stats.setdefault(d.module, {}).setdefault(d.rule, counts)
 

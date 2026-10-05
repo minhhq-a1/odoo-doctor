@@ -78,11 +78,11 @@ def test_xml_file_wide_suppression(tmp_path: Path):
 
 def test_file_wide_suppression_blocks_all_lines(tmp_path: Path):
     """Pipeline integration: file-wide suppression removes all matching diagnostics."""
+    from odoo_doctor.core.diagnostics import Diagnostic
     from odoo_doctor.core.pipeline import (
         apply_inline_suppressions,
         normalize_diagnostics,
     )
-    from odoo_doctor.core.diagnostics import Diagnostic
 
     f = tmp_path / "models" / "sale.py"
     f.parent.mkdir()

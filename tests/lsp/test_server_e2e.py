@@ -14,7 +14,7 @@ import pytest
 
 pytest.importorskip("pygls")
 
-from tests.lsp.test_engine import RULE, _project  # noqa: E402
+from tests.lsp.test_engine import RULE, _project
 
 TIMEOUT = 60
 
@@ -24,7 +24,7 @@ class Client:
 
     def __init__(self, cwd: Path) -> None:
         # a file, not a pipe nobody reads: a chatty server must never block on stderr
-        self._stderr = tempfile.TemporaryFile()
+        self._stderr = tempfile.TemporaryFile()  # noqa: SIM115 - held open for the server lifetime
         self.proc = subprocess.Popen(
             [
                 sys.executable,

@@ -91,9 +91,11 @@ def render_markdown() -> str:
         "",
         "# Built-in Rules",
         "",
-        f"Odoo Doctor ships {total} native rules. Each rule has a **tier** "
-        "(P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and "
-        "a **confidence**; only high-confidence findings affect the score.",
+        (
+            f"Odoo Doctor ships {total} native rules. Each rule has a **tier** "
+            "(P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and "
+            "a **confidence**; only high-confidence findings affect the score."
+        ),
         "",
         "| Rule | Tier | Category | Severity | Confidence | Fixable |",
         "|------|------|----------|----------|------------|---------|",

@@ -10,7 +10,7 @@ from odoo_doctor.rules.xml.orphan_view import check_orphan_view
 
 def _manifest(files: list[str]) -> str:
     joined = ", ".join(f'"{f}"' for f in files)
-    return '{"name": "M", "depends": [], "data": [%s], "license": "LGPL-3"}' % joined
+    return '{"name": "M", "depends": [], "data": [' + joined + '], "license": "LGPL-3"}'
 
 
 def test_unreferenced_view_is_flagged(tmp_path: Path):

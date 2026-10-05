@@ -1,10 +1,11 @@
+import subprocess
+
 from odoo_doctor.core.scoring import ScoreResult
 from odoo_doctor.reporters.pr_comment import (
-    render_pr_comment_body,
     choose_comment_action,
     post_pr_comment,
+    render_pr_comment_body,
 )
-import subprocess
 
 
 def test_body_contains_marker():

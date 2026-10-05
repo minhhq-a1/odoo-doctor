@@ -6,10 +6,10 @@ import pytest
 
 pytest.importorskip("lsprotocol")
 
-from lsprotocol import types as lsp  # noqa: E402
+from lsprotocol import types as lsp
 
-from odoo_doctor.core.diagnostics import Diagnostic  # noqa: E402
-from odoo_doctor.lsp.convert import (  # noqa: E402
+from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.lsp.convert import (
     diff_edits,
     split_lines,
     to_lsp_diagnostic,
@@ -17,23 +17,23 @@ from odoo_doctor.lsp.convert import (  # noqa: E402
 
 
 def _diag(**over) -> Diagnostic:
-    base = dict(
-        module="m",
-        file_path="/x/m/models/a.py",
-        line=3,
-        column=0,
-        rule="eval-usage",
-        category="Security",
-        severity="error",
-        tier="P0",
-        source="native",
-        confidence="high",
-        title="eval() on user data",
-        message="Do not use eval.",
-        help="Use ast.literal_eval.",
-        odoo_version="17.0",
-        url="https://example.test/rules#eval-usage",
-    )
+    base = {
+        "module": "m",
+        "file_path": "/x/m/models/a.py",
+        "line": 3,
+        "column": 0,
+        "rule": "eval-usage",
+        "category": "Security",
+        "severity": "error",
+        "tier": "P0",
+        "source": "native",
+        "confidence": "high",
+        "title": "eval() on user data",
+        "message": "Do not use eval.",
+        "help": "Use ast.literal_eval.",
+        "odoo_version": "17.0",
+        "url": "https://example.test/rules#eval-usage",
+    }
     base.update(over)
     return Diagnostic(**base)
 

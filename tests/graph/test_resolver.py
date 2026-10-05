@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from odoo_doctor.graph.stubs.loader import load_stubs
 from odoo_doctor.graph.resolver import ResolveResult, SymbolResolver
+from odoo_doctor.graph.stubs.loader import load_stubs
 from odoo_doctor.parsers.python_models import FieldInfo, ModelInfo
 
 

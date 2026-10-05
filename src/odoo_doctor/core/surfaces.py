@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.config import SurfaceConfig
+from odoo_doctor.core.diagnostics import Diagnostic
 
 
 def filter_for_surface(

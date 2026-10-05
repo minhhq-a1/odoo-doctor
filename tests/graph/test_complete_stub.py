@@ -41,8 +41,7 @@ def test_loader_reads_complete_true(tmp_path, monkeypatch):
 
 def test_complete_stub_proves_absence(monkeypatch):
     """When the stub file is complete, a missing field IS provably NOT_FOUND."""
-    from odoo_doctor.graph.resolver import SymbolResolver
-    from odoo_doctor.graph.resolver import ResolveResult
+    from odoo_doctor.graph.resolver import ResolveResult, SymbolResolver
 
     r = SymbolResolver(repo_models={}, repo_xml_ids={}, stub_version="17.0")
     # Simulate a complete stub backing (e.g. build_stubs source output).

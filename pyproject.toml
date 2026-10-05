@@ -75,7 +75,19 @@ pythonpath = ["src"]
 extend-exclude = ["tests/corpus"]
 
 [tool.ruff.lint]
-# Pin the rule set: ruff 0.16 widened its defaults, which broke CI on an
-# unchanged codebase. These are the long-standing defaults (pyflakes + the
-# pycodestyle subset), so a ruff upgrade cannot change what CI enforces.
-select = ["E4", "E7", "E9", "F"]
+ignore = [
+    # Nested ifs / early-return booleans are kept explicit in AST visitors and
+    # rule predicates, where each condition mirrors one Odoo pattern.
+    "SIM102",
+    "SIM103",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Intentionally flawed sample addons used as scan inputs.
+"tests/fixtures/**" = ["B018", "UP031"]
+# Side-effect imports that register rules and fixers (see the comments there).
+"src/odoo_doctor/cli/app.py" = ["F401"]
+"src/odoo_doctor/reporters/json_report.py" = ["F401"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Argument", "typer.Option"]

@@ -3,37 +3,37 @@
 
 from __future__ import annotations
 
-from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.config import OdooDoctorConfig
+from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.pipeline import (
-    deduplicate,
-    normalize_diagnostics,
-    apply_severity_overrides,
     apply_ignore_filters,
     apply_inline_suppressions,
+    apply_severity_overrides,
     apply_version_gates,
+    deduplicate,
     mark_score_eligibility,
+    normalize_diagnostics,
     run_pipeline,
 )
 
 
 def _diag(**overrides) -> Diagnostic:
-    defaults = dict(
-        module="m",
-        file_path="f.py",
-        line=1,
-        column=0,
-        rule="r",
-        category="Security",
-        severity="error",
-        tier="P0",
-        source="native",
-        confidence="high",
-        title="t",
-        message="msg",
-        help="h",
-        odoo_version="17.0",
-    )
+    defaults = {
+        "module": "m",
+        "file_path": "f.py",
+        "line": 1,
+        "column": 0,
+        "rule": "r",
+        "category": "Security",
+        "severity": "error",
+        "tier": "P0",
+        "source": "native",
+        "confidence": "high",
+        "title": "t",
+        "message": "msg",
+        "help": "h",
+        "odoo_version": "17.0",
+    }
     defaults.update(overrides)
     return Diagnostic(**defaults)
 
@@ -189,7 +189,7 @@ def test_run_pipeline_ignores_relative_patterns(tmp_path):
     d = _diag(file_path=str(sale_file))
     cfg = OdooDoctorConfig(ignore_files=["models/*.py"])
 
-    result_diags, eligible = run_pipeline(
+    result_diags, _eligible = run_pipeline(
         [d],
         cfg,
         suppressions=set(),
@@ -209,7 +209,7 @@ def test_run_pipeline_ignores_migrations_glob(tmp_path):
     d = _diag(file_path=str(pre_file))
     cfg = OdooDoctorConfig(ignore_files=["migrations/**"])
 
-    result_diags, eligible = run_pipeline(
+    result_diags, _eligible = run_pipeline(
         [d],
         cfg,
         suppressions=set(),
@@ -334,8 +334,8 @@ def test_derive_capabilities():
 
 
 def test_rule_is_enabled():
-    from odoo_doctor.rules.registry import RuleMeta
     from odoo_doctor.core.pipeline import rule_is_enabled
+    from odoo_doctor.rules.registry import RuleMeta
 
     meta = RuleMeta(
         name="test-rule",

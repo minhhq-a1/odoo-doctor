@@ -51,10 +51,11 @@ def _vendored_roots(addon: Path) -> list[Path]:
                     roots.append(current / d)
                     dirnames.remove(d)
             continue
-        if current.name.endswith((".dist-info", ".egg-info")):
-            roots.append(current)
-            dirnames[:] = []
-        elif current.name.lower() in _VENDOR_DIRS and _has_python(current):
+        if (
+            current.name.endswith((".dist-info", ".egg-info"))
+            or current.name.lower() in _VENDOR_DIRS
+            and _has_python(current)
+        ):
             roots.append(current)
             dirnames[:] = []
     return roots

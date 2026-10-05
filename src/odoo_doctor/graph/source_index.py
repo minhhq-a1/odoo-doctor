@@ -49,7 +49,7 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
 
         try:
             _manifest = ast.literal_eval(manifest_file.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception:  # noqa: BLE001, S112 - skip unparsable files
             continue
 
         if not isinstance(_manifest, dict):
@@ -72,6 +72,5 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
                 pass
 
         # 2. XML ID indexing is deferred for odoo_source_path (model-only in spec v3)
-        pass
 
     return SourceIndex(model_owners, xml_id_owners, module_depends)

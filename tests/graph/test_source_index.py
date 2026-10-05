@@ -6,8 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-from odoo_doctor.graph.source_index import build_source_index
 from odoo_doctor.graph.resolver import ResolveResult, SymbolResolver
+from odoo_doctor.graph.source_index import build_source_index
 
 
 def test_build_source_index(tmp_path: Path):

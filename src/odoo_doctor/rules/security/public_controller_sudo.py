@@ -6,8 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.rules.registry import rule
 from odoo_doctor.parsers.python_models import parse_controllers
+from odoo_doctor.rules.registry import rule
 
 
 @rule(

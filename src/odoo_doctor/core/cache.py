@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from collections.abc import Iterable
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
-from typing import Iterable
 
 # Bump when the serialized Diagnostic payload schema changes. A mismatch makes
 # any older on-disk cache miss cleanly instead of raising on Diagnostic(**old).

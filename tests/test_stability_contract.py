@@ -28,19 +28,44 @@ runner = CliRunner()
 
 # --- rule IDs: never renamed, never reused for another rule -----------------
 
-FROZEN_RULE_IDS = """
-manifest-missing-required-fields manifest-data-order-risk manifest-missing-dependency
-missing-access-csv eval-usage unknown-model-in-access-csv raw-sql-string-interpolation
-public-controller-sudo-risk sudo-without-comment record-rule-without-domain
-duplicate-xml-id missing-xml-ref view-field-not-in-model button-method-not-found
-orphan-view search-in-loop create-in-loop write-in-loop n-plus-one-read
-unbounded-search expensive-nonstored-compute override-missing-super
-compute-missing-depends field-no-string-on-required missing-translation
-missing-ondelete data-noupdate-risk deprecated-api-usage removed-model-still-referenced
-asset-bundle-missing monetary-missing-currency-field hardcoded-company-or-currency
-missing-multicompany-rule manifest-license-incompatible missing-external-dependency
-vendored-python-code
-""".split()
+FROZEN_RULE_IDS = [
+    "manifest-missing-required-fields",
+    "manifest-data-order-risk",
+    "manifest-missing-dependency",
+    "missing-access-csv",
+    "eval-usage",
+    "unknown-model-in-access-csv",
+    "raw-sql-string-interpolation",
+    "public-controller-sudo-risk",
+    "sudo-without-comment",
+    "record-rule-without-domain",
+    "duplicate-xml-id",
+    "missing-xml-ref",
+    "view-field-not-in-model",
+    "button-method-not-found",
+    "orphan-view",
+    "search-in-loop",
+    "create-in-loop",
+    "write-in-loop",
+    "n-plus-one-read",
+    "unbounded-search",
+    "expensive-nonstored-compute",
+    "override-missing-super",
+    "compute-missing-depends",
+    "field-no-string-on-required",
+    "missing-translation",
+    "missing-ondelete",
+    "data-noupdate-risk",
+    "deprecated-api-usage",
+    "removed-model-still-referenced",
+    "asset-bundle-missing",
+    "monetary-missing-currency-field",
+    "hardcoded-company-or-currency",
+    "missing-multicompany-rule",
+    "manifest-license-incompatible",
+    "missing-external-dependency",
+    "vendored-python-code",
+]
 
 # --- CLI: command path -> flags that must keep existing ---------------------
 
@@ -51,10 +76,21 @@ FROZEN_CLI = {
     "init": {"--path"},
     "install": set(),
     "rules": {"--cache", "--check", "--format", "--json", "--out", "--path"},
-    "scan": set(
-        """--badge --baseline --cache --diff --fail-on --format --history --json
-        --min-score --module --odoo-version --score-delta --write-baseline""".split()
-    ),
+    "scan": {
+        "--badge",
+        "--baseline",
+        "--cache",
+        "--diff",
+        "--fail-on",
+        "--format",
+        "--history",
+        "--json",
+        "--min-score",
+        "--module",
+        "--odoo-version",
+        "--score-delta",
+        "--write-baseline",
+    },
 }
 
 # --- machine-readable output ------------------------------------------------
@@ -70,28 +106,75 @@ FROZEN_REPORT_KEYS = {
 FROZEN_MODULE_KEYS = {"score", "fix_priorities", "suppression_stats", "diagnostics"}
 FROZEN_SCORE_KEYS = {"overall", "label", "categories", "diagnostics_counted"}
 FROZEN_CATEGORY_KEYS = {"category", "score", "finding_count"}
-FROZEN_DIAGNOSTIC_KEYS = set(
-    """module file_path line column rule category severity tier source confidence
-    title message help odoo_version url""".split()
-)
-FROZEN_TOP_FINDING_KEYS = set(
-    """module file_path line rule tier title category severity confidence
-    fixable""".split()
-)
-FROZEN_FIX_PRIORITY_KEYS = set(
-    """rank rule file_path line tier title category impact effort roi
-    projected_score score_gain fixable""".split()
-)
+FROZEN_DIAGNOSTIC_KEYS = {
+    "module",
+    "file_path",
+    "line",
+    "column",
+    "rule",
+    "category",
+    "severity",
+    "tier",
+    "source",
+    "confidence",
+    "title",
+    "message",
+    "help",
+    "odoo_version",
+    "url",
+}
+FROZEN_TOP_FINDING_KEYS = {
+    "module",
+    "file_path",
+    "line",
+    "rule",
+    "tier",
+    "title",
+    "category",
+    "severity",
+    "confidence",
+    "fixable",
+}
+FROZEN_FIX_PRIORITY_KEYS = {
+    "rank",
+    "rule",
+    "file_path",
+    "line",
+    "tier",
+    "title",
+    "category",
+    "impact",
+    "effort",
+    "roi",
+    "projected_score",
+    "score_gain",
+    "fixable",
+}
 FROZEN_SUPPRESSION_COUNTS = {"surfaced", "inline", "ignore_rule", "severity_off"}
-FROZEN_HISTORY_KEYS = set(
-    """history_schema_version score_schema_version tool_version timestamp commit
-    branch project modules""".split()
-)
+FROZEN_HISTORY_KEYS = {
+    "history_schema_version",
+    "score_schema_version",
+    "tool_version",
+    "timestamp",
+    "commit",
+    "branch",
+    "project",
+    "modules",
+}
 
-FROZEN_PLUGIN_API = set(
-    """CATEGORIES CONFIDENCES Diagnostic ModuleContext PLUGIN_API_VERSION SEVERITIES
-    TIERS node_is_orm read_source receiver_is_orm rule""".split()
-)
+FROZEN_PLUGIN_API = {
+    "CATEGORIES",
+    "CONFIDENCES",
+    "Diagnostic",
+    "ModuleContext",
+    "PLUGIN_API_VERSION",
+    "SEVERITIES",
+    "TIERS",
+    "node_is_orm",
+    "read_source",
+    "receiver_is_orm",
+    "rule",
+}
 
 
 def _click_command():
@@ -168,10 +251,18 @@ def test_rules_stats_json_keys_are_stable():
     data = json.loads(result.stdout)
     assert {"thresholds", "rules"} <= set(data)
     assert {"min_sample", "noisy_ratio"} <= set(data["thresholds"])
-    assert set(
-        """rule surfaced inline ignore_rule severity_off suppressed total ratio
-            noisy suggestion""".split()
-    ) <= set(data["rules"][0])
+    assert {
+        "rule",
+        "surfaced",
+        "inline",
+        "ignore_rule",
+        "severity_off",
+        "suppressed",
+        "total",
+        "ratio",
+        "noisy",
+        "suggestion",
+    } <= set(data["rules"][0])
 
 
 def test_history_record_keys_are_stable(tmp_path: Path):

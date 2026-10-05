@@ -51,8 +51,10 @@ def _conflict(mine: str, dep: str) -> tuple[str, str] | None:
     if mine == "proprietary" and dep in _STRONG_COPYLEFT:
         return (
             "medium",
-            "a proprietary module depends on strong-copyleft code, which may make "
-            "the combination a derived work",
+            (
+                "a proprietary module depends on strong-copyleft code, which may make "
+                "the combination a derived work"
+            ),
         )
     return None
 

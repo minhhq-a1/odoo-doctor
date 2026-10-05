@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-pip install -e ".[dev]" && pip install ruff     # setup (ruff is not in the dev extra but CI needs it)
+pip install -e ".[dev]" && pip install "ruff>=0.16,<0.17"   # setup (ruff is not in the dev extra but CI needs it)
 
 pytest                                          # all tests
 pytest tests/rules/test_eval_usage.py -xvs      # one file, stop on first failure, no capture
@@ -23,7 +23,7 @@ ruff check src tests && ruff format --check src tests   # both must pass in CI (
 
 **Golden corpus** (`tests/corpus/`, run by `tests/test_golden_corpus.py`): each directory is a tiny sample addon scanned end to end through the CLI and compared with its `expected.json` (`[rule, file, confidence]` per finding). It guards true positives *and* known false positives. When a rule change is intentional, review the diff then refresh with `UPDATE_GOLDEN=1 pytest tests/test_golden_corpus.py`. When a real scan shows a false positive, reduce it to a corpus case first. The corpus is excluded from pytest collection (`tests/conftest.py`) and from ruff (`pyproject.toml`) because it holds scan inputs, not tests.
 
-CI (`.github/workflows/ci.yml`) runs pytest + ruff on Python 3.10–3.12; the package supports 3.10–3.13. Ruff lint rules are deliberately pinned in `pyproject.toml` (`E4,E7,E9,F`) — don't widen them casually.
+CI (`.github/workflows/ci.yml`) runs pytest + ruff on Python 3.10–3.12; the package supports 3.10–3.13. Ruff runs its 0.16 default rule set; CI pins `ruff>=0.16,<0.17` so a new minor cannot change what is enforced (bump it together with fixing the findings), and the few deliberate ignores live in `pyproject.toml`. The side-effect imports that register rules (`cli/app.py`, `reporters/json_report.py`) sit in `isort: off` blocks: registration order is import order and decides the order of `rules list` and of findings at the same location (`tests/test_registration_order.py`).
 
 Useful CLI invocations while developing (entry point `odoo-doctor = odoo_doctor.cli.app:app`, Typer):
 

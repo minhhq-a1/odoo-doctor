@@ -20,9 +20,12 @@ def node_is_orm(node: ast.AST, orm_vars: set[str] | None = None) -> bool:
         elif isinstance(n, ast.Subscript):
             sub_val = n.value
             is_env = False
-            if isinstance(sub_val, ast.Name) and sub_val.id == "env":
-                is_env = True
-            elif isinstance(sub_val, ast.Attribute) and sub_val.attr == "env":
+            if (
+                isinstance(sub_val, ast.Name)
+                and sub_val.id == "env"
+                or isinstance(sub_val, ast.Attribute)
+                and sub_val.attr == "env"
+            ):
                 is_env = True
             if is_env:
                 has_env_subscript[0] = True
