@@ -28,6 +28,22 @@ All notable changes to Odoo Doctor are documented here.
   go through at least one minor release marked `### Deprecated`, rule IDs are permanent.
   `tests/test_stability_contract.py` fences it with subset checks, so adding names never
   fails it and removing or renaming one does. No behaviour change.
+- **Language server and VS Code extension (experimental).** `odoo-doctor lsp` serves LSP
+  over stdio (pygls 2.x, optional extra `pip install 'odoo-doctor[lsp]'`, also part of
+  `dev`; without it the command exits 3 with a hint). It publishes every finding of the
+  workspace folder as diagnostics (rule name as code, link to the rule docs) and offers
+  quick fixes: the deterministic auto-fix when the rule has one, disable on this line,
+  disable in this file, and disable in `odoo-doctor.toml`. Findings refresh on startup, on
+  save and on the `odooDoctor.rescan` command; a scan covers the whole folder because
+  cross-module rules need every addon, scans never overlap and saves during a scan are
+  merged. Settings come from `odoo-doctor.toml`.
+  - Code: `odoo_doctor/lsp/` (`convert`, `actions`, `engine` are pure; `server` is the
+    pygls glue), covered by unit tests and an end-to-end JSON-RPC test.
+  - `editors/vscode/` is a TypeScript extension (`odooDoctor.enable`, `odooDoctor.path`,
+    commands to rescan and restart). Build a `.vsix` with `npm run package`; it is not
+    published to the Marketplace. CI compiles and packages it.
+  - Docs in [`docs/lsp.md`](docs/lsp.md) (VS Code, Neovim, Helix). The language server is
+    outside the stability contract until a later release lists it.
 
 ---
 

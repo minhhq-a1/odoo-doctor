@@ -1,0 +1,70 @@
+{
+  "name": "odoo-doctor",
+  "displayName": "Odoo Doctor",
+  "description": "Health findings for Odoo custom addons in your editor, with quick fixes (experimental).",
+  "version": "0.6.0",
+  "publisher": "minhhq-a1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/minhhq-a1/odoo-doctor.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "keywords": [
+    "odoo",
+    "lint",
+    "static-analysis"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/__manifest__.py"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Odoo Doctor",
+      "properties": {
+        "odooDoctor.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run the Odoo Doctor language server for this workspace."
+        },
+        "odooDoctor.path": {
+          "type": "string",
+          "default": "odoo-doctor",
+          "description": "Path to the odoo-doctor executable. It must be installed with the language server extra: pip install 'odoo-doctor[lsp]'."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "odooDoctor.rescan",
+        "title": "Odoo Doctor: Rescan workspace"
+      },
+      {
+        "command": "odooDoctor.restart",
+        "title": "Odoo Doctor: Restart language server"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "1.91.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.6.0"
+  }
+}
