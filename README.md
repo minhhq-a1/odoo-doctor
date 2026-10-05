@@ -56,10 +56,13 @@ odoo-doctor scan . --diff main --json
 | `removed-model-still-referenced` | P1 | Upgrade Safety |
 | `asset-bundle-missing` | P2 | Frontend |
 | `expensive-nonstored-compute` | P2 | Performance |
+| `monetary-missing-currency-field` | P1 | Correctness |
+| `missing-multicompany-rule` | P1 | Security |
+| `hardcoded-company-or-currency` | P2 | Correctness |
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
-The full, generated reference (30 rules, with before/after examples) is in
+The full, generated reference (33 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md).

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Odoo Doctor** is a static analysis and health-scoring CLI for custom Odoo addons. It runs 30 native rules (8 categories: Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend), optionally merges Ruff / Pylint-Odoo findings, and produces a 0–100 score per addon. It never imports Odoo — everything is AST/XML/CSV parsing plus packaged model stubs.
+**Odoo Doctor** is a static analysis and health-scoring CLI for custom Odoo addons. It runs 33 native rules (8 categories: Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend), optionally merges Ruff / Pylint-Odoo findings, and produces a 0–100 score per addon. It never imports Odoo — everything is AST/XML/CSV parsing plus packaged model stubs.
 
 `AGENTS.md` is a parallel contributor guide that duplicates much of this file; keep the two in sync when changing shared facts (version, rule counts, structure).
 

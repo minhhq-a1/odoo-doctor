@@ -2,23 +2,26 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 30 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 33 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
 | [eval-usage](#eval-usage) | P0 | Security | error | high |  |
 | [missing-access-csv](#missing-access-csv) | P0 | Security | error | high |  |
 | [raw-sql-string-interpolation](#raw-sql-string-interpolation) | P0 | Security | error | high |  |
+| [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
 | [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
 | [duplicate-xml-id](#duplicate-xml-id) | P1 | Correctness | error | high |  |
 | [missing-xml-ref](#missing-xml-ref) | P1 | Correctness | error | high |  |
+| [monetary-missing-currency-field](#monetary-missing-currency-field) | P1 | Correctness | error | high |  |
 | [override-missing-super](#override-missing-super) | P1 | Correctness | error | high |  |
 | [unknown-model-in-access-csv](#unknown-model-in-access-csv) | P1 | Correctness | error | high |  |
 | [view-field-not-in-model](#view-field-not-in-model) | P1 | Correctness | error | high |  |
 | [compute-missing-depends](#compute-missing-depends) | P2 | Correctness | warning | high |  |
+| [hardcoded-company-or-currency](#hardcoded-company-or-currency) | P2 | Correctness | warning | medium |  |
 | [create-in-loop](#create-in-loop) | P1 | Performance | error | high |  |
 | [n-plus-one-read](#n-plus-one-read) | P1 | Performance | warning | low |  |
 | [search-in-loop](#search-in-loop) | P1 | Performance | error | high |  |
@@ -109,6 +112,35 @@ Good:
 
 ```python
 self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))
+```
+
+### missing-multicompany-rule
+
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: Models defined in the module with a `company_id` Many2one to `res.company` that no `ir.rule` in the scanned modules protects.
+
+**Why**: Without a company record rule, users of one company can read and edit another company's records in a multi-company database.
+
+**Fix**: Add an `ir.rule` restricting records to `company_ids`.
+
+**Note**: Medium confidence (does not affect the score): the rule may live in an addon that was not scanned. Transient and abstract models are skipped.
+
+Bad:
+
+```xml
+company_id = fields.Many2one("res.company", required=True)
+# ... and no <record model="ir.rule"> for this model
+```
+
+Good:
+
+```xml
+<record id="my_model_comp_rule" model="ir.rule">
+    <field name="name">My model multi-company</field>
+    <field name="model_id" ref="model_my_model"/>
+    <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+</record>
 ```
 
 ### public-controller-sudo-risk
@@ -223,6 +255,31 @@ partner = self.env['res.partner'].sudo().browse(pid)
 
 **Fix**: Verify the referenced XML ID exists and that the providing module is listed in `depends`.
 
+### monetary-missing-currency-field
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: `fields.Monetary` fields whose currency field (`currency_id`, or the one named by `currency_field=`) provably does not exist on the model, including its `_inherit`/`_inherits` ancestors and extensions in other scanned modules.
+
+**Why**: A Monetary field needs a currency to be stored, rounded and displayed; without it Odoo raises at runtime or shows no currency.
+
+**Fix**: Add the currency field, or point `currency_field=` at an existing Many2one to `res.currency`.
+
+**Note**: Only reported when absence is provable; models that extend an upstream model you do not define here are skipped.
+
+Bad:
+
+```python
+amount = fields.Monetary(string="Amount")
+```
+
+Good:
+
+```python
+currency_id = fields.Many2one("res.currency")
+amount = fields.Monetary(string="Amount")
+```
+
 ### override-missing-super
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
@@ -308,6 +365,30 @@ Good:
 def _compute_total(self):
     for rec in self:
         rec.total = rec.quantity * rec.unit_price
+```
+
+### hardcoded-company-or-currency
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: `env.ref('base.main_company')` and `env.ref('base.USD')`-style references to a specific currency in business code.
+
+**Why**: In a multi-company or multi-currency database these pick the wrong record.
+
+**Fix**: Use `self.env.company`, `self.env.company.currency_id`, or the document's own `company_id` / `currency_id`.
+
+**Note**: Medium confidence (does not affect the score). Install hooks (`*_hook` functions, `hooks.py`), `migrations/` and `tests/` are skipped.
+
+Bad:
+
+```python
+company = self.env.ref("base.main_company")
+```
+
+Good:
+
+```python
+company = self.env.company
 ```
 
 ## Performance

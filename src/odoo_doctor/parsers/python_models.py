@@ -21,6 +21,7 @@ class FieldInfo:
     required: bool = False
     string: str | None = None
     ondelete: str | None = None
+    currency_field: str | None = None  # Monetary only
     line: int = 0
 
 
@@ -223,6 +224,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
     required = False
     string = None
     ondelete = None
+    currency_field = None
 
     # First positional arg for relational fields is comodel
     # For Char/etc, the first positional arg is actually the string, but Odoo 14+
@@ -246,6 +248,8 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
             string = str(kw.value.value)
         elif kw.arg == "ondelete" and isinstance(kw.value, ast.Constant):
             ondelete = kw.value.value
+        elif kw.arg == "currency_field" and isinstance(kw.value, ast.Constant):
+            currency_field = kw.value.value
 
     return FieldInfo(
         name=name,
@@ -257,6 +261,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
         required=required,
         string=string,
         ondelete=ondelete,
+        currency_field=currency_field,
         line=line,
     )
 

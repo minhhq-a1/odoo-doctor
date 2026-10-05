@@ -6,8 +6,10 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
-False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
-`purchase_request` and others): 229 -> 193 findings on one such repo (before the three debatable-rule changes below).
+Theme: trust the findings (golden corpus, taint analysis, fix ROI) and cover
+multi-company / multi-currency. Also false-positive fixes found by scanning real
+OCA/custom addons (`queue_job`, `purchase_request` and others): 229 -> 188
+findings on one such repo.
 
 ### Added
 
@@ -25,6 +27,19 @@ False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
     constants.
   - Behaviour change: interpolating a variable that was bound to a string
     constant is no longer reported (it cannot be injected); a parameter still is.
+- **Multi-company / multi-currency rules** (native rules: 30 -> 33):
+  - `monetary-missing-currency-field` (Correctness, P1, high): a `fields.Monetary`
+    whose currency field (`currency_id` or `currency_field=`) provably does not
+    exist on the model, following `_inherit`/`_inherits` and extensions in other
+    scanned modules. Models extending an upstream model are skipped.
+  - `missing-multicompany-rule` (Security, P1, medium): a model defined in the
+    addon with a `company_id` to `res.company` that no `ir.rule` in the scanned
+    modules protects.
+  - `hardcoded-company-or-currency` (Correctness, P2, medium):
+    `env.ref('base.main_company')` / `env.ref('base.USD')` in business code
+    (install hooks, `migrations/` and `tests/` are skipped).
+  - The parser now records `currency_field` on Monetary fields and the resolver
+    can tell whether any scanned module declares an `ir.rule` for a model.
 - **Fix ROI ranking** (`core/roi.py`). Each module's score-eligible findings are
   ranked by marginal score gain per effort (greedy on the unclamped
   `0.4 x min + 0.6 x avg` blend, so the weakest category is attacked first).
