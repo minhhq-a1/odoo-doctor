@@ -3,7 +3,7 @@
   "displayName": "Odoo Doctor",
   "description": "Health findings for Odoo custom addons in your editor, with quick fixes (experimental).",
   "version": "0.7.0",
-  "publisher": "minhhq-a1",
+  "publisher": "MinhHong",
   "preview": true,
   "license": "MIT",
   "repository": {
