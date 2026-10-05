@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import difflib
+from pathlib import Path
 
 from lsprotocol import types as lsp
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.rules.registry import default_registry
 
 SOURCE = "odoo-doctor"
 
@@ -75,3 +77,24 @@ def diff_edits(old: str, new: str) -> list[lsp.TextEdit]:
             )
         )
     return edits
+
+
+def _is_fixable(rule: str) -> bool:
+    entry = default_registry.get(rule)
+    return bool(entry and entry[0].fixable)
+
+
+def file_diagnostics(
+    file_path: str, findings: list[Diagnostic]
+) -> list[lsp.Diagnostic]:
+    """LSP diagnostics for all findings in one file (reads the file for the ranges)."""
+    try:
+        lines = Path(file_path).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        lines = None
+    result = []
+    for d in findings:
+        index = d.line - 1
+        text = lines[index] if lines is not None and 0 <= index < len(lines) else None
+        result.append(to_lsp_diagnostic(d, text, fixable=_is_fixable(d.rule)))
+    return result

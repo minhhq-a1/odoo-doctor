@@ -107,6 +107,17 @@ def fix_edits(finding: Diagnostic, text: str) -> list[lsp.TextEdit] | None:
     return diff_edits(text, new_text)
 
 
+def find_finding(
+    findings: list[Diagnostic], diagnostic: lsp.Diagnostic
+) -> Diagnostic | None:
+    """The finding an LSP diagnostic was made from (same rule on the same line)."""
+    line = diagnostic.range.start.line + 1
+    for finding in findings:
+        if finding.rule == diagnostic.code and max(finding.line, 1) == line:
+            return finding
+    return None
+
+
 def _action(title: str, diagnostic: lsp.Diagnostic, **fields) -> lsp.CodeAction:
     return lsp.CodeAction(
         title=title,

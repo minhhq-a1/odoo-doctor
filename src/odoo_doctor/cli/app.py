@@ -363,6 +363,26 @@ def fix_cmd(
     )
 
 
+def _load_lsp_runner():
+    from odoo_doctor.lsp.server import run
+
+    return run
+
+
+@app.command()
+def lsp() -> None:
+    """Run the language server on stdio (experimental; needs odoo-doctor[lsp])."""
+    try:
+        run = _load_lsp_runner()
+    except ImportError:
+        typer.echo(
+            "[ERROR] The language server needs pygls: pip install 'odoo-doctor[lsp]'",
+            err=True,
+        )
+        raise typer.Exit(code=3)
+    run()
+
+
 def _rules_stats(path: str, cache_enabled: bool, json_output: bool) -> None:
     """Scan like `scan` and print per-rule suppression counts and noise."""
     config_root = Path(path).resolve()
