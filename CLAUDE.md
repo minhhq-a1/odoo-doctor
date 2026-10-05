@@ -35,6 +35,7 @@ odoo-doctor fix . [--fix-dry-run]                      # deterministic auto-fixe
 odoo-doctor rules list | explain <rule> | disable <rule> | enable <rule>
 odoo-doctor rules docs --out docs/rules.md [--check]   # regenerate rules reference
 odoo-doctor rules stats [--path DIR] [--cache] [--json]   # which rules users suppress most
+odoo-doctor lsp                                        # language server on stdio (needs the `lsp` extra, included in `dev`)
 odoo-doctor history show h.jsonl --max-drop 3          # regression gate (exit 2)
 ```
 
@@ -75,6 +76,7 @@ Key concepts that span files:
 - **Taint analysis** (`rules/_taint.py`): `TaintVisitor` tracks SAFE/UNKNOWN/UNSAFE states per variable (lists, branches, module constants) for the Security rules; subclass it and implement `check_call` (see `eval_usage.py`, `raw_sql_interpolation.py`).
 - **Fix ROI** (`core/roi.py`): `rank_fixes` orders a module's score-eligible findings by marginal score gain per effort and fills `ScoreResult.fix_priorities` (via `scanner._score_module`, used by both the live and cached paths). Add an `EFFORT_BY_RULE` entry (1-3) for every new native rule — a test fails otherwise.
 - **Suppression analytics** (`core/suppression_stats.py`): `pipeline.run_pipeline_with_stats` counts findings dropped by inline `disable`, `[ignore] rules` and `[severity] = "off"` (first channel wins; `files/modules` and baseline are not counted). Counts live on `ScoreResult.suppression_stats` and in the scan cache (`CACHE_VERSION` 2) because they cannot be recomputed from post-pipeline findings. `--diff` scans collect none.
+- **Language server** (`src/odoo_doctor/lsp/`, experimental, see `docs/lsp.md`): `odoo-doctor lsp` serves LSP over stdio with pygls 2.x (optional extra `lsp`). `convert.py`, `actions.py` and `engine.py` are pure (no server state) and unit-tested; `server.py` is the pygls glue. A scan covers the whole workspace folder (`engine.scan_project`) on startup, on save and on `odooDoctor.rescan`, one at a time on a worker thread. Stdout carries the protocol, so nothing in a scan may print to stdout. The VS Code extension lives in `editors/vscode/` (TypeScript: `npm ci && npm run compile`; `npm run package` builds a `.vsix`). Do not mention the Marketplace as published: it is not.
 - `skills/*/SKILL.md` are the agent skills installed by `odoo-doctor install`.
 
 ## Adding a Rule
@@ -87,11 +89,11 @@ Key concepts that span files:
 
 ## Releasing
 
-1. Bump the version in `pyproject.toml`, `src/odoo_doctor/__init__.py` (read by the JSON report), `README.md` (including the `minhhq-a1/odoo-doctor@vX.Y.Z` action example), `CLAUDE.md` and `AGENTS.md`. `tests/test_version.py` enforces pyproject == `__version__` and that `CHANGELOG.md` has a `## [X.Y.Z]` entry; the README/CLAUDE/AGENTS bumps are not tested.
+1. Bump the version in `pyproject.toml`, `src/odoo_doctor/__init__.py` (read by the JSON report), `README.md` (including the `minhhq-a1/odoo-doctor@vX.Y.Z` action example), `CLAUDE.md` and `AGENTS.md`, plus both `version` fields of `editors/vscode/package.json` and `package-lock.json`. `tests/test_version.py` enforces pyproject == `__version__` and that `CHANGELOG.md` has a `## [X.Y.Z]` entry; `tests/test_vscode_extension.py` enforces the extension version; the README/CLAUDE/AGENTS bumps are not tested.
 2. Update `CHANGELOG.md`; regenerate `docs/rules.md` if rules changed.
 3. Merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z` and create a GitHub Release — `.github/workflows/publish.yml` publishes to PyPI via Trusted Publishing.
 
-Current version: `0.6.0`.
+Current version: `0.7.0`.
 
 ## Configuration
 

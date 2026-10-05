@@ -65,7 +65,8 @@ Plus Ruff and Pylint-Odoo findings when those tools are installed.
 The full, generated reference (36 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
-[plugin API](docs/custom-rules.md).
+[plugin API](docs/custom-rules.md). What you can rely on across upgrades (CLI flags, exit
+codes, JSON keys, rule IDs) is in the [stability contract](docs/stability.md).
 
 ---
 
@@ -164,7 +165,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.6.0
+  uses: minhhq-a1/odoo-doctor@v0.7.0
   with:
     fail-on: warning
     min-score: 75
@@ -265,6 +266,8 @@ odoo-doctor scan . --diff main --json
 Use `odoo-doctor rules explain <rule-name>` to understand any finding (description, why, fix, examples and a docs link).
 
 Use `odoo-doctor rules stats` to see which rules your team suppresses most (inline `# odoo-doctor: disable`, `[ignore] rules`, `[severity] = "off"`). Rules where most findings are suppressed are flagged as noisy, with a suggestion to lower their severity.
+
+**In your editor (experimental).** `pip install 'odoo-doctor[lsp]'` adds `odoo-doctor lsp`, a language server that shows the same findings as diagnostics and offers quick fixes (apply the auto-fix, or disable the rule on a line, in a file or in `odoo-doctor.toml`). A VS Code extension is in [`editors/vscode`](editors/vscode); setup for VS Code, Neovim and Helix is in [`docs/lsp.md`](docs/lsp.md).
 
 ---
 

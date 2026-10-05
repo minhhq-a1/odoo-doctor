@@ -4,7 +4,11 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
-## [Unreleased]
+## [0.7.0] — 2026-10-05
+
+Theme: trust and reach. Tell users which rules are noisy in their own repo, state what is
+safe to rely on, and show findings in the editor. All three are local: no hosted service,
+no LLM, no new scoring.
 
 ### Added
 
@@ -21,6 +25,56 @@ All notable changes to Odoo Doctor are documented here.
   - `core/pipeline.py::run_pipeline_with_stats` collects the counts; `run_pipeline` is
     unchanged. The scan cache stores them too, so `CACHE_VERSION` is now 2 (older cache
     files are ignored once). `--diff` scans do not collect stats.
+- **Stability contract.** [`docs/stability.md`](docs/stability.md) states what is public
+  and what is not (CLI flags and exit codes, JSON report keys, `rules stats --json`,
+  history and baseline files, SARIF, rule IDs, inline-suppression syntax, config keys,
+  `odoo_doctor.plugin_api`) and the policy for changing it: additions are free, removals
+  go through at least one minor release marked `### Deprecated`, rule IDs are permanent.
+  `tests/test_stability_contract.py` fences it with subset checks, so adding names never
+  fails it and removing or renaming one does. No behaviour change.
+- **Language server and VS Code extension (experimental).** `odoo-doctor lsp` serves LSP
+  over stdio (pygls 2.x, optional extra `pip install 'odoo-doctor[lsp]'`, also part of
+  `dev`; without it the command exits 3 with a hint). It publishes every finding of the
+  workspace folder as diagnostics (rule name as code, link to the rule docs) and offers
+  quick fixes: the deterministic auto-fix when the rule has one, disable on this line,
+  disable in this file, and disable in `odoo-doctor.toml`. Findings refresh on startup, on
+  save and on the `odooDoctor.rescan` command; a scan covers the whole folder because
+  cross-module rules need every addon, scans never overlap and saves during a scan are
+  merged. Settings come from `odoo-doctor.toml`.
+  - Code: `odoo_doctor/lsp/` (`convert`, `actions`, `engine` are pure; `server` is the
+    pygls glue), covered by unit tests and an end-to-end JSON-RPC test.
+  - `editors/vscode/` is a TypeScript extension (`odooDoctor.enable`, `odooDoctor.path`,
+    commands to rescan and restart). Build a `.vsix` with `npm run package`; it is not
+    published to the Marketplace. CI compiles and packages it.
+  - Safety: quick fixes that depend on the finding's line are withheld while the buffer has
+    unsaved changes around it; *disable on this line* is only offered where a comment is
+    valid (not inside strings, after a backslash or inside XML tags), keeps CRLF files
+    CRLF, and extends an existing `disable=` comment instead of stacking another. The
+    extension is off in untrusted workspaces. Folders opened through a symlink,
+    nested folders and added/removed folders are handled.
+  - Docs in [`docs/lsp.md`](docs/lsp.md) (VS Code, Neovim, Helix). The language server is
+    outside the stability contract until a later release lists it.
+
+### Roadmap decisions (explicit close-or-defer)
+
+Closed in 0.7.0: suppression analytics (local, per repo), the stability contract and
+the language server with a VS Code extension (experimental). The cache is now version 2
+(see above), so the first `--cache` scan after upgrading is a full scan.
+
+Deferred, with owner version:
+
+| Item | Target | Reason |
+|------|--------|--------|
+| Language server follow-ups: hover, per-keystroke analysis, Marketplace publishing, listing it in the stability contract | 0.8.0 (candidate) | first release is deliberately small; needs real-world use first |
+| Aggregating suppression data across users; confidence calibration from a labelled corpus and a feedback channel | not scheduled | needs the remote score service decision and a labelled corpus (9 cases today) |
+| Percentile score vs. other repos | not scheduled | needs an anonymised dataset and the remote service decision |
+| LLM-assisted fix suggestions | not scheduled | needs an opt-in / privacy design (which model, cost, does source leave the machine) |
+| Hosted remote score service, auth, server-side trends; Odoo in-app reporting module | not scheduled | needs a product decision (open source or hosted) |
+| Inter-procedural / type-aware taint | not scheduled | unchanged from 0.6.0 |
+| Scan daemon / persistent cache | not scheduled | scaling is linear; the language server rescans per save at about 0.06 s per addon |
+| Abandoned-dependency warning | not scheduled | optional in 0.6.0, still no demand |
+| LTS line, security audit, performance SLA, migration guide | toward 1.0 | the stability contract is the first step |
+| Rule-alias mechanism; warning on unknown config keys | when first needed | the policy already requires an alias on a rename; unknown keys are documented as ignored |
 
 ---
 

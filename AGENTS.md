@@ -74,6 +74,7 @@ odoo-doctor rules explain rule-name  # Explain a rule
 odoo-doctor rules disable rule-name   # Disable a rule in odoo-doctor.toml
 odoo-doctor rules docs --out docs/rules.md  # Regenerate rules docs (never hand-edit)
 odoo-doctor rules stats [--path DIR] [--json]   # Which rules users suppress most
+odoo-doctor lsp                # Language server on stdio (needs the lsp extra)
 odoo-doctor scan . --history h.jsonl --badge badge.svg
 odoo-doctor history show h.jsonl --max-drop 3
 ```
@@ -179,10 +180,10 @@ chore(release): bump version to 0.3.0
 
 ### Cut a New Release
 
-1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md` (`tests/test_version.py` checks consistency).
+1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`, plus `editors/vscode/package.json` and `package-lock.json` (`tests/test_version.py` and `tests/test_vscode_extension.py` check consistency).
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag v0.6.0 && git push origin v0.6.0`).
+4. Create and push a new Git tag (e.g., `git tag v0.7.0 && git push origin v0.7.0`).
 5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
 
 ---
@@ -233,6 +234,8 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
+| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
+| `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
 | `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |

@@ -41,3 +41,8 @@ env/
 # Temp directories
 .tmp/
 .claude/
+
+# VS Code extension build output
+editors/vscode/node_modules/
+editors/vscode/out/
+editors/vscode/*.vsix
