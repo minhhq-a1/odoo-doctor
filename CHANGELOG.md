@@ -4,7 +4,7 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
-## [Unreleased]
+## [0.6.0] — 2026-10-05
 
 Theme: trust the findings (golden corpus, taint analysis, fix ROI) and cover
 multi-company / multi-currency. Also false-positive fixes found by scanning real
@@ -104,6 +104,25 @@ findings on one such repo.
 - **`manifest-missing-required-fields`** no longer requires `installable` (Odoo
   defaults it to `True`) and no longer requires `data` when the manifest declares
   `assets` or `demo`. `odoo-doctor fix` no longer inserts `installable`.
+
+### Roadmap decisions (explicit close-or-defer)
+
+Closed in 0.6.0: multi-company / multi-currency rules, golden corpus, taint
+analysis for the Security rules, fix ROI ranking, supply-chain rules, 2x faster
+scans.
+
+Deferred, with owner version:
+
+| Item | Target | Reason |
+|------|--------|--------|
+| LSP server + VS Code extension | 0.7.0 | new stack (pygls + TypeScript); 0.6.0 spent its budget on rule trust and speed |
+| Percentile score vs. other repos | 0.7.0 | needs an anonymised dataset and the remote service decision |
+| LLM-assisted fix suggestions | 0.7.0 | deterministic fixers and ROI ranking come first; needs an opt-in/privacy design |
+| Suppression analytics and calibration | 0.7.0 | the golden corpus is the first calibration input |
+| Inter-procedural / type-aware taint | not scheduled | intra-procedural taint removed most noise; revisit with corpus evidence |
+| Scan daemon / persistent cache | not scheduled | scaling is linear and a scan of 14 addons takes about 0.5 s |
+| Hosted remote score service, auth, server-side trends | 0.7.0 (needs a product decision) | unchanged from 0.5.0 |
+| Odoo in-app reporting module | 0.7.0 (depends on the remote service decision) | unchanged from 0.5.0 |
 
 ---
 
