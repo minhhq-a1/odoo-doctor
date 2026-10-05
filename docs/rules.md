@@ -95,6 +95,8 @@ access_my_model_user,my.model user,model_my_model,base.group_user,1,1,1,0
 
 **Fix**: Pass values as query parameters.
 
+**Note**: When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works.
+
 Bad:
 
 ```python
@@ -489,6 +491,8 @@ partner_id = fields.Many2one("res.partner", ondelete="restrict")
 
 **Fix**: Wrap the records in `<data noupdate="1">`.
 
+**Note**: `ir.rule` records are reported with medium confidence (not scored): Odoo core wraps them in `noupdate` while many addons keep them updatable so rule fixes ship with the module. `ir.config_parameter` and `ir.cron` stay high confidence.
+
 Bad:
 
 ```xml
@@ -591,11 +595,11 @@ Good:
 
 **Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0 · **Fixable**: yes
 
-**Detects**: `__manifest__.py` missing one of `name`, `version`, `depends`, `data`, `installable`, `license`.
+**Detects**: `__manifest__.py` missing one of `name`, `version`, `depends`, `data`, `license`.
 
 **Fix**: Add the missing key. Run `odoo-doctor fix` to apply it automatically.
 
-**Note**: Fixable via `odoo-doctor fix`.
+**Note**: Fixable via `odoo-doctor fix`. `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
 
 ## Maintainability
 

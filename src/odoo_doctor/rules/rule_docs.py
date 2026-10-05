@@ -43,6 +43,12 @@ RULE_DOCS: dict[str, RuleDoc] = {
         fix="Pass values as query parameters.",
         bad="self.env.cr.execute(f\"SELECT * FROM res_partner WHERE name = '{name}'\")",
         good='self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))',
+        notes="When the dynamic part is not user data (for example a WHERE "
+        "fragment whose values are bound through parameters), assert it with "
+        "pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule "
+        "honours: a trailing comment covers its line, a comment on its own line "
+        "covers the rest of the enclosing function. "
+        "`# odoo-doctor: disable=raw-sql-string-interpolation` also works.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
@@ -233,9 +239,11 @@ RULE_DOCS: dict[str, RuleDoc] = {
     # ----------------------------------------------------------- Module Hygiene
     "manifest-missing-required-fields": RuleDoc(
         detects="`__manifest__.py` missing one of `name`, `version`, `depends`, "
-        "`data`, `installable`, `license`.",
+        "`data`, `license`.",
         fix="Add the missing key. Run `odoo-doctor fix` to apply it automatically.",
-        notes="Fixable via `odoo-doctor fix`.",
+        notes="Fixable via `odoo-doctor fix`. `installable` is not required "
+        "(Odoo defaults it to `True`), and `data` is not required when the "
+        "manifest declares `assets` or `demo`.",
     ),
     "manifest-data-order-risk": RuleDoc(
         detects="`data` files in the manifest listed in an unsafe load order "
@@ -311,6 +319,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         '    <record id="my_rule" model="ir.rule">...</record>\n'
         "</data>",
         lang="xml",
+        notes="`ir.rule` records are reported with medium confidence (not "
+        "scored): Odoo core wraps them in `noupdate` while many addons keep "
+        "them updatable so rule fixes ship with the module. "
+        "`ir.config_parameter` and `ir.cron` stay high confidence.",
     ),
     # --------------------------------------------------------- Upgrade Safety
     "deprecated-api-usage": RuleDoc(

@@ -59,8 +59,9 @@ def test_fills_all_missing_required_fields_at_once():
     src = "{'name': 'M'}"
     out = fix_missing_required_field(_diag(), src)
     parsed = ast.literal_eval(out)
-    for key in ("version", "depends", "data", "installable", "license"):
+    for key in ("version", "depends", "data", "license"):
         assert key in parsed
+    assert "installable" not in parsed  # Odoo defaults it to True
 
 
 def test_preserves_leading_coding_header():
