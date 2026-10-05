@@ -8,7 +8,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
 from odoo_doctor.rules._ast_helpers import is_test_file
 from odoo_doctor.rules._ast_helpers import receiver_is_orm
 from odoo_doctor.rules.registry import rule
@@ -137,12 +137,8 @@ def check_create_in_loop(
     diags: list[Diagnostic] = []
     if is_test_file(file_path, module_name):
         return []
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
     _walk_for_loops(
         tree, diags, file_path, module_name, odoo_version, "create", "create-in-loop"
@@ -165,12 +161,8 @@ def check_write_in_loop(
     diags: list[Diagnostic] = []
     if is_test_file(file_path, module_name):
         return []
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
     _walk_for_loops(
         tree, diags, file_path, module_name, odoo_version, "write", "write-in-loop"

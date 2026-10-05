@@ -7,7 +7,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python, read_source
 
 
 @dataclass
@@ -88,12 +88,8 @@ _LIFECYCLE_METHODS = {"create", "write", "unlink", "default_get", "read", "copy"
 
 def parse_models(file_path: Path) -> list[ModelInfo]:
     """Parse all Odoo model classes from a Python file."""
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     models: list[ModelInfo] = []
@@ -108,13 +104,10 @@ def parse_models(file_path: Path) -> list[ModelInfo]:
 
 def parse_controllers(file_path: Path) -> list[ControllerInfo]:
     """Parse all http.route controllers from a Python file."""
-    source = read_source(file_path)
-    if source is None:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
+    source = read_source(file_path) or ""
 
     controllers: list[ControllerInfo] = []
     for node in ast.walk(tree):

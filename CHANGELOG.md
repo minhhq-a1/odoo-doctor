@@ -11,6 +11,23 @@ multi-company / multi-currency. Also false-positive fixes found by scanning real
 OCA/custom addons (`queue_job`, `purchase_request` and others): 229 -> 188
 findings on one such repo.
 
+### Performance
+
+- **Scans are about 2x faster** (0.93s -> 0.48s on 14 addons / 169 files / 18.8k
+  lines; same findings, same order, same scores). Cause, found by profiling: every
+  file-based rule read and `ast.parse`d every file itself, about 11 parses per file.
+  - `core/source.py` gains `parse_python(path)`: a small (16 entries) cache keyed
+    by path and `(mtime_ns, size)`, shared by `read_source`, so a rewritten file is
+    never served stale. Parses per scan: 1316 -> 277.
+  - The scanner runs file-based rules file-first (each file is parsed once and
+    every rule runs on it), then concatenates results in rule order, so output
+    order is unchanged and memory stays flat (peak RSS +4 MB).
+  - `raw-sql-string-interpolation` and the inline-suppression scanner no longer
+    tokenize files that cannot contain a `pylint:` / `odoo-doctor:` marker.
+  - Scaling is linear (~0.06 s per addon from 14 to 112 addons). A native (Rust)
+    core is not needed at this size: graph building is under 20% of the time.
+  - Contract: the tree returned by `parse_python` is shared, treat it as read-only.
+
 ### Added
 
 - **Taint analysis for the Security rules** (`rules/_taint.py`). Values are

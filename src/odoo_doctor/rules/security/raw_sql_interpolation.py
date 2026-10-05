@@ -9,7 +9,7 @@ import re
 import tokenize
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python, read_source
 
 
 from odoo_doctor.core.diagnostics import Diagnostic
@@ -41,16 +41,15 @@ def check_raw_sql_interpolation(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
     """Find cr.execute() calls with dynamically interpolated SQL strings."""
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     visitor = _RawSqlVisitor(
-        file_path, module_name, odoo_version, _pylint_disabled_ranges(source, tree)
+        file_path,
+        module_name,
+        odoo_version,
+        _pylint_disabled_ranges(read_source(file_path) or "", tree),
     )
     visitor.visit(tree)
     return visitor.diagnostics
@@ -74,6 +73,8 @@ def _pylint_disabled_ranges(source: str, tree: ast.AST) -> list[tuple[int, int]]
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
     ]
     ranges: list[tuple[int, int]] = []
+    if "pylint" not in source:  # tokenizing every file only to find nothing is slow
+        return ranges
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     except (tokenize.TokenError, IndentationError):

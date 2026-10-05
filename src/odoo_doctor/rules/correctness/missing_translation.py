@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
 from odoo_doctor.rules.registry import rule
 
 _USER_FACING = {"UserError", "ValidationError", "Warning", "RedirectWarning"}
@@ -46,12 +46,8 @@ def _is_bare_string_arg(call: ast.Call) -> bool:
 def check_missing_translation(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
     diags: list[Diagnostic] = []

@@ -9,7 +9,7 @@ from pathlib import Path
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.rules.registry import rule
 from odoo_doctor.graph.module_context import ModuleContext
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python
 from odoo_doctor.graph.resolver import ResolveResult
 
 # Standard ORM fields and methods that shouldn't trigger "missing depends"
@@ -40,13 +40,8 @@ def check_compute_missing_depends(ctx: ModuleContext) -> list[Diagnostic]:
         if not model.file_path:
             continue
 
-        source = read_source(Path(model.file_path))
-        if not source:
-            continue
-
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
+        tree = parse_python(Path(model.file_path))
+        if tree is None:
             continue
 
         for method_name, method in model.methods.items():

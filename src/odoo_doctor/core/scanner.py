@@ -23,6 +23,7 @@ from odoo_doctor.core.pipeline import (
     run_pipeline,
 )
 from odoo_doctor.core.roi import rank_fixes
+from odoo_doctor.core.source import clear_source_cache
 from odoo_doctor.core.scoring import score_diagnostics, CATEGORIES
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
@@ -169,27 +170,41 @@ def collect_scores(
                     err=True,
                 )
 
-    # Run native file-based rules
-    for meta, func in default_registry.get_rules(needs_context=False):
-        for ctx in graph.modules.values():
-            derived_caps = derive_capabilities(ctx.odoo_version, cfg.capabilities)
-            if not rule_is_enabled(meta, ctx.odoo_version, derived_caps):
+    # Run native file-based rules. Files are the outer loop so each file is read and
+    # parsed once and shared by every rule (see core.source) instead of once per
+    # rule. Diagnostics are bucketed per rule and concatenated in rule order, so the
+    # output order is the same as running the rules one after another.
+    file_rules = list(default_registry.get_rules(needs_context=False))
+    by_rule: list[list[Diagnostic]] = [[] for _ in file_rules]
+    for ctx in graph.modules.values():
+        derived_caps = derive_capabilities(ctx.odoo_version, cfg.capabilities)
+        enabled = [
+            i
+            for i, (meta, _) in enumerate(file_rules)
+            if rule_is_enabled(meta, ctx.odoo_version, derived_caps)
+        ]
+        if not enabled:
+            continue
+        for py_file in ctx.path.rglob("*.py"):
+            if py_file.name.startswith("__"):
                 continue
-            for py_file in ctx.path.rglob("*.py"):
-                if py_file.name.startswith("__"):
-                    continue
-                if (
-                    changed_files is not None
-                    and str(py_file.resolve()) not in changed_files
-                ):
-                    continue
+            if (
+                changed_files is not None
+                and str(py_file.resolve()) not in changed_files
+            ):
+                continue
+            for i in enabled:
+                meta, func = file_rules[i]
                 try:
-                    all_diags.extend(func(py_file, ctx.name, ctx.odoo_version))
+                    by_rule[i].extend(func(py_file, ctx.name, ctx.odoo_version))
                 except Exception as exc:
                     typer.echo(
                         f"[WARN] rule {meta.name} crashed on {py_file.name}: {exc}",
                         err=True,
                     )
+    for bucket in by_rule:
+        all_diags.extend(bucket)
+    clear_source_cache()  # release the parsed trees of the last files
 
     # Run adapters
     adapters = []

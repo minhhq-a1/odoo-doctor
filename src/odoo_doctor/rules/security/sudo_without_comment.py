@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import parse_python, read_source
 from odoo_doctor.rules.registry import rule
 
 
@@ -38,15 +38,11 @@ def _line_has_comment(line: str) -> bool:
 def check_sudo_without_comment(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
-    source = read_source(file_path)
-    if source is None:
-        return []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_python(file_path)
+    if tree is None:
         return []
 
-    lines = source.splitlines()
+    lines = (read_source(file_path) or "").splitlines()
 
     diags: list[Diagnostic] = []
     for node in ast.walk(tree):
