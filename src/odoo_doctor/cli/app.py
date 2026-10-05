@@ -62,6 +62,7 @@ import odoo_doctor.rules.security.missing_multicompany_rule
 import odoo_doctor.rules.manifest.license_compatibility
 import odoo_doctor.rules.manifest.external_dependencies
 import odoo_doctor.rules.manifest.vendored_python_code
+import odoo_doctor.rules.security.unsafe_template_render
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers

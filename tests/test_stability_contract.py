@@ -65,6 +65,7 @@ FROZEN_RULE_IDS = [
     "manifest-license-incompatible",
     "missing-external-dependency",
     "vendored-python-code",
+    "unsafe-template-render",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------

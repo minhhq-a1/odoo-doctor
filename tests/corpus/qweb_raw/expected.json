@@ -1,0 +1,7 @@
+[
+  [
+    "unsafe-template-render",
+    "qweb_demo/views/templates.xml",
+    "medium"
+  ]
+]
