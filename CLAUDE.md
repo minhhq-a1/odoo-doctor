@@ -93,7 +93,7 @@ Key concepts that span files:
 2. Update `CHANGELOG.md`; regenerate `docs/rules.md` if rules changed.
 3. Merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z` and create a GitHub Release — `.github/workflows/publish.yml` publishes to PyPI via Trusted Publishing.
 
-Current version: `0.6.0`.
+Current version: `0.7.0`.
 
 ## Configuration
 
