@@ -72,13 +72,14 @@ Key concepts that span files:
 - **Symbol resolution** (`graph/resolver.py`) answers "does this model/field/XML ID exist, and where" using parsed addons, optional `odoo_source_path` (`graph/source_index.py`) and packaged stubs in `graph/stubs/data/{17.0,18.0,19.0}.json` (loader tries exact version, then major).
 - **Rule docs** are generated: `rules/rule_docs.py` (`RULE_DOCS`) is the single source for `docs/rules.md`, HTML, `rules explain` and SARIF `helpUri`.
 - **Taint analysis** (`rules/_taint.py`): `TaintVisitor` tracks SAFE/UNKNOWN/UNSAFE states per variable (lists, branches, module constants) for the Security rules; subclass it and implement `check_call` (see `eval_usage.py`, `raw_sql_interpolation.py`).
+- **Fix ROI** (`core/roi.py`): `rank_fixes` orders a module's score-eligible findings by marginal score gain per effort and fills `ScoreResult.fix_priorities` (via `scanner._score_module`, used by both the live and cached paths). Add an `EFFORT_BY_RULE` entry (1-3) for every new native rule — a test fails otherwise.
 - `skills/*/SKILL.md` are the agent skills installed by `odoo-doctor install`.
 
 ## Adding a Rule
 
 1. `src/odoo_doctor/rules/<category>/my_rule.py` using `@rule(name=..., category=..., tier="P0".."P3", severity=..., default_confidence=..., needs_context=True, min_version=None, fixable=False)`; yield `Diagnostic(...)` (see an existing rule such as `rules/security/eval_usage.py` for the field set). Shared AST helpers: `rules/_ast_helpers.py`.
 2. Test in `tests/rules/` — build a temp addon, assemble a `ModuleContext`, assert on emitted diagnostics (positive and negative cases). Shared fixture addons are in `tests/fixtures/`.
-3. Add the import to `cli/app.py` and a `RuleDoc` entry to `rules/rule_docs.py`, then `odoo-doctor rules docs --out docs/rules.md`.
+3. Add the import to `cli/app.py`, a `RuleDoc` entry to `rules/rule_docs.py` and an effort to `core/roi.py::EFFORT_BY_RULE`, then `odoo-doctor rules docs --out docs/rules.md`.
 
 **Never hand-edit `docs/rules.md`.** `tests/test_rule_docs_complete.py` fails if any rule lacks a `RULE_DOCS` entry, a `RULE_DOCS` entry is stale, or the page isn't regenerated. A single `@rule` function can register several names (`create_write_in_loop.py` registers both `create-in-loop` and `write-in-loop`).
 

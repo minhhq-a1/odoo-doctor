@@ -22,6 +22,7 @@ from odoo_doctor.core.pipeline import (
     rule_is_enabled,
     run_pipeline,
 )
+from odoo_doctor.core.roi import rank_fixes
 from odoo_doctor.core.scoring import score_diagnostics, CATEGORIES
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
@@ -61,6 +62,34 @@ def _config_repr(cfg: OdooDoctorConfig) -> str:
     return repr(dataclasses.asdict(cfg)) if dataclasses.is_dataclass(cfg) else repr(cfg)
 
 
+def _is_fixable_rule(rule_name: str) -> bool:
+    entry = default_registry.get(rule_name)
+    return bool(entry and entry[0].fixable)
+
+
+def _score_module(
+    mod_diags: list[Diagnostic],
+    mod_elig: list[bool],
+    cfg: OdooDoctorConfig,
+    in_scope: list[str],
+):
+    """Score one module and attach its best-first fix priorities."""
+    result = score_diagnostics(
+        mod_diags,
+        mod_elig,
+        category_weights=cfg.category_weights,
+        in_scope_categories=in_scope,
+    )
+    result.fix_priorities = rank_fixes(
+        mod_diags,
+        mod_elig,
+        category_weights=cfg.category_weights,
+        in_scope_categories=in_scope,
+        is_fixable=_is_fixable_rule,
+    )
+    return result
+
+
 def _score_per_module(
     diags: list[Diagnostic], cfg: OdooDoctorConfig, version: str
 ) -> dict[str, object]:
@@ -73,12 +102,7 @@ def _score_per_module(
     for name in modules:
         mod_diags = [d for d in diags if d.module == name]
         mod_elig = [e for d, e in zip(diags, eligible) if d.module == name]
-        scores[name] = score_diagnostics(
-            mod_diags,
-            mod_elig,
-            category_weights=cfg.category_weights,
-            in_scope_categories=in_scope,
-        )
+        scores[name] = _score_module(mod_diags, mod_elig, cfg, in_scope)
     return scores
 
 
@@ -237,11 +261,6 @@ def collect_scores(
     for module_name in graph.modules:
         mod_diags = [d for d in diags if d.module == module_name]
         mod_elig = [elig for d, elig in zip(diags, eligible) if d.module == module_name]
-        scores[module_name] = score_diagnostics(
-            mod_diags,
-            mod_elig,
-            category_weights=cfg.category_weights,
-            in_scope_categories=in_scope,
-        )
+        scores[module_name] = _score_module(mod_diags, mod_elig, cfg, in_scope)
 
     return diags, scores

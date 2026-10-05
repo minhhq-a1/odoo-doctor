@@ -25,6 +25,13 @@ False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
     constants.
   - Behaviour change: interpolating a variable that was bound to a string
     constant is no longer reported (it cannot be injected); a parameter still is.
+- **Fix ROI ranking** (`core/roi.py`). Each module's score-eligible findings are
+  ranked by marginal score gain per effort (greedy on the unclamped
+  `0.4 x min + 0.6 x avg` blend, so the weakest category is attacked first).
+  Terminal: a *Fix first* list per module. JSON: `modules.<name>.fix_priorities`
+  (top 10: `rank`, `rule`, `file_path`, `line`, `tier`, `impact`, `effort`, `roi`,
+  `projected_score`, `score_gain`, `fixable`). `EFFORT_BY_RULE` holds a 1-3 effort
+  per native rule (a test enforces an entry for every rule).
 - **Golden corpus** (`tests/corpus/`, `tests/test_golden_corpus.py`): sample addons
   scanned end to end and compared with a frozen list of findings, so both true
   positives and previously fixed false positives are regression-guarded.
