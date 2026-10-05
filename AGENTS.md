@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 30 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 33 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -13,8 +13,8 @@ odoo-doctor/
 ├── src/odoo_doctor/          # Main source code
 │   ├── core/                 # Scanner, pipeline (7-stage), config, scoring, fixer, baseline, cache
 │   ├── rules/                # Rule implementations (P0–P3 tiers, organized by category)
-│   │   ├── security/         # 7 rules (eval, SQL injection, sudo, access control)
-│   │   ├── correctness/      # 4 rules (missing depends, super, translations)
+│   │   ├── security/         # 8 rules (eval, SQL injection, sudo, access control, multi-company rules)
+│   │   ├── correctness/      # 6 rules (missing depends, super, translations, monetary currency, hardcoded company/currency)
 │   │   ├── performance/      # 5 rules (loops, N+1, unbounded search)
 │   │   ├── xml/              # 5 rules (broken refs, duplicate IDs, orphan views)
 │   │   ├── manifest/         # 3 rules + fixers (dependencies, data order, required fields)

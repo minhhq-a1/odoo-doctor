@@ -1,0 +1,12 @@
+[
+  [
+    "data-noupdate-risk",
+    "hyg/data/params.xml",
+    "high"
+  ],
+  [
+    "data-noupdate-risk",
+    "hyg/data/params.xml",
+    "medium"
+  ]
+]

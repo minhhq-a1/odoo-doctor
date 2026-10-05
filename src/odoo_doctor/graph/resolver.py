@@ -83,6 +83,7 @@ class SymbolResolver:
         # so an action_* button added to sale.order via _inherit resolves FOUND.
         self._extended_methods: dict[str, dict] = extended_methods or {}
         self._source_index = build_source_index(source_path)
+        self._rule_models: set[str] | None = None
         # module -> declared depends, for modules whose manifest we have seen
         # (scanned addons, plus the Odoo source checkout when configured).
         self._module_dependencies: dict[str, list[str]] = dict(
@@ -255,6 +256,20 @@ class SymbolResolver:
 
         # XML IDs are module-scoped; we can't prove absence without full knowledge
         return SymbolLookup(ResolveResult.UNKNOWN)
+
+    def model_has_record_rule(self, model_name: str) -> bool:
+        """True if any scanned module declares an `ir.rule` for the model."""
+        if self._rule_models is None:
+            by_suffix = {m.replace(".", "_"): m for m in self._repo_models}
+            self._rule_models = set()
+            for info in self._repo_xml_ids.values():
+                if getattr(info, "model", None) != "ir.rule":
+                    continue
+                for ref in getattr(info, "refs", []):
+                    name = ref.rpartition(".")[2]
+                    if name.startswith("model_") and name[6:] in by_suffix:
+                        self._rule_models.add(by_suffix[name[6:]])
+        return model_name in self._rule_models
 
     def _is_implicit_model_xml_id(self, xml_id: str) -> bool:
         _module, _, name = xml_id.rpartition(".")

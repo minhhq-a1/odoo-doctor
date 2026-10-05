@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Odoo Doctor** is a static analysis and health-scoring CLI for custom Odoo addons. It runs 30 native rules (8 categories: Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend), optionally merges Ruff / Pylint-Odoo findings, and produces a 0–100 score per addon. It never imports Odoo — everything is AST/XML/CSV parsing plus packaged model stubs.
+**Odoo Doctor** is a static analysis and health-scoring CLI for custom Odoo addons. It runs 33 native rules (8 categories: Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend), optionally merges Ruff / Pylint-Odoo findings, and produces a 0–100 score per addon. It never imports Odoo — everything is AST/XML/CSV parsing plus packaged model stubs.
 
 `AGENTS.md` is a parallel contributor guide that duplicates much of this file; keep the two in sync when changing shared facts (version, rule counts, structure).
 
@@ -20,6 +20,8 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest         # what CI runs
 
 ruff check src tests && ruff format --check src tests   # both must pass in CI (ruff format to fix)
 ```
+
+**Golden corpus** (`tests/corpus/`, run by `tests/test_golden_corpus.py`): each directory is a tiny sample addon scanned end to end through the CLI and compared with its `expected.json` (`[rule, file, confidence]` per finding). It guards true positives *and* known false positives. When a rule change is intentional, review the diff then refresh with `UPDATE_GOLDEN=1 pytest tests/test_golden_corpus.py`. When a real scan shows a false positive, reduce it to a corpus case first. The corpus is excluded from pytest collection (`tests/conftest.py`) and from ruff (`pyproject.toml`) because it holds scan inputs, not tests.
 
 CI (`.github/workflows/ci.yml`) runs pytest + ruff on Python 3.10–3.12; the package supports 3.10–3.13. Ruff lint rules are deliberately pinned in `pyproject.toml` (`E4,E7,E9,F`) — don't widen them casually.
 
@@ -69,13 +71,15 @@ Key concepts that span files:
 - **Plugins**: third-party rules load via `entry_points` (`rules/plugins.py`, only when `[plugins] enabled = true`, with `allow` list/version check/rollback). `src/odoo_doctor/plugin_api.py` is the *only* stable import surface for plugins — don't break it.
 - **Symbol resolution** (`graph/resolver.py`) answers "does this model/field/XML ID exist, and where" using parsed addons, optional `odoo_source_path` (`graph/source_index.py`) and packaged stubs in `graph/stubs/data/{17.0,18.0,19.0}.json` (loader tries exact version, then major).
 - **Rule docs** are generated: `rules/rule_docs.py` (`RULE_DOCS`) is the single source for `docs/rules.md`, HTML, `rules explain` and SARIF `helpUri`.
+- **Taint analysis** (`rules/_taint.py`): `TaintVisitor` tracks SAFE/UNKNOWN/UNSAFE states per variable (lists, branches, module constants) for the Security rules; subclass it and implement `check_call` (see `eval_usage.py`, `raw_sql_interpolation.py`).
+- **Fix ROI** (`core/roi.py`): `rank_fixes` orders a module's score-eligible findings by marginal score gain per effort and fills `ScoreResult.fix_priorities` (via `scanner._score_module`, used by both the live and cached paths). Add an `EFFORT_BY_RULE` entry (1-3) for every new native rule — a test fails otherwise.
 - `skills/*/SKILL.md` are the agent skills installed by `odoo-doctor install`.
 
 ## Adding a Rule
 
 1. `src/odoo_doctor/rules/<category>/my_rule.py` using `@rule(name=..., category=..., tier="P0".."P3", severity=..., default_confidence=..., needs_context=True, min_version=None, fixable=False)`; yield `Diagnostic(...)` (see an existing rule such as `rules/security/eval_usage.py` for the field set). Shared AST helpers: `rules/_ast_helpers.py`.
 2. Test in `tests/rules/` — build a temp addon, assemble a `ModuleContext`, assert on emitted diagnostics (positive and negative cases). Shared fixture addons are in `tests/fixtures/`.
-3. Add the import to `cli/app.py` and a `RuleDoc` entry to `rules/rule_docs.py`, then `odoo-doctor rules docs --out docs/rules.md`.
+3. Add the import to `cli/app.py`, a `RuleDoc` entry to `rules/rule_docs.py` and an effort to `core/roi.py::EFFORT_BY_RULE`, then `odoo-doctor rules docs --out docs/rules.md`.
 
 **Never hand-edit `docs/rules.md`.** `tests/test_rule_docs_complete.py` fails if any rule lacks a `RULE_DOCS` entry, a `RULE_DOCS` entry is stale, or the page isn't regenerated. A single `@rule` function can register several names (`create_write_in_loop.py` registers both `create-in-loop` and `write-in-loop`).
 

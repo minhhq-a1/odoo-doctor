@@ -47,6 +47,9 @@ import odoo_doctor.rules.data_integrity.data_noupdate_risk  # noqa: F401
 import odoo_doctor.rules.upgrade_safety.deprecated_api_usage  # noqa: F401
 import odoo_doctor.rules.upgrade_safety.removed_model_still_referenced  # noqa: F401
 import odoo_doctor.rules.frontend.asset_bundle_missing  # noqa: F401
+import odoo_doctor.rules.correctness.monetary_missing_currency_field  # noqa: F401
+import odoo_doctor.rules.correctness.hardcoded_company_or_currency  # noqa: F401
+import odoo_doctor.rules.security.missing_multicompany_rule  # noqa: F401
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers  # noqa: F401

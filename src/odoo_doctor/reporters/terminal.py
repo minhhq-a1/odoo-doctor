@@ -24,6 +24,10 @@ _LABEL_COLORS = {
 }
 
 
+# Fixes listed per module in the "Fix first" section.
+_FIX_FIRST = 5
+
+
 def render_terminal(
     diagnostics: list[Diagnostic],
     scores: dict[str, ScoreResult],
@@ -53,6 +57,18 @@ def render_terminal(
                     continue
                 table.add_row(cs.category, str(cs.score), str(cs.finding_count))
             console.print(table)
+
+        fixes = getattr(score, "fix_priorities", [])[:_FIX_FIRST]
+        if fixes:
+            console.print("  [bold]Fix first[/bold] [dim](best score per effort)[/dim]")
+            for rank, fp in enumerate(fixes, 1):
+                auto = " [dim]auto-fix[/dim]" if fp.fixable else ""
+                console.print(
+                    f"   {rank}. [bold]{fp.rule}[/bold] "
+                    f"{fp.file_path}:{fp.line}  "
+                    f"[dim]->[/dim] {fp.projected_score:.1f}/100 "
+                    f"[dim](+{fp.score_gain:.1f})[/dim]{auto}"
+                )
 
     # Diagnostics grouped by module
     by_module: dict[str, list[Diagnostic]] = {}

@@ -1,0 +1,17 @@
+[
+  [
+    "hardcoded-company-or-currency",
+    "mc/models/util.py",
+    "medium"
+  ],
+  [
+    "missing-multicompany-rule",
+    "mc/models/company.py",
+    "medium"
+  ],
+  [
+    "monetary-missing-currency-field",
+    "mc/models/money.py",
+    "high"
+  ]
+]

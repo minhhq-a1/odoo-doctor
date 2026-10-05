@@ -1,0 +1,22 @@
+[
+  [
+    "eval-usage",
+    "taint/models/queries.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "taint/models/queries.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "taint/models/queries.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "taint/models/queries.py",
+    "high"
+  ]
+]

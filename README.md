@@ -56,10 +56,13 @@ odoo-doctor scan . --diff main --json
 | `removed-model-still-referenced` | P1 | Upgrade Safety |
 | `asset-bundle-missing` | P2 | Frontend |
 | `expensive-nonstored-compute` | P2 | Performance |
+| `monetary-missing-currency-field` | P1 | Correctness |
+| `missing-multicompany-rule` | P1 | Security |
+| `hardcoded-company-or-currency` | P2 | Correctness |
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
-The full, generated reference (30 rules, with before/after examples) is in
+The full, generated reference (33 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md).
@@ -90,6 +93,26 @@ Tier impacts: P0 = 25, P1 = 10, P2 = 4, P3 = 1.
 
 Each finding deducts points by tier: **P0 = −25**, **P1 = −10**, **P2 = −4**, **P3 = −1**.  
 Only `high` confidence findings count toward the score.
+
+### Fix first
+
+Every scan ranks the score-eligible findings of each module by **marginal score
+gain per effort**, so you (or an agent) fix the right thing first. The terminal
+prints the top 5 under *Fix first*; `--json` has the top 10 per module as
+`modules.<name>.fix_priorities`:
+
+```json
+{"rank": 1, "rule": "missing-ondelete", "file_path": "...", "line": 79,
+ "impact": 10.0, "effort": 1, "roi": 10.0, "projected_score": 52.1,
+ "score_gain": 4.7, "fixable": false}
+```
+
+- `effort` is a coarse 1-3 estimate per rule (1 mechanical, 2 local code change,
+  3 restructuring); auto-fixable rules count as 1.
+- `projected_score` is the module score after fixing this finding *and every one
+  ranked before it*; `score_gain` is the change this step made. A category that is
+  already at 0 shows `+0.0` until enough of its findings are fixed — the weakest
+  category carries the `0.4 × min` term, so it is ranked first.
 
 ---
 

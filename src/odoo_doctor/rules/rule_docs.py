@@ -48,7 +48,12 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule "
         "honours: a trailing comment covers its line, a comment on its own line "
         "covers the rest of the enclosing function. "
-        "`# odoo-doctor: disable=raw-sql-string-interpolation` also works.",
+        "`# odoo-doctor: disable=raw-sql-string-interpolation` also works. "
+        "The rule follows values through local variables, lists (`append`, "
+        "`extend`, `+=`), `if`/`try`/loop branches and module constants: SQL "
+        "built only from constants, `int()` casts, `self._table`, `SQL(...)` or "
+        "`','.join(['%s'] * n)` placeholder lists is not reported, while a "
+        "fragment that reaches the query through a list or a branch is.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
@@ -70,6 +75,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         bad="result = eval(expression)",
         good="from odoo.tools.safe_eval import safe_eval\n"
         "result = safe_eval(expression, {'uid': self.env.uid})",
+        notes="An argument provably built from constants (a literal, or a "
+        "variable bound only to constants) is not reported; anything else, "
+        "including a parameter or a string with interpolated values, is.",
     ),
     "public-controller-sudo-risk": RuleDoc(
         detects="`@http.route` handlers with `auth='public'` or `auth='none'` "
@@ -354,5 +362,52 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "    'web.assets_backend': ['my_module/static/src/js/missing.js'],\n"
         "}",
         good="# create static/src/js/missing.js, or drop the entry above",
+    ),
+    # -------------------------------------------- Multi-company / multi-currency
+    "monetary-missing-currency-field": RuleDoc(
+        detects="`fields.Monetary` fields whose currency field (`currency_id`, "
+        "or the one named by `currency_field=`) provably does not exist on the "
+        "model, including its `_inherit`/`_inherits` ancestors and extensions in "
+        "other scanned modules.",
+        why="A Monetary field needs a currency to be stored, rounded and "
+        "displayed; without it Odoo raises at runtime or shows no currency.",
+        fix="Add the currency field, or point `currency_field=` at an existing "
+        "Many2one to `res.currency`.",
+        bad='amount = fields.Monetary(string="Amount")',
+        good='currency_id = fields.Many2one("res.currency")\n'
+        'amount = fields.Monetary(string="Amount")',
+        notes="Only reported when absence is provable; models that extend an "
+        "upstream model you do not define here are skipped.",
+    ),
+    "missing-multicompany-rule": RuleDoc(
+        detects="Models defined in the module with a `company_id` Many2one to "
+        "`res.company` that no `ir.rule` in the scanned modules protects.",
+        why="Without a company record rule, users of one company can read and "
+        "edit another company's records in a multi-company database.",
+        fix="Add an `ir.rule` restricting records to `company_ids`.",
+        bad='company_id = fields.Many2one("res.company", required=True)\n'
+        '# ... and no <record model="ir.rule"> for this model',
+        good='<record id="my_model_comp_rule" model="ir.rule">\n'
+        '    <field name="name">My model multi-company</field>\n'
+        '    <field name="model_id" ref="model_my_model"/>\n'
+        "    <field name=\"domain_force\">[('company_id', 'in', company_ids)]"
+        "</field>\n"
+        "</record>",
+        lang="xml",
+        notes="Medium confidence (does not affect the score): the rule may live "
+        "in an addon that was not scanned. Transient and abstract models are "
+        "skipped.",
+    ),
+    "hardcoded-company-or-currency": RuleDoc(
+        detects="`env.ref('base.main_company')` and `env.ref('base.USD')`-style "
+        "references to a specific currency in business code.",
+        why="In a multi-company or multi-currency database these pick the wrong "
+        "record.",
+        fix="Use `self.env.company`, `self.env.company.currency_id`, or the "
+        "document's own `company_id` / `currency_id`.",
+        bad='company = self.env.ref("base.main_company")',
+        good="company = self.env.company",
+        notes="Medium confidence (does not affect the score). Install hooks "
+        "(`*_hook` functions, `hooks.py`), `migrations/` and `tests/` are skipped.",
     ),
 }

@@ -67,6 +67,9 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 
+[tool.ruff]
+extend-exclude = ["tests/corpus"]
+
 [tool.ruff.lint]
 # Pin the rule set: ruff 0.16 widened its defaults, which broke CI on an
 # unchanged codebase. These are the long-standing defaults (pyflakes + the
