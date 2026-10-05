@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import shutil
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -14,13 +16,14 @@ runner = CliRunner()
 
 
 @pytest.fixture
-def local_tmp() -> Path:
+def local_tmp() -> Iterator[Path]:
     import uuid
 
     # Use a directory inside the workspace to allow sandbox writes
     ws_tmp = Path(__file__).parent.parent.parent / ".tmp" / str(uuid.uuid4())
     ws_tmp.mkdir(parents=True, exist_ok=True)
-    return ws_tmp
+    yield ws_tmp
+    shutil.rmtree(ws_tmp, ignore_errors=True)
 
 
 def _write_addon(root: Path) -> Path:
