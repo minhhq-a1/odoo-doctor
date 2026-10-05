@@ -7,7 +7,7 @@ All notable changes to Odoo Doctor are documented here.
 ## [Unreleased]
 
 False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
-`purchase_request` and others): 229 -> 193 findings on one such repo.
+`purchase_request` and others): 229 -> 193 findings on one such repo (before the three debatable-rule changes below).
 
 ### Fixed
 
@@ -29,13 +29,16 @@ False-positive fixes found by scanning real OCA/custom addons (`queue_job`,
   directory.
 - **`manifest-data-order-risk`**: a data file named like a view/action/menu is no
   longer treated as a security file just because it lives in `security/`.
-
-### Not changed
-
-`data-noupdate-risk` on `ir.rule`, `raw-sql-string-interpolation` on
-parameterised dynamic `WHERE` clauses and `manifest-missing-required-fields`
-for `installable` are debatable rather than wrong and keep their current
-behavior.
+- **`data-noupdate-risk`**: `ir.rule` records are reported with medium confidence
+  (not scored). Core and OCA disagree on `noupdate` for rules, so neither is a
+  defect; `ir.config_parameter` and `ir.cron` stay high confidence.
+- **`raw-sql-string-interpolation`** honours pylint-odoo's
+  `# pylint: disable=sql-injection` marker (trailing comment: that line; own-line
+  comment: the rest of the enclosing function), so explicitly vetted dynamic
+  `WHERE` fragments are no longer reported.
+- **`manifest-missing-required-fields`** no longer requires `installable` (Odoo
+  defaults it to `True`) and no longer requires `data` when the manifest declares
+  `assets` or `demo`. `odoo-doctor fix` no longer inserts `installable`.
 
 ---
 

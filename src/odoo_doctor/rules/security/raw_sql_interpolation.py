@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import ast
+import io
+import re
+import tokenize
 from pathlib import Path
 
 from odoo_doctor.core.source import read_source
@@ -45,13 +48,61 @@ def check_raw_sql_interpolation(
     except SyntaxError:
         return []
 
-    visitor = _RawSqlVisitor(file_path, module_name, odoo_version)
+    visitor = _RawSqlVisitor(
+        file_path, module_name, odoo_version, _pylint_disabled_ranges(source, tree)
+    )
     visitor.visit(tree)
     return visitor.diagnostics
 
 
+# pylint-odoo's own check for this pattern. A developer who writes this marker is
+# explicitly asserting the dynamic part is not user data (e.g. a WHERE fragment
+# whose values are bound through parameters), so we honour it like pylint does.
+_PYLINT_DISABLE_RE = re.compile(r"pylint:\s*disable\s*=\s*([\w\-,\s]+)")
+
+
+def _pylint_disabled_ranges(source: str, tree: ast.AST) -> list[tuple[int, int]]:
+    """Line ranges where `# pylint: disable=sql-injection` is in effect.
+
+    A trailing comment covers its own line; a comment on its own line covers the
+    rest of the enclosing function (or module), as in pylint.
+    """
+    scopes = [
+        (n.lineno, n.end_lineno or n.lineno)
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    ranges: list[tuple[int, int]] = []
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError):
+        return ranges
+    for tok in tokens:
+        if tok.type != tokenize.COMMENT:
+            continue
+        match = _PYLINT_DISABLE_RE.search(tok.string)
+        if not match or "sql-injection" not in {
+            name.strip() for name in match.group(1).split(",")
+        }:
+            continue
+        line = tok.start[0]
+        if tok.line[: tok.start[1]].strip():  # trailing comment
+            ranges.append((line, line))
+            continue
+        enclosing = [end for start, end in scopes if start <= line <= end]
+        ranges.append((line, min(enclosing) if enclosing else 10**9))
+    return ranges
+
+
 class _RawSqlVisitor(ast.NodeVisitor):
-    def __init__(self, file_path: Path, module_name: str, odoo_version: str) -> None:
+    def __init__(
+        self,
+        file_path: Path,
+        module_name: str,
+        odoo_version: str,
+        disabled_ranges: list[tuple[int, int]] | None = None,
+    ) -> None:
+        self._disabled_ranges = disabled_ranges or []
         self.file_path = file_path
         self.module_name = module_name
         self.odoo_version = odoo_version
@@ -99,7 +150,9 @@ class _RawSqlVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         if _is_cursor_execute(node) and node.args:
             sql_arg = node.args[0]
-            if _is_unsafe_sql_expr(sql_arg, self._unsafe_names):
+            if _is_unsafe_sql_expr(sql_arg, self._unsafe_names) and not any(
+                start <= node.lineno <= end for start, end in self._disabled_ranges
+            ):
                 self.diagnostics.append(
                     _make_diagnostic(
                         node, self.file_path, self.module_name, self.odoo_version
