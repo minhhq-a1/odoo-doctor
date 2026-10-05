@@ -4,6 +4,20 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Rule `unsafe-template-render`** (Security, P1, medium confidence, Odoo 14+): flags QWeb
+  `t-raw`, which renders a value without HTML-escaping (stored or reflected XSS), and ignores
+  the safe `t-raw="0"` body idiom of `t-call`. Native rules: 36 -> 37.
+  - The rule first shipped in the `v0.3.1` tag, but that line never reached `main`, so
+    0.4.0 to 0.7.0 did not have it. It is ported here with its original tests, a rules-docs
+    entry, an effort estimate and a golden-corpus case. Its ID is now covered by the
+    stability contract.
+
+---
+
 ## [0.7.0] — 2026-10-05
 
 Theme: trust and reach. Tell users which rules are noisy in their own repo, state what is

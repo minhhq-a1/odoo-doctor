@@ -38,6 +38,7 @@ EFFORT_BY_RULE: dict[str, int] = {
     "manifest-missing-dependency": 1,
     "missing-external-dependency": 1,
     "missing-access-csv": 1,
+    "unsafe-template-render": 1,
     "unknown-model-in-access-csv": 1,
     "sudo-without-comment": 1,
     "duplicate-xml-id": 1,

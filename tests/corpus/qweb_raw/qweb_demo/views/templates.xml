@@ -1,0 +1,13 @@
+<odoo>
+  <template id="report_body">
+    <!-- flagged: unescaped output of a field a user can edit -->
+    <div t-raw="doc.user_comment"/>
+    <!-- safe: escaped output -->
+    <span t-esc="doc.name"/>
+    <span t-out="doc.name"/>
+  </template>
+  <template id="layout">
+    <!-- safe: the body passed to t-call -->
+    <div class="wrap"><t t-raw="0"/></div>
+  </template>
+</odoo>

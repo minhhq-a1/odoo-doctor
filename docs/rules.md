@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 36 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -13,6 +13,7 @@ Odoo Doctor ships 36 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
 | [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | medium |  |
+| [unsafe-template-render](#unsafe-template-render) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
 | [duplicate-xml-id](#duplicate-xml-id) | P1 | Correctness | error | high |  |
 | [missing-xml-ref](#missing-xml-ref) | P1 | Correctness | error | high |  |
@@ -224,6 +225,30 @@ Good:
 ```python
 # sudo: portal users cannot read partners but need the display name
 partner = self.env['res.partner'].sudo().browse(pid)
+```
+
+### unsafe-template-render
+
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+
+**Detects**: QWeb `t-raw` output, which renders a value without HTML-escaping. The safe `t-raw="0"` idiom (the body passed to a `t-call`) is ignored.
+
+**Why**: Unescaped output of user-controlled data is a stored or reflected XSS risk in reports, emails and website pages.
+
+**Fix**: Use `t-esc` (or `t-out` on Odoo 17+) so the value is escaped, or only render raw markup when the value is a trusted `Markup` object.
+
+**Note**: Medium confidence: the value may already be sanitized, so it does not count toward the score by default.
+
+Bad:
+
+```xml
+<div t-raw="doc.user_comment"/>
+```
+
+Good:
+
+```xml
+<div t-esc="doc.user_comment"/>
 ```
 
 ## Correctness

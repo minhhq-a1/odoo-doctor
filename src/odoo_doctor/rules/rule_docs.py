@@ -93,6 +93,19 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "def get_data(self):\n"
         "    return request.env['private.model'].search([])",
     ),
+    "unsafe-template-render": RuleDoc(
+        detects="QWeb `t-raw` output, which renders a value without HTML-escaping. "
+        'The safe `t-raw="0"` idiom (the body passed to a `t-call`) is ignored.',
+        why="Unescaped output of user-controlled data is a stored or reflected "
+        "XSS risk in reports, emails and website pages.",
+        fix="Use `t-esc` (or `t-out` on Odoo 17+) so the value is escaped, or only "
+        "render raw markup when the value is a trusted `Markup` object.",
+        bad='<div t-raw="doc.user_comment"/>',
+        good='<div t-esc="doc.user_comment"/>',
+        lang="xml",
+        notes="Medium confidence: the value may already be sanitized, so it does "
+        "not count toward the score by default.",
+    ),
     "sudo-without-comment": RuleDoc(
         detects="`.sudo()` calls with no justifying comment on the same line "
         "or directly above.",
