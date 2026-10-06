@@ -114,9 +114,12 @@ odoo-doctor scan .   # your rule runs only because [plugins].enabled = true
   `ValueError` and the plugin is skipped.
 - **No overrides.** A rule name already registered (built-in or another plugin)
   is rejected; a plugin can never replace a built-in rule.
-- **Version check.** If your module sets `ODOO_DOCTOR_PLUGIN_API` and it differs
-  from `plugin_api.PLUGIN_API_VERSION`, the plugin is refused. Omitting it is
-  allowed but discouraged.
+- **Version check.** Declare the plugin API your module was written against with
+  `ODOO_DOCTOR_PLUGIN_API = 1` at module level (the module your entry point
+  names). It must be an integer equal to `plugin_api.PLUGIN_API_VERSION`;
+  anything else (another number, `True`, `"1"`, `1.0`) refuses the plugin with a
+  warning that names it. Omitting it still loads the plugin but prints a warning,
+  because without it odoo-doctor cannot refuse the plugin when the API changes.
 - **Rollback and isolation.** A plugin that raises while loading is skipped with
   a warning and every rule it had already registered is removed. A rule that
   raises while running is reported as a warning and skipped for that module/file;
@@ -134,9 +137,19 @@ odoo-doctor scan .   # your rule runs only because [plugins].enabled = true
   `.py` file of each addon.
 - Return (or yield) `Diagnostic` objects.
 - Exported helpers: `Diagnostic`, `ModuleContext`, `rule`, `read_source`,
-  `receiver_is_orm`, `node_is_orm`, plus the constants above.
+  `receiver_is_orm`, `node_is_orm`, plus the constants `PLUGIN_API_VERSION`,
+  `CATEGORIES`, `TIERS`, `SEVERITIES` and `CONFIDENCES`.
 - Plugin rules are not part of the built-in rules reference (`docs/rules.md`) and
   their findings carry no docs link unless you set `Diagnostic.url` yourself.
+
+## Versioning policy
+
+`PLUGIN_API_VERSION` is an integer. It stays the same when `plugin_api` gains names;
+it is bumped, and the old value refused by the loader, only when a name is removed
+or its behavior changes incompatibly. Such a bump follows the deprecation window in
+[stability.md](stability.md). The exported names are frozen in
+`tests/test_stability_contract.py`, and `tests/rules/test_plugin_api_ga.py` checks
+that this page mentions every one of them.
 
 ## Security / trust model
 
