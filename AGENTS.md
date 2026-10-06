@@ -184,7 +184,7 @@ chore(release): bump version to 0.3.0
 1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`, plus `editors/vscode/package.json` and `package-lock.json` (`tests/test_version.py` and `tests/test_vscode_extension.py` check consistency).
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag v0.7.0 && git push origin v0.7.0`).
+4. Create and push a new Git tag (e.g., `git tag v0.8.0 && git push origin v0.8.0`).
 5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
 6. Publish the VS Code extension (`MinhHong.odoo-doctor`, same version) from `main`: `cd editors/vscode && npm ci && npx vsce publish` with the publisher's token, or upload the `.vsix` from `npm run package` at https://marketplace.visualstudio.com/manage/publishers/MinhHong. This step is manual.
 

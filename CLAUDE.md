@@ -96,7 +96,7 @@ Key concepts that span files:
 3. Merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z` and create a GitHub Release — `.github/workflows/publish.yml` publishes to PyPI via Trusted Publishing.
 4. VS Code extension (not automated, needs the publisher's token): after the PyPI release, publish the same version from `main` with `cd editors/vscode && npm ci && npx vsce publish`, or upload the `.vsix` that `npm run package` builds at https://marketplace.visualstudio.com/manage/publishers/MinhHong. Never put the token in the repo or in chat.
 
-Current version: `0.7.1`.
+Current version: `0.8.0`.
 
 ## Configuration
 
