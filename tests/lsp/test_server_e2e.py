@@ -14,6 +14,8 @@ import pytest
 
 pytest.importorskip("pygls")
 
+from pygls.uris import to_fs_path
+
 from tests.lsp.test_engine import RULE, _project
 
 TIMEOUT = 60
@@ -104,8 +106,14 @@ class Client:
                 self.proc.kill()
 
 
+def _same_uri(a: str, b: str) -> bool:
+    """Same file, however the URI is spelled: the server publishes ``file:///c%3A/...``
+    (what VS Code uses) while ``Path.as_uri()`` gives ``file:///C:/...`` on Windows."""
+    return to_fs_path(a) == to_fs_path(b)
+
+
 def _has(params: dict, uri: str, code: str | None, present: bool) -> bool:
-    if params["uri"] != uri:
+    if not _same_uri(params["uri"], uri):
         return False
     found = any(d.get("code") == code for d in params["diagnostics"])
     return found == present
