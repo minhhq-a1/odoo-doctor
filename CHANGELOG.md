@@ -6,6 +6,21 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `eval-usage` no longer reports a bare `eval(...)` / `exec(...)` when the module binds that
+  name itself, e.g. `from odoo.tools.safe_eval import safe_eval as eval` (an Odoo 8/9 idiom
+  still found in ported addons) or `eval = safe_eval`: that call is the sandboxed function, not
+  the builtin. Module-level bindings count (also inside `if` / `try`); a method named `eval`
+  shadows nothing. New golden corpus case `eval_shadowed`.
+
+### Changed
+
+- `eval-usage` message now shows the evaluated expression and why it is flagged (not provably
+  constant, or built from interpolated text), and the help names `ast.literal_eval` and
+  `safe_eval`. Detection is otherwise unchanged: on Odoo 19 community the rule reports a single
+  bare `exec` (the `shell` command), so its high confidence stands.
+
 ### Changed
 
 - `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the
