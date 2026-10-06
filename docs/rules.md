@@ -12,7 +12,7 @@ Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
-| [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | medium |  |
+| [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | low |  |
 | [unsafe-template-render](#unsafe-template-render) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
 | [duplicate-xml-id](#duplicate-xml-id) | P1 | Correctness | error | high |  |
@@ -204,7 +204,7 @@ Good:
 
 ### sudo-without-comment
 
-**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: low · **Min Odoo version**: 14.0
 
 **Detects**: `.sudo()` calls with no justifying comment on any line of the statement or directly above it (a compound statement counts only its header line(s)).
 
@@ -212,7 +212,7 @@ Good:
 
 **Fix**: Add a short comment explaining why elevated privileges are needed.
 
-**Note**: `.sudo(False)` (drops privileges), test files and migration scripts are skipped. A comment on every `sudo()` is a team convention rather than a defect (Odoo's own addons leave most of theirs uncommented), and addons you only vendor are best left out with `[ignore] modules`. Medium confidence: does not affect the score.
+**Note**: `.sudo(False)` (drops privileges), test files and migration scripts are skipped. A comment on every `sudo()` is a team convention rather than a defect (Odoo's own addons leave most of theirs uncommented), and addons you only vendor are best left out with `[ignore] modules`. Low confidence: does not affect the score, and `min_confidence = "medium"` on a surface hides it.
 
 Bad:
 

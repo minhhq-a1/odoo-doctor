@@ -124,8 +124,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         notes="`.sudo(False)` (drops privileges), test files and migration scripts "
         "are skipped. A comment on every `sudo()` is a team convention rather than a "
         "defect (Odoo's own addons leave most of theirs uncommented), and addons you "
-        "only vendor are best left out with `[ignore] modules`. Medium confidence: "
-        "does not affect the score.",
+        "only vendor are best left out with `[ignore] modules`. Low confidence: does "
+        'not affect the score, and `min_confidence = "medium"` on a surface hides it.',
     ),
     "record-rule-without-domain": RuleDoc(
         detects="`ir.rule` records without a restricting `domain_force`.",

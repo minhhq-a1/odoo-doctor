@@ -79,7 +79,7 @@ def _is_justified(lines: list[str], span: tuple[int, int], sudo_line: int) -> bo
     category="Security",
     tier="P1",
     severity="warning",
-    default_confidence="medium",
+    default_confidence="low",
     needs_context=False,
     min_version="14.0",
 )
@@ -115,7 +115,7 @@ def check_sudo_without_comment(
                 severity="warning",
                 tier="P1",
                 source="native",
-                confidence="medium",
+                confidence="low",
                 title="'.sudo()' without a justifying comment",
                 message=(
                     f".sudo() at line {lineno} bypasses access rights but has "

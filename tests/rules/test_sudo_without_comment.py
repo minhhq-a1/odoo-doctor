@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
+from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.security.sudo_without_comment import (
     check_sudo_without_comment,
 )
@@ -139,3 +140,20 @@ def test_test_and_migration_files_are_skipped(tmp_path: Path):
     assert _flagged_lines(tmp_path, src, "m/tests/test_x.py") == []
     assert _flagged_lines(tmp_path, src, "m/migrations/17.0.1.0/post-x.py") == []
     assert _flagged_lines(tmp_path, src, "m/models/x.py") == [3]
+
+
+def test_finding_is_low_confidence(tmp_path: Path):
+    """A comment per sudo() is a team convention (most of Odoo's own code ignores it),
+    so a surface with min_confidence = "medium" must be able to hide it."""
+    f = _write(
+        tmp_path,
+        """\
+        class M:
+            def f(self):
+                return self.env["x"].sudo().search([])
+        """,
+    )
+    (diag,) = check_sudo_without_comment(f, "m", "17.0")
+    assert diag.confidence == "low"
+    meta, _ = default_registry.get("sudo-without-comment")
+    assert meta.default_confidence == "low"

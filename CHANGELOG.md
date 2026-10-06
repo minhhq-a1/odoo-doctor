@@ -14,7 +14,8 @@ All notable changes to Odoo Doctor are documented here.
   fires. A compound statement (`if`, `for`, `with`) counts only its header lines. `.sudo(False)`
   (drops privileges), test files and migration scripts are skipped. The convention itself is
   unchanged: it is a team policy, and Odoo 19's own addons leave about 80% of their `.sudo()`
-  calls uncommented.
+  calls uncommented, so its confidence drops from medium to low. The score is unaffected (only
+  high confidence scores); a surface with `min_confidence = "medium"` now hides it.
 
 ### Changed
 
