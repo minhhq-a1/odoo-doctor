@@ -6,8 +6,20 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Plugin loading checks the declared API version strictly: `ODOO_DOCTOR_PLUGIN_API` must be
+  an integer equal to `PLUGIN_API_VERSION`. `True` and `1.0` used to pass (`True == 1`) and a
+  string was refused with a confusing message; now all of them are refused with
+  "must be an integer". Plugins that omit the declaration still load, but print a warning
+  naming the plugin (it was silent). `PLUGIN_API_VERSION` stays 1 and `plugin_api` is unchanged.
+
 ### Added
 
+- Contract tests for the plugin loader: discovery through real `importlib.metadata`
+  entry points (a compatible and a future-version plugin), the mismatch message, and a check
+  that `docs/custom-rules.md` mentions every name `plugin_api` exports. `docs/custom-rules.md`
+  and `docs/stability.md` describe the versioning policy.
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
   heartbeat line); the SVG source stays in the repo and is not shipped in the `.vsix`.
 
