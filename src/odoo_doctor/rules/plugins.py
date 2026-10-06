@@ -9,9 +9,11 @@ Guarantees (see docs/custom-rules.md):
 - opt-in: nothing loads unless ``[plugins].enabled = true``;
 - optional allowlist: ``[plugins].allow = ["name", ...]`` restricts which entry
   points load;
-- isolation: a plugin that fails to import, declares an incompatible
+- isolation: a plugin that fails to import, declares an incompatible or malformed
   ``ODOO_DOCTOR_PLUGIN_API``, or registers an invalid/duplicate rule is skipped
   with a warning and every rule it had registered is rolled back;
+- explicit versioning: ``ODOO_DOCTOR_PLUGIN_API`` must be an integer equal to
+  ``PLUGIN_API_VERSION``; a plugin that omits it still loads but is warned about;
 - built-in rules can never be overridden (duplicate names are rejected);
 - a rule that raises while running is isolated per rule/file by the scanner.
 """
@@ -39,6 +41,30 @@ def _discover() -> Iterable:
         return list(eps.select(group=ENTRY_POINT_GROUP))
     except AttributeError:  # pragma: no cover - very old API
         return list(eps.get(ENTRY_POINT_GROUP, []))
+
+
+def _check_declared_version(name: str, module) -> None:
+    """Refuse a plugin written for another plugin API; warn when it declares none.
+
+    The declaration must be a real ``int``: ``True`` equals ``1`` and ``1.0 == 1`` in
+    Python, so a bare ``==`` would accept values no plugin author meant.
+    """
+    declared = getattr(module, PLUGIN_API_ATTR, None)
+    if declared is None:
+        print(
+            f"[WARN] rule plugin '{name}' does not declare {PLUGIN_API_ATTR}; "
+            f"add `{PLUGIN_API_ATTR} = {PLUGIN_API_VERSION}` so odoo-doctor can "
+            "refuse it when the plugin API changes.",
+            file=sys.stderr,
+        )
+        return
+    if isinstance(declared, bool) or not isinstance(declared, int):
+        raise TypeError(f"{PLUGIN_API_ATTR} must be an integer, got {declared!r}")
+    if declared != PLUGIN_API_VERSION:
+        raise RuntimeError(
+            f"requires plugin API {declared}, this odoo-doctor provides "
+            f"{PLUGIN_API_VERSION}"
+        )
 
 
 def _rule_names(registry: RuleRegistry) -> set[str]:
@@ -83,12 +109,7 @@ def load_rule_plugins(
         before = _rule_names(target)
         try:
             module = ep.load()
-            declared = getattr(module, PLUGIN_API_ATTR, None)
-            if declared is not None and declared != PLUGIN_API_VERSION:
-                raise RuntimeError(
-                    f"requires plugin API {declared}, this odoo-doctor provides "
-                    f"{PLUGIN_API_VERSION}"
-                )
+            _check_declared_version(name, module)
             loaded[name] = True
         except Exception as exc:  # noqa: BLE001 - isolation is the point
             for added in _rule_names(target) - before:

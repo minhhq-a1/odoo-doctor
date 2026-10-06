@@ -420,19 +420,44 @@ def _rules_stats(path: str, cache_enabled: bool, json_output: bool) -> None:
     )
 
 
+def _rules_new(rule_name: str | None, out: str | None) -> None:
+    """Scaffold a third-party rule pack (see docs/custom-rules.md)."""
+    from odoo_doctor.core.scaffold import write_scaffold
+
+    if not rule_name:
+        typer.echo("[ERROR] Usage: rules new <rule-name> [--out DIR]", err=True)
+        raise typer.Exit(code=3)
+    try:
+        project = write_scaffold(rule_name, Path(out or "."))
+    except FileExistsError as exc:
+        typer.echo(f"[ERROR] {exc} already exists; nothing was written.", err=True)
+        raise typer.Exit(code=3) from exc
+    except ValueError as exc:
+        typer.echo(f"[ERROR] {exc}", err=True)
+        raise typer.Exit(code=3) from exc
+    typer.echo(f"Created {project}")
+    typer.echo(
+        f"Next: cd {project} && pip install -e '.[dev]' && pytest\n"
+        "Then enable it in odoo-doctor.toml: [plugins] enabled = true, "
+        f'allow = ["{rule_name.replace("-", "_")}"]'
+    )
+
+
 @app.command("rules")
 def rules_cmd(
     action: str = typer.Argument(
-        "list", help="list, explain, disable, enable, docs or stats"
+        "list", help="list, explain, disable, enable, docs, stats or new"
     ),
     rule_name: str | None = typer.Argument(
-        None, help="Rule name (explain, disable, enable)"
+        None, help="Rule name (explain, disable, enable, new)"
     ),
     path: str = typer.Option(
         ".", "--path", help="Directory holding odoo-doctor.toml (list/disable/enable)"
     ),
     out: str | None = typer.Option(
-        None, "--out", help="docs: write the page here instead of stdout"
+        None,
+        "--out",
+        help="docs: write the page here instead of stdout; new: parent directory (default .)",
     ),
     docs_format: str = typer.Option(
         "markdown", "--format", help="docs: markdown or html"
@@ -470,6 +495,8 @@ def rules_cmd(
             typer.echo(f"{rule_name} already {verb.lower()} in {config_path}")
     elif action == "stats":
         _rules_stats(path, cache_enabled, json_output)
+    elif action == "new":
+        _rules_new(rule_name, out)
     elif action == "docs":
         if docs_format not in ("markdown", "html"):
             typer.echo("[ERROR] --format must be markdown or html.", err=True)
@@ -497,7 +524,7 @@ def rules_cmd(
         typer.echo(
             "[ERROR] Usage: rules list | explain <rule> | disable <rule> | "
             "enable <rule> | docs [--out FILE] [--format markdown|html] [--check] | "
-            "stats [--path DIR] [--cache] [--json]",
+            "stats [--path DIR] [--cache] [--json] | new <rule-name> [--out DIR]",
             err=True,
         )
         raise typer.Exit(code=3)

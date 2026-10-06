@@ -141,3 +141,82 @@ def test_config_parses_allowlist():
     assert _build_config({}).plugin_allowlist is None
     cfg = _build_config({"plugins": {"enabled": True, "allow": ["x", "y"]}})
     assert cfg.plugin_allowlist == ["x", "y"]
+
+
+# --- explicit entry-point versioning ----------------------------------------
+
+
+@pytest.mark.parametrize("declared", [True, False, 1.0, "1", [1]])
+def test_non_integer_declaration_is_refused_and_rolled_back(declared, capsys):
+    reg = RuleRegistry()
+
+    def odd():
+        rule(**_rule_kwargs(name="odd-rule"), registry=reg)(lambda f, m, v: [])
+        return types.SimpleNamespace(ODOO_DOCTOR_PLUGIN_API=declared)
+
+    assert load_rule_plugins(entry_points=[_EP("odd", odd)], registry=reg) == {}
+    assert "odd-rule" not in reg
+    assert "must be an integer" in capsys.readouterr().err
+
+
+def test_mismatch_message_names_plugin_and_both_versions(capsys):
+    reg = RuleRegistry()
+    ep = _EP("future", lambda: types.SimpleNamespace(ODOO_DOCTOR_PLUGIN_API=2))
+    load_rule_plugins(entry_points=[ep], registry=reg)
+    err = capsys.readouterr().err
+    assert "'future'" in err and "requires plugin API 2" in err
+    assert f"provides {plugin_api.PLUGIN_API_VERSION}" in err
+
+
+def test_missing_declaration_warns_but_loads(capsys):
+    reg = RuleRegistry()
+    ep = _EP("legacy", lambda: types.SimpleNamespace())
+    assert load_rule_plugins(entry_points=[ep], registry=reg) == {"legacy": True}
+    err = capsys.readouterr().err
+    assert "'legacy'" in err and "ODOO_DOCTOR_PLUGIN_API" in err
+
+
+def test_declared_version_does_not_warn(capsys):
+    reg = RuleRegistry()
+    ep = _EP("ok", lambda: types.SimpleNamespace(ODOO_DOCTOR_PLUGIN_API=1))
+    assert load_rule_plugins(entry_points=[ep], registry=reg) == {"ok": True}
+    assert "ODOO_DOCTOR_PLUGIN_API" not in capsys.readouterr().err
+
+
+def test_discovery_through_real_entry_point_metadata(tmp_path, monkeypatch, capsys):
+    """An installed distribution's entry point is found, loaded and version-checked."""
+    (tmp_path / "odd_real_plugin.py").write_text(
+        "ODOO_DOCTOR_PLUGIN_API = 1\nLOADED = True\n", encoding="utf-8"
+    )
+    (tmp_path / "odd_future_plugin.py").write_text(
+        "ODOO_DOCTOR_PLUGIN_API = 99\n", encoding="utf-8"
+    )
+    for dist, ep_name, module in (
+        ("odd_real_plugin", "real", "odd_real_plugin"),
+        ("odd_future_plugin", "future", "odd_future_plugin"),
+    ):
+        info = tmp_path / f"{dist}-1.0.dist-info"
+        info.mkdir()
+        (info / "METADATA").write_text(
+            f"Metadata-Version: 2.1\nName: {dist}\nVersion: 1.0\n", encoding="utf-8"
+        )
+        (info / "entry_points.txt").write_text(
+            f"[odoo_doctor.rules]\n{ep_name} = {module}\n", encoding="utf-8"
+        )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    loaded = load_rule_plugins(registry=RuleRegistry(), allow=["real", "future"])
+
+    assert loaded == {"real": True}
+    assert "requires plugin API 99" in capsys.readouterr().err
+
+
+def test_documented_public_names_match_the_module():
+    """docs/custom-rules.md must mention every name plugin_api exports."""
+    from pathlib import Path
+
+    doc = (Path(__file__).parents[2] / "docs" / "custom-rules.md").read_text(
+        encoding="utf-8"
+    )
+    missing = [name for name in plugin_api.__all__ if name not in doc]
+    assert not missing, f"undocumented in docs/custom-rules.md: {missing}"

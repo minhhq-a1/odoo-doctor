@@ -35,6 +35,7 @@ odoo-doctor fix . [--fix-dry-run]                      # deterministic auto-fixe
 odoo-doctor rules list | explain <rule> | disable <rule> | enable <rule>
 odoo-doctor rules docs --out docs/rules.md [--check]   # regenerate rules reference
 odoo-doctor rules stats [--path DIR] [--cache] [--json]   # which rules users suppress most
+odoo-doctor rules new <rule-name> [--out DIR]          # scaffold a third-party rule pack (core/scaffold.py)
 odoo-doctor lsp                                        # language server on stdio (needs the `lsp` extra, included in `dev`)
 odoo-doctor history show h.jsonl --max-drop 3          # regression gate (exit 2)
 ```
