@@ -6,6 +6,24 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+False positives of the loop rules (`search-in-loop`, `create-in-loop`, `write-in-loop`) found by
+reviewing a real workspace and Odoo 19 community:
+
+- The loop's own iterable was treated as part of the loop, so the most common line in Odoo,
+  `for rec in self.env['x'].search([...]):`, was reported as a search in a loop. The iterable and
+  the `else` clause run once and are no longer in scope; the iterable of an *inner* loop still
+  counts for the outer one (it runs once per outer iteration), and a `while` condition still counts.
+  On Odoo 19 community 87 of 522 `search-in-loop` findings were this; 2 of the 9 loop findings of the
+  two OCA addons in the reviewed workspace (`queue_job`, `purchase_request`) were too.
+- Loops over chunks (`split_every(...)`, `range(start, stop, step)`) and over a literal tuple/list
+  of constants no longer count: they run once per chunk or a fixed number of times.
+- A `while` loop paged with `search(..., limit=N)` (N other than 0/1) no longer counts: the search is
+  the batching. `limit=1` is still a lookup per iteration and is reported.
+- The per-iteration walk now lives in `rules/_ast_helpers.py` (`per_iteration_nodes`,
+  `is_bounded_loop`), shared by the three rules. New golden corpus case `loop_setup_not_flagged`.
+
 ### Changed
 
 - `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the

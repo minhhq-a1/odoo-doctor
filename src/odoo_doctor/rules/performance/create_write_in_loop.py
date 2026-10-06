@@ -4,24 +4,17 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Generator
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import is_test_file, receiver_is_orm
+from odoo_doctor.rules._ast_helpers import (
+    is_bounded_loop,
+    is_test_file,
+    per_iteration_nodes,
+    receiver_is_orm,
+)
 from odoo_doctor.rules.registry import rule
-
-
-def _walk_excluding_nested_loops(node: ast.AST) -> Generator[ast.AST, None, None]:
-    from collections import deque
-
-    todo = deque(ast.iter_child_nodes(node))
-    while todo:
-        curr = todo.popleft()
-        yield curr
-        if not isinstance(curr, (ast.For, ast.While)):
-            todo.extend(ast.iter_child_nodes(curr))
 
 
 def _check_loop_body(
@@ -34,6 +27,8 @@ def _check_loop_body(
     rule_name: str,
     orm_vars: set[str],
 ) -> None:
+    if is_bounded_loop(loop):
+        return
     local_orm_vars = set(orm_vars)
     if isinstance(loop, ast.For):
         from odoo_doctor.rules._ast_helpers import node_is_orm
@@ -46,7 +41,7 @@ def _check_loop_body(
                     if isinstance(el, ast.Name):
                         local_orm_vars.add(el.id)
 
-    for node in _walk_excluding_nested_loops(loop):
+    for node in per_iteration_nodes(loop):
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr == method_name:

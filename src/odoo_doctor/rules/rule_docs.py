@@ -209,17 +209,24 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "    partner = self.env['res.partner'].search([('id', '=', line.pid)])",
         good="partners = self.env['res.partner'].search([('id', 'in', lines.mapped('pid'))])\n"
         "by_id = {p.id: p for p in partners}",
-        notes="The performance rules skip files inside an addon's `tests/` directory.",
+        notes="The performance rules skip files inside an addon's `tests/` directory. "
+        "Only what runs on every iteration counts: the loop's own iterable "
+        "(`for rec in self.env[...].search(...)`) and its `else` clause run once. "
+        "Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal "
+        "tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are "
+        "not reported.",
     ),
     "create-in-loop": RuleDoc(
-        detects="`create()` called inside a loop.",
+        detects="`create()` called inside a loop (its iterable and `else` clause "
+        "excluded; chunked and constant-literal loops are skipped).",
         why="Each call triggers its own INSERT and recomputation round trip.",
         fix="Collect the values and call `create()` once with a list.",
         bad="for vals in vals_list:\n    self.env['my.model'].create(vals)",
         good="self.env['my.model'].create(vals_list)",
     ),
     "write-in-loop": RuleDoc(
-        detects="`write()` called inside a loop.",
+        detects="`write()` called inside a loop (its iterable and `else` clause "
+        "excluded; chunked and constant-literal loops are skipped).",
         why="Each call triggers its own UPDATE and recomputation round trip.",
         fix="Write once on the whole recordset when the values are identical.",
         bad="for rec in records:\n    rec.write({'state': 'done'})",

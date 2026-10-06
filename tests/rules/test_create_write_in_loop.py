@@ -59,3 +59,14 @@ def test_create_write_batch_is_clean(tmp_path: Path):
     f.write_text(code)
     diags = check_create_write_in_loop(f, "test_mod", "17.0")
     assert len(diags) == 0
+
+
+def test_iterable_of_a_loop_is_not_inside_the_loop(tmp_path: Path):
+    f = tmp_path / "m.py"
+    f.write_text(
+        "class A:\n"
+        "    def f(self, vals):\n"
+        "        for rec in self.create(vals):\n"
+        "            rec.name\n"
+    )
+    assert check_create_write_in_loop(f, "m", "19.0") == []
