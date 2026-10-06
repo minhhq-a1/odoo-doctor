@@ -112,15 +112,20 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "not count toward the score by default.",
     ),
     "sudo-without-comment": RuleDoc(
-        detects="`.sudo()` calls with no justifying comment on the same line "
-        "or directly above.",
+        detects="`.sudo()` calls with no justifying comment on any line of the "
+        "statement or directly above it (a compound statement counts only its "
+        "header line(s)).",
         why="Every privilege elevation should be reviewable; an undocumented "
         "`sudo()` is hard to audit.",
         fix="Add a short comment explaining why elevated privileges are needed.",
         bad="partner = self.env['res.partner'].sudo().browse(pid)",
         good="# sudo: portal users cannot read partners but need the display name\n"
         "partner = self.env['res.partner'].sudo().browse(pid)",
-        notes="Medium confidence: does not affect the score.",
+        notes="`.sudo(False)` (drops privileges), test files and migration scripts "
+        "are skipped. A comment on every `sudo()` is a team convention rather than a "
+        "defect (Odoo's own addons leave most of theirs uncommented), and addons you "
+        "only vendor are best left out with `[ignore] modules`. Medium confidence: "
+        "does not affect the score.",
     ),
     "record-rule-without-domain": RuleDoc(
         detects="`ir.rule` records without a restricting `domain_force`.",

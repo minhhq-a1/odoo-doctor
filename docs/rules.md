@@ -206,13 +206,13 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
 
-**Detects**: `.sudo()` calls with no justifying comment on the same line or directly above.
+**Detects**: `.sudo()` calls with no justifying comment on any line of the statement or directly above it (a compound statement counts only its header line(s)).
 
 **Why**: Every privilege elevation should be reviewable; an undocumented `sudo()` is hard to audit.
 
 **Fix**: Add a short comment explaining why elevated privileges are needed.
 
-**Note**: Medium confidence: does not affect the score.
+**Note**: `.sudo(False)` (drops privileges), test files and migration scripts are skipped. A comment on every `sudo()` is a team convention rather than a defect (Odoo's own addons leave most of theirs uncommented), and addons you only vendor are best left out with `[ignore] modules`. Medium confidence: does not affect the score.
 
 Bad:
 

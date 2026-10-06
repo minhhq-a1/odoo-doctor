@@ -6,6 +6,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `sudo-without-comment`: a comment now counts when it sits on any line of the statement that
+  holds the `.sudo()` or directly above that statement, not only on the call's first line, so a
+  chained `(self.env[...]\n.sudo()\n.get_param(...))` justified by a comment above no longer
+  fires. A compound statement (`if`, `for`, `with`) counts only its header lines. `.sudo(False)`
+  (drops privileges), test files and migration scripts are skipped. The convention itself is
+  unchanged: it is a team policy, and Odoo 19's own addons leave about 80% of their `.sudo()`
+  calls uncommented.
+
 ### Changed
 
 - `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the
