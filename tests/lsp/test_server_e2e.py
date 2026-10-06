@@ -131,6 +131,7 @@ def test_diagnostics_actions_command_and_rescan(tmp_path: Path):
         capabilities = init["capabilities"]
         assert capabilities["textDocumentSync"]["save"]  # didSave is advertised
         assert capabilities["codeActionProvider"]
+        assert capabilities["hoverProvider"]
         assert (
             "odooDoctor.disableRule"
             in (capabilities["executeCommandProvider"]["commands"])
@@ -295,3 +296,50 @@ def test_a_folder_without_addons_shows_a_warning_instead_of_silence(tmp_path: Pa
         assert "addons_paths" in shown["message"]
     finally:
         client.close()
+
+
+def _hover(client: Client, uri: str, line: int, character: int) -> dict | None:
+    return client.request(
+        "textDocument/hover",
+        {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        },
+    )
+
+
+def test_hover_explains_the_rule_and_withholds_it_for_a_stale_buffer(tmp_path: Path):
+    root = _project(tmp_path)
+    source = root / "mod" / "models" / "m.py"
+    uri = source.resolve().as_uri()
+    client = Client(root)
+    try:
+        _start(client, root.resolve())
+        client.wait_for(
+            "textDocument/publishDiagnostics", lambda p: _has(p, uri, RULE, True)
+        )
+        # line 8 (0-based 7) holds the flagged cr.execute(...)
+        result = _hover(client, uri, 7, 12)
+        assert result is not None
+        assert result["contents"]["kind"] == "markdown"
+        text = result["contents"]["value"]
+        assert RULE in text and "Fix." in text and "Why it matters." in text
+        assert result["range"]["start"]["line"] == 7
+
+        assert _hover(client, uri, 0, 0) is None  # a line without a finding
+
+        # The editor buffer now differs from the saved file on that line: no hover.
+        client.notify(
+            "textDocument/didOpen",
+            {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "python",
+                    "version": 1,
+                    "text": source.read_text().replace("SELECT 1", "SELECT 2"),
+                }
+            },
+        )
+        assert _hover(client, uri, 7, 12) is None
+    finally:
+        assert client.close() == 0

@@ -8,6 +8,14 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Added
 
+- **Language server: hover.** Hovering a flagged line shows the rule's explanation from
+  `RULE_DOCS` (detects, why, fix, bad/good example, docs link), not repeating the message the
+  editor already shows. Findings from Ruff / Pylint-Odoo show their own title and help. A line
+  edited since the last save gets no hover (its finding would describe old code). The language
+  server and extension stay experimental and outside the stability contract.
+- **CI:** the VS Code extension is built and packaged on Linux and Windows (it was only tried on
+  macOS), and the language server tests (`tests/lsp`) run on Windows, where file URIs and paths
+  differ. `tests/test_ci_workflow.py` keeps both in the workflow.
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
   heartbeat line); the SVG source stays in the repo and is not shipped in the `.vsix`.
 

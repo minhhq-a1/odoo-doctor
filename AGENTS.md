@@ -235,7 +235,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
-| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
+| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
 | `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |

@@ -28,8 +28,9 @@ from odoo_doctor.lsp.actions import (
     find_finding,
     line_in_sync,
 )
-from odoo_doctor.lsp.convert import SOURCE, file_diagnostics
+from odoo_doctor.lsp.convert import SOURCE, file_diagnostics, split_lines
 from odoo_doctor.lsp.engine import addons_found, scan_project
+from odoo_doctor.lsp.hover import hover_for
 from odoo_doctor.rules.registry import default_registry
 
 RESCAN_COMMAND = "odooDoctor.rescan"
@@ -278,6 +279,23 @@ def create_server() -> OdooDoctorServer:
                     )
                 )
         return actions
+
+    @server.feature(lsp.TEXT_DOCUMENT_HOVER)
+    def hover(params: lsp.HoverParams) -> lsp.Hover | None:
+        uri = params.text_document.uri
+        findings = server.findings_for(uri)
+        if not findings:
+            return None
+        text = server.workspace.get_text_document(uri).source
+        disk_text = _read_disk(uri)
+        # Findings come from the saved file: a line that moved or was edited since the
+        # last scan would explain the wrong code, so it gets no hover until the next save.
+        current = [f for f in findings if line_in_sync(f.line, text, disk_text)]
+        lines = split_lines(text)
+        line = params.position.line
+        return hover_for(
+            current, params.position, lines[line] if line < len(lines) else None
+        )
 
     @server.command(RESCAN_COMMAND)
     async def rescan() -> None:
