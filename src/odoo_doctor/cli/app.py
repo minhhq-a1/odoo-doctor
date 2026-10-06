@@ -142,6 +142,7 @@ def scan(
         )
         raise typer.Exit(code=3)
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
+    _warn_if_no_addons(addons_paths, path)
 
     if cfg.enable_plugins:
         from odoo_doctor.rules.plugins import load_rule_plugins
@@ -839,6 +840,36 @@ def _resolve_addons_paths(
     if path_arg is not None:
         return [Path(path_arg).resolve()]
     return [(config_root / p).resolve() for p in cfg.addons_paths]
+
+
+def _warn_if_no_addons(addons_paths: list[Path], path_arg: str | None) -> None:
+    """Say on stderr when the scan roots hold no addon; the exit code is unchanged.
+
+    ``scan PATH`` looks only at the folders directly inside PATH, so pointing it at a
+    repository root (``scan .``) silently yields an empty report. stdout stays the
+    untouched report so ``--json`` consumers are not affected.
+    """
+    from odoo_doctor.discovery.addons import discover_addons
+
+    if discover_addons(addons_paths):
+        return
+    shown = ", ".join(str(p) for p in addons_paths) or "(none)"
+    if path_arg is not None:
+        hint = (
+            "`scan PATH` scans only the folders directly inside PATH; omit PATH to "
+            "use addons_paths from odoo-doctor.toml, or point PATH at the folder "
+            "that holds the addons."
+        )
+    else:
+        hint = (
+            "Set addons_paths in odoo-doctor.toml to the folders that hold your "
+            "addons (each addon is a folder with a __manifest__.py)."
+        )
+    typer.echo(
+        f"[WARN] No Odoo addon found under: {shown}. The result covers no module. "
+        f"{hint}",
+        err=True,
+    )
 
 
 def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:

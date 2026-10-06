@@ -6,6 +6,15 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the
+  scan roots hold no addon. `scan PATH` scans only the folders directly inside PATH, so
+  `scan .` on a repository root used to produce a silent, empty report (0 modules, score 100).
+  The message points to omitting PATH (use `addons_paths`) or targeting the addons folder.
+  Exit code stays 0 and stdout (including `--json`) is unchanged; `--module` and `--diff` do
+  not trigger it.
+
 ---
 
 ## [0.8.0] — 2026-10-06
