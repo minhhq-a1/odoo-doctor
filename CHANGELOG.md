@@ -6,6 +6,14 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.7.1] — 2026-10-06
+
+A patch release: a restored rule, fixes found by scanning a real Odoo 19 workspace, and
+the install path for the language server and VS Code extension. Rule IDs, CLI flags and
+JSON keys are unchanged (see `docs/stability.md`); the new rule only adds findings.
+
 ### Changed
 
 - The VS Code extension is published on the Marketplace as `MinhHong.odoo-doctor` (preview, 0.7.0):
