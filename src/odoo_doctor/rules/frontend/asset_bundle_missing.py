@@ -12,6 +12,28 @@ if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
 
 
+# Directives of a bundle entry (`('prepend', path)`) and the position of the file each one
+# adds. `include` names a bundle and `remove` points at a file that already exists
+# elsewhere, so neither adds a file of this module.
+_ADDED_PATH_INDEX = {"prepend": 0, "append": 0, "before": 1, "after": 1, "replace": 1}
+
+
+def _added_path(entry: object) -> str | None:
+    """The file path an assets entry adds, or None when it adds none we can check.
+
+    An entry is a plain path or a directive tuple/list such as ``('after', target, path)``.
+    """
+    if isinstance(entry, str):
+        return entry
+    if not isinstance(entry, (tuple, list)) or not entry:
+        return None
+    index = _ADDED_PATH_INDEX.get(entry[0])
+    if index is None or len(entry) < index + 2:
+        return None
+    path = entry[index + 1]
+    return path if isinstance(path, str) else None
+
+
 @rule(
     name="asset-bundle-missing",
     category="Frontend",
@@ -29,7 +51,12 @@ def check_asset_bundle_missing(ctx: ModuleContext) -> list[Diagnostic]:
         return diags
 
     for bundle_name, file_list in ctx.manifest.assets.items():
-        for asset_path in file_list:
+        if not isinstance(file_list, (list, tuple)):
+            continue
+        for entry in file_list:
+            asset_path = _added_path(entry)
+            if asset_path is None:
+                continue
             # Skip glob patterns, URLs, and prepend/append directives
             if any(c in asset_path for c in ("*", "?", "://")) or asset_path.startswith(
                 ("(", ")")
