@@ -5,6 +5,8 @@ Health findings for Odoo custom addons, in your editor. This extension starts th
 
 - findings as diagnostics (squiggles and the Problems panel), each with a link to the
   rule's documentation;
+- hover on a flagged line: what the rule detects, why it matters, how to fix it and a bad/good
+  example;
 - quick fixes (Ctrl+. / Cmd+.): apply the deterministic auto-fix when the rule has one, or
   disable the rule on this line, in this file, or in `odoo-doctor.toml`.
 

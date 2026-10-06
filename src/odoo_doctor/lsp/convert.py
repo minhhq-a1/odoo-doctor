@@ -33,27 +33,31 @@ _SEVERITY = {
 }
 
 
-def to_lsp_diagnostic(
-    d: Diagnostic, line_text: str | None, fixable: bool = False
-) -> lsp.Diagnostic:
-    """Map a finding to an LSP diagnostic.
+def line_range(line: int, line_text: str | None) -> lsp.Range:
+    """The code on a finding's 1-based *line*: first non-blank character to the end.
 
-    The range spans the code on the finding's line (first non-blank character to the end
-    of the line). ``Diagnostic.column`` is not used: its base differs between native
-    rules and the Ruff / Pylint adapters. Without the line text the range is empty.
+    ``Diagnostic.column`` is not used: its base differs between native rules and the Ruff /
+    Pylint adapters. Without the line text (or on a blank line) the range is empty.
     """
-    line = max(d.line - 1, 0)
+    index = max(line - 1, 0)
     start = end = 0
     if line_text is not None:
         text = line_text.rstrip("\r\n")
         if text.strip():
             start = len(text) - len(text.lstrip())
             end = len(text.rstrip())
+    return lsp.Range(
+        start=lsp.Position(line=index, character=start),
+        end=lsp.Position(line=index, character=max(end, start)),
+    )
+
+
+def to_lsp_diagnostic(
+    d: Diagnostic, line_text: str | None, fixable: bool = False
+) -> lsp.Diagnostic:
+    """Map a finding to an LSP diagnostic spanning the code on its line."""
     return lsp.Diagnostic(
-        range=lsp.Range(
-            start=lsp.Position(line=line, character=start),
-            end=lsp.Position(line=line, character=max(end, start)),
-        ),
+        range=line_range(d.line, line_text),
         message=f"{d.message}\n{d.help}" if d.help else d.message,
         severity=_SEVERITY.get(d.severity, lsp.DiagnosticSeverity.Information),
         code=d.rule,

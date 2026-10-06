@@ -26,6 +26,12 @@ Without the extra, `odoo-doctor lsp` exits with code 3 and tells you what to ins
 - **Diagnostics** for the whole workspace folder: every finding `odoo-doctor scan` reports,
   as squiggles and in the Problems panel, with the rule name as the code and a link to its
   documentation.
+- **Hover** on a flagged line: the rule's explanation (what it detects, why it matters, how
+  to fix it, a bad/good example and the documentation link), from the same catalog as
+  `odoo-doctor rules explain`. The message and help text are not repeated: the editor already
+  shows them with the diagnostic. Findings from Ruff / Pylint-Odoo show their own title and help.
+  A line you edited since the last save gets no hover until the next scan, because its finding
+  would describe the old code.
 - **Quick fixes** on a finding (lightbulb, Ctrl+. / Cmd+.):
   - *fix*: the deterministic auto-fix, when the rule has one (the same fixers as
     `odoo-doctor fix`);
