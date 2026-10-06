@@ -61,7 +61,14 @@ Configuration (addons paths, `[ignore]`, `[severity]`, plugins, ...) comes from
 
 ## VS Code
 
-Build and install the extension from source (it is not published to the Marketplace yet):
+Install **Odoo Doctor** (`MinhHong.odoo-doctor`, preview) from the Extensions view, or:
+
+```bash
+code --install-extension MinhHong.odoo-doctor
+```
+
+It also needs the server: `pip install 'odoo-doctor[lsp]'` (see above). To build the
+extension from source instead:
 
 ```bash
 cd editors/vscode
