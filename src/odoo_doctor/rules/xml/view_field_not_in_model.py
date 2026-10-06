@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.graph.resolver import ResolveResult
 from odoo_doctor.rules.registry import rule
+from odoo_doctor.rules.xml._view_refs import sits_in_subview
 
 if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
@@ -30,6 +31,9 @@ def check_view_field_not_in_model(ctx: ModuleContext) -> list[Diagnostic]:
             continue
 
         for field_name in view.field_refs:
+            anchor = view.field_ref_anchors.get(field_name)
+            if sits_in_subview(ctx.resolver, view.model, anchor):
+                continue
             lookup = ctx.resolver.resolve_field(view.model, field_name)
 
             if lookup.status == ResolveResult.FOUND:

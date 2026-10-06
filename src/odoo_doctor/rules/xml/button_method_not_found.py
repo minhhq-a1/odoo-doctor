@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.graph.resolver import ResolveResult
 from odoo_doctor.rules.registry import rule
+from odoo_doctor.rules.xml._view_refs import sits_in_subview
 
 if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
@@ -30,6 +31,9 @@ def check_button_method_not_found(ctx: ModuleContext) -> list[Diagnostic]:
             continue
 
         for method_name in view.button_methods:
+            anchor = view.button_method_anchors.get(method_name)
+            if sits_in_subview(ctx.resolver, view.model, anchor):
+                continue
             lookup = ctx.resolver.resolve_method(view.model, method_name)
 
             if lookup.status == ResolveResult.FOUND:

@@ -58,6 +58,36 @@ def _declared_python_packages(raw: dict) -> set[str]:
     }
 
 
+def _add_model(models: dict[str, ModelInfo], m: ModelInfo) -> None:
+    """Add a class of one module to that module's models, merging classes of one model.
+
+    A module may split a model over several files, and an extension (``_inherit`` only) can
+    be parsed before the class that defines it. The merged entry then still is the
+    definition (``name`` set, abstract/transient flags and location from it), whatever the
+    parse order.
+    """
+    key = m.name or (m.inherit[0] if m.inherit else None)
+    if not key:
+        return
+    existing = models.get(key)
+    if existing is None:
+        models[key] = m
+        return
+    existing.fields.update(m.fields)
+    existing.methods.update(m.methods)
+    existing.inherit = list(dict.fromkeys(existing.inherit + m.inherit))
+    for name, target in m.inherits.items():
+        existing.inherits.setdefault(name, target)
+    if m.defines and not existing.defines:
+        # the definition arrived after an extension: the entry now is the definition
+        existing.name = m.name
+        existing.is_transient = m.is_transient
+        existing.is_abstract = m.is_abstract
+        existing.file_path = m.file_path
+        existing.line = m.line
+    existing.defines = existing.defines or m.defines
+
+
 def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
     """One resolver entry for a model declared (with ``_name``) in one or more modules.
 
@@ -67,7 +97,7 @@ def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
     not depend on the order the modules were parsed in, and the per-module ``ModelInfo``
     objects are never modified.
     """
-    definers = [m for m in declarations if m.name not in m.inherit]
+    definers = [m for m in declarations if m.defines]
     base = (definers or declarations)[0]
     if len(declarations) == 1:
         return base
@@ -129,15 +159,7 @@ def build_project_graph(
                 continue
             for m in parse_models(py_file):
                 m.module = addon.name
-                key = m.name or (m.inherit[0] if m.inherit else None)
-                if key:
-                    if key in models:
-                        # Merge fields/methods from multiple files
-                        models[key].fields.update(m.fields)
-                        models[key].methods.update(m.methods)
-                        models[key].inherit = list(set(models[key].inherit + m.inherit))
-                    else:
-                        models[key] = m
+                _add_model(models, m)
             controllers.extend(parse_controllers(py_file))
 
         # Parse XML files

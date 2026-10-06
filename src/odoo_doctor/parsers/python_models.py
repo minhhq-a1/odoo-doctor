@@ -47,6 +47,9 @@ class ModelInfo:
     file_path: str = ""
     line: int = 0
     module: str = ""
+    # True when a class defines the model: it has a `_name` that its own `_inherit` does not
+    # list. `_name = 'x'` with `_inherit = ['x', mixin]` (and `_inherit = 'x'` alone) extends.
+    defines: bool = False
 
 
 @dataclass
@@ -217,6 +220,7 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
             method = _extract_method(item)
             model.methods[method.name] = method
 
+    model.defines = model.name is not None and model.name not in model.inherit
     return model
 
 

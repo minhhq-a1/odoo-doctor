@@ -136,3 +136,31 @@ def test_view_field_rule_still_flags_a_missing_field(tmp_path: Path):
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     diags = check_view_field_not_in_model(graph.modules["aaa_defs"])
     assert [d.title for d in diags] == ["View references unknown field 'gamma'"]
+
+
+def test_the_owner_survives_a_definer_that_also_extends_its_own_model(tmp_path: Path):
+    """`base` defines res.users in one file and extends it in others (like core does).
+
+    Merged in one ModelInfo, its `inherit` then lists the model's own name; it must still
+    count as the definition, not as one more extension, or the first extension wins.
+    """
+    defs = tmp_path / "zzz_base"
+    ext = tmp_path / "aaa_ext"
+    _addon(tmp_path, "zzz_base", [], DEFINER)
+    (defs / "models" / "m2.py").write_text(
+        "from odoo import fields, models\n\n"
+        "class X2(models.Model):\n    _inherit = 'x.model'\n\n"
+        "    gamma = fields.Char()\n"
+    )
+    (defs / "models" / "__init__.py").write_text("from . import m\nfrom . import m2\n")
+    _addon(tmp_path, "aaa_ext", ["zzz_base"], EXTENSION)
+    assert ext.exists()
+
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+
+    owner = graph.resolver.owner_module_for_model("x.model")
+    assert owner.status == ResolveResult.FOUND and owner.source == "zzz_base"
+    for field in ("alpha", "beta", "gamma"):
+        assert (
+            graph.resolver.resolve_field("x.model", field).status == ResolveResult.FOUND
+        )

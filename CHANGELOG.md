@@ -34,6 +34,21 @@ All notable changes to Odoo Doctor are documented here.
   position="...">` only locates a node of the parent view (which may be inside a subview), so it
   is not a reference. Odoo 19.0 community: `view-field-not-in-model` 65 -> 16.
 
+- **Model ownership inside one module, and BaseModel methods.** A module that both defines a model
+  (`_name = 'res.users'` in one file) and extends it (`_inherit = 'res.users'` in others) was merged
+  into an entry that no longer counted as the definition, so the first extending module (`bus`,
+  `point_of_sale`) became the "owner" and every module extending `res.users` or `res.currency` was
+  told to depend on it. `ModelInfo.defines` now records whether a class defines the model, and
+  the merge no longer depends on file order (the `_inherit` list is kept in a stable order too).
+  Methods every model gets from `BaseModel` (`unlink`, `action_archive`, `action_unarchive`,
+  `write`, ...) now resolve, so a button calling them is no longer "not found".
+- **Refs inserted next to a subview node.** An inherited view's `<xpath expr="//field[@name='X']">`
+  where `X` is not a field of the view's model located a node of an inline subview, so the
+  fields and buttons it inserts belong to that subview's model; `view-field-not-in-model` and
+  `button-method-not-found` no longer check them against the parent model.
+  Odoo 19.0 community, with the fixes above: `manifest-missing-dependency` 204 -> 2,
+  `view-field-not-in-model` 1,503 -> 7, `removed-model-still-referenced` 172 -> 14.
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a

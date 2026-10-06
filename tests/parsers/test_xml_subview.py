@@ -120,3 +120,29 @@ def test_a_field_locator_is_not_a_reference(tmp_path: Path):
     )
     assert "located_elsewhere" not in view.field_refs
     assert "plain_ref" in view.field_refs
+
+
+def test_refs_inserted_by_an_xpath_remember_the_field_it_targets(tmp_path: Path):
+    view = _inherited(
+        tmp_path,
+        """<xpath expr="//field[@name='pattern']" position="after">
+             <field name="a"/>
+             <group><button name="act" type="object"/></group>
+           </xpath>
+           <xpath expr="//group[@name='main']" position="inside"><field name="b"/></xpath>
+           <field name="c"/>""",
+    )
+    assert view.field_ref_anchors == {"a": "pattern", "b": None, "c": None}
+    assert view.button_method_anchors == {"act": "pattern"}
+
+
+def test_a_name_seen_with_two_different_anchors_is_not_anchored(tmp_path: Path):
+    view = _inherited(
+        tmp_path,
+        """<xpath expr="//field[@name='p']" position="after"><field name="a"/></xpath>
+           <xpath expr="//field[@name='q']" position="after"><field name="a"/></xpath>
+           <xpath expr="//field[@name='p']" position="after"><field name="d"/></xpath>
+           <field name="d"/>""",
+    )
+    assert view.field_ref_anchors["a"] is None  # two targets: attribute it to the model
+    assert view.field_ref_anchors["d"] is None  # also seen outside any xpath

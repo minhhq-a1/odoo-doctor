@@ -299,3 +299,37 @@ def test_resolve_method_extended_via_inherit_found():
         extended_methods={"sale.order": {"action_foo": MethodInfo(name="action_foo")}},
     )
     assert r.resolve_method("sale.order", "action_foo").status == ResolveResult.FOUND
+
+
+# --- methods every model inherits from BaseModel -----------------------------
+
+
+def _complete_repo_resolver() -> SymbolResolver:
+    model = ModelInfo(name="x.model", module="m")
+    return SymbolResolver(
+        repo_models={"x.model": model}, repo_xml_ids={}, stub_version="17.0"
+    )
+
+
+def test_base_model_methods_exist_on_every_model():
+    resolver = _complete_repo_resolver()
+    for method in (
+        "unlink",
+        "write",
+        "create",
+        "copy",
+        "action_archive",
+        "action_unarchive",
+        "toggle_active",
+    ):
+        lookup = resolver.resolve_method("x.model", method)
+        assert lookup.status == ResolveResult.FOUND, method
+        assert lookup.source == "builtin"
+
+
+def test_a_method_that_exists_nowhere_is_still_not_found():
+    resolver = _complete_repo_resolver()
+    assert (
+        resolver.resolve_method("x.model", "action_made_up").status
+        == ResolveResult.NOT_FOUND
+    )

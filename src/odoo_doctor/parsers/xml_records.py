@@ -34,6 +34,10 @@ class ViewInfo:
     line: int = 0
     field_ref_lines: dict[str, int] = field(default_factory=dict)
     button_method_lines: dict[str, int] = field(default_factory=dict)
+    # For refs inserted by an <xpath> that targets a field node: ref -> that field's name
+    # (None when the ref is not anchored, or seen with different anchors).
+    field_ref_anchors: dict[str, str | None] = field(default_factory=dict)
+    button_method_anchors: dict[str, str | None] = field(default_factory=dict)
 
 
 _REF_CALL_RE = re.compile(r"\bref\(['\"]([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)['\"]\)")
@@ -130,6 +134,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
         button_methods: list[str] = []
         field_ref_lines: dict[str, int] = {}
         button_method_lines: dict[str, int] = {}
+        field_ref_anchors: dict[str, str | None] = {}
+        button_method_anchors: dict[str, str | None] = {}
 
         for field_elem in record.findall("field"):
             fname = field_elem.get("name")
@@ -145,6 +151,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
                     button_methods,
                     field_ref_lines,
                     button_method_lines,
+                    field_ref_anchors,
+                    button_method_anchors,
                 )
 
         if not model:
@@ -161,6 +169,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
                 line=record.sourceline or 0,
                 field_ref_lines=field_ref_lines,
                 button_method_lines=button_method_lines,
+                field_ref_anchors=field_ref_anchors,
+                button_method_anchors=button_method_anchors,
             )
         )
 
@@ -235,12 +245,32 @@ def _xpath_enters_subview(expr: str) -> bool:
     return False
 
 
+_FIELD_STEP = re.compile(r"""field\[@name=['"]([^'"]+)['"]\]""")
+
+
+def _targeted_field(expr: str) -> str | None:
+    """The field an xpath ends on (``//field[@name='pattern']`` -> ``pattern``), if any."""
+    steps = _xpath_steps(expr)
+    match = _FIELD_STEP.match(steps[-1]) if steps else None
+    return match.group(1) if match else None
+
+
+def _note_anchor(anchors: dict[str, str | None], name: str, anchor: str | None) -> None:
+    """Keep an anchor only while every sighting of *name* has the same one."""
+    if name not in anchors:
+        anchors[name] = anchor
+    elif anchors[name] != anchor:
+        anchors[name] = None
+
+
 def _extract_arch_refs(
     arch_elem: etree._Element,
     field_refs: list[str],
     button_methods: list[str],
     field_ref_lines: dict[str, int],
     button_method_lines: dict[str, int],
+    field_ref_anchors: dict[str, str | None],
+    button_method_anchors: dict[str, str | None],
 ) -> None:
     """Walk arch XML for <field name="..."> and <button ... type="object">.
 
@@ -252,11 +282,15 @@ def _extract_arch_refs(
     one of its subviews), so it is not a reference either.
     """
 
-    def walk(elem: etree._Element, inside_field: bool) -> None:
+    def walk(elem: etree._Element, inside_field: bool, anchor: str | None) -> None:
         for child in elem:
             if child.tag == "xpath":
-                enters = _xpath_enters_subview(child.get("expr", ""))
-                walk(child, inside_field or enters)
+                expr = child.get("expr", "")
+                walk(
+                    child,
+                    inside_field or _xpath_enters_subview(expr),
+                    _targeted_field(expr),
+                )
             elif child.tag == "field":
                 if not inside_field and child.get("position") is None:
                     name = child.get("name")
@@ -264,7 +298,8 @@ def _extract_arch_refs(
                         if name not in field_refs:
                             field_refs.append(name)
                         field_ref_lines.setdefault(name, child.sourceline or 0)
-                walk(child, True)
+                        _note_anchor(field_ref_anchors, name, anchor)
+                walk(child, True, anchor)
             elif child.tag == "button":
                 if not inside_field and child.get("position") is None:
                     btn_name = child.get("name")
@@ -273,8 +308,9 @@ def _extract_arch_refs(
                         if btn_name not in button_methods:
                             button_methods.append(btn_name)
                         button_method_lines.setdefault(btn_name, child.sourceline or 0)
-                walk(child, inside_field)
+                        _note_anchor(button_method_anchors, btn_name, anchor)
+                walk(child, inside_field, anchor)
             else:
-                walk(child, inside_field)
+                walk(child, inside_field, anchor)
 
-    walk(arch_elem, False)
+    walk(arch_elem, False, None)

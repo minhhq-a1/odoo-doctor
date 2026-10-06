@@ -42,6 +42,73 @@ ORM_MAGIC_FIELDS = frozenset(
 )
 
 
+# Public methods of ``BaseModel`` (Odoo 19), present on every model, so no model has to
+# define them: a button may call ``unlink`` or ``action_archive`` on any model.
+ORM_BASE_METHODS = frozenset(
+    {
+        "action_archive",
+        "action_unarchive",
+        "browse",
+        "check_access",
+        "check_access_rights",
+        "check_access_rule",
+        "check_field_access_rights",
+        "concat",
+        "copy",
+        "copy_data",
+        "copy_translations",
+        "create",
+        "default_get",
+        "ensure_one",
+        "exists",
+        "export_data",
+        "fetch",
+        "fields_get",
+        "filtered",
+        "filtered_domain",
+        "flush_model",
+        "flush_recordset",
+        "get_base_url",
+        "get_external_id",
+        "get_field_translations",
+        "get_metadata",
+        "get_property_definition",
+        "grouped",
+        "has_access",
+        "invalidate_model",
+        "invalidate_recordset",
+        "load",
+        "lock_for_update",
+        "mapped",
+        "modified",
+        "name_create",
+        "name_search",
+        "new",
+        "onchange",
+        "read",
+        "read_group",
+        "search",
+        "search_count",
+        "search_fetch",
+        "search_read",
+        "sorted",
+        "sudo",
+        "toggle_active",
+        "try_lock_for_update",
+        "union",
+        "unlink",
+        "update",
+        "update_field_translations",
+        "with_company",
+        "with_context",
+        "with_env",
+        "with_prefetch",
+        "with_user",
+        "write",
+    }
+)
+
+
 _MODEL_OWNER_OVERRIDES = {
     "sale.order": "sale",
     "sale.order.line": "sale",
@@ -205,6 +272,10 @@ class SymbolResolver:
         # 2b. Methods inherited from ancestors (prototype inheritance / _inherits)
         if self._ancestor_has(model_name, method_name, "method", _seen):
             return SymbolLookup(ResolveResult.FOUND, "repo")
+
+        # 2c. Methods every model gets from BaseModel (unlink, action_archive, ...)
+        if method_name in ORM_BASE_METHODS:
+            return SymbolLookup(ResolveResult.FOUND, "builtin")
 
         # 3. Stub methods (presence only)
         if self._stubs:
