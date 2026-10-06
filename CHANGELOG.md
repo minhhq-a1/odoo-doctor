@@ -34,6 +34,14 @@ All notable changes to Odoo Doctor are documented here.
   is kept as an artifact. `tests/test_ci_templates.py` checks the YAML, that every flag exists on
   `scan`, and runs the script in a throwaway git repo with a real `origin` (branch pipeline, MR that
   changes a clean addon, MR that changes a bad one, advisory mode). The README documents both.
+- **Language server: hover.** Hovering a flagged line shows the rule's explanation from
+  `RULE_DOCS` (detects, why, fix, bad/good example, docs link), not repeating the message the
+  editor already shows. Findings from Ruff / Pylint-Odoo show their own title and help. A line
+  edited since the last save gets no hover (its finding would describe old code). The language
+  server and extension stay experimental and outside the stability contract.
+- **CI:** the VS Code extension is built and packaged on Linux and Windows (it was only tried on
+  macOS), and the language server tests (`tests/lsp`) run on Windows, where file URIs and paths
+  differ. `tests/test_ci_workflow.py` keeps both in the workflow.
 
 ---
 

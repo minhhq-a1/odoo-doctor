@@ -17,6 +17,12 @@ from odoo_doctor.lsp.engine import addons_found, scan_project
 RULE = "raw-sql-string-interpolation"
 
 
+def _key(path: Path) -> str:
+    """How a scan keys a file: resolved and POSIX-style, as the pipeline normalizes it
+    (``str()`` would use backslashes on Windows and never match)."""
+    return path.resolve().as_posix()
+
+
 def _project(root: Path, toml_extra: str = "") -> Path:
     (root / "odoo-doctor.toml").write_text(
         '[odoo-doctor]\nodoo_version = "17.0"\n\n'
@@ -44,7 +50,7 @@ def _project(root: Path, toml_extra: str = "") -> Path:
 def test_scan_groups_findings_by_absolute_file_path(tmp_path: Path):
     root = _project(tmp_path)
     by_file = scan_project(root)
-    path = str((root / "mod" / "models" / "m.py").resolve())
+    path = _key(root / "mod" / "models" / "m.py")
     assert RULE in {d.rule for d in by_file[path]}
     assert all(Path(p).is_absolute() for p in by_file)
 
@@ -58,7 +64,7 @@ def test_scan_honours_the_project_config(tmp_path: Path):
 def test_a_rescan_sees_the_edited_file(tmp_path: Path):
     root = _project(tmp_path)
     path = root / "mod" / "models" / "m.py"
-    assert RULE in {d.rule for d in scan_project(root)[str(path.resolve())]}
+    assert RULE in {d.rule for d in scan_project(root)[_key(path)]}
     path.write_text(
         "from odoo import models\n\n"
         "class M(models.Model):\n"
@@ -68,15 +74,15 @@ def test_a_rescan_sees_the_edited_file(tmp_path: Path):
         "        self.env.cr.execute('SELECT 1 FROM t WHERE n = %s', (name,))\n"
         "        return None\n"
     )
-    after = scan_project(root).get(str(path.resolve()), [])
+    after = scan_project(root).get(_key(path), [])
     assert RULE not in {d.rule for d in after}
 
 
 def test_file_diagnostics_read_the_line_text(tmp_path: Path):
     root = _project(tmp_path)
     path = root / "mod" / "models" / "m.py"
-    findings = scan_project(root)[str(path.resolve())]
-    diags = file_diagnostics(str(path.resolve()), findings)
+    findings = scan_project(root)[_key(path)]
+    diags = file_diagnostics(_key(path), findings)
     sql = next(d for d in diags if d.code == RULE)
     assert sql.range.start == lsp.Position(line=7, character=8)
     assert sql.range.end.character > sql.range.start.character
@@ -85,8 +91,8 @@ def test_file_diagnostics_read_the_line_text(tmp_path: Path):
 def test_file_diagnostics_survive_an_unreadable_file(tmp_path: Path):
     root = _project(tmp_path)
     path = root / "mod" / "models" / "m.py"
-    findings = scan_project(root)[str(path.resolve())]
-    gone = str((root / "gone.py").resolve())
+    findings = scan_project(root)[_key(path)]
+    gone = _key(root / "gone.py")
     from dataclasses import replace
 
     diags = file_diagnostics(gone, [replace(f, file_path=gone) for f in findings])
@@ -96,10 +102,8 @@ def test_file_diagnostics_survive_an_unreadable_file(tmp_path: Path):
 def test_find_finding_matches_by_rule_and_line(tmp_path: Path):
     root = _project(tmp_path)
     path = root / "mod" / "models" / "m.py"
-    findings = scan_project(root)[str(path.resolve())]
-    diag = next(
-        d for d in file_diagnostics(str(path.resolve()), findings) if d.code == RULE
-    )
+    findings = scan_project(root)[_key(path)]
+    diag = next(d for d in file_diagnostics(_key(path), findings) if d.code == RULE)
     found = find_finding(findings, diag)
     assert found is not None and found.rule == RULE and found.line == 8
     other = lsp.Diagnostic(
