@@ -268,7 +268,7 @@ Use `odoo-doctor rules explain <rule-name>` to understand any finding (descripti
 
 Use `odoo-doctor rules stats` to see which rules your team suppresses most (inline `# odoo-doctor: disable`, `[ignore] rules`, `[severity] = "off"`). Rules where most findings are suppressed are flagged as noisy, with a suggestion to lower their severity.
 
-**In your editor (experimental).** `pip install 'odoo-doctor[lsp]'` adds `odoo-doctor lsp`, a language server that shows the same findings as diagnostics and offers quick fixes (apply the auto-fix, or disable the rule on a line, in a file or in `odoo-doctor.toml`). A VS Code extension is in [`editors/vscode`](editors/vscode); setup for VS Code, Neovim and Helix is in [`docs/lsp.md`](docs/lsp.md).
+**In your editor (experimental).** `pip install 'odoo-doctor[lsp]'` adds `odoo-doctor lsp`, a language server that shows the same findings as diagnostics and offers quick fixes (apply the auto-fix, or disable the rule on a line, in a file or in `odoo-doctor.toml`). The VS Code extension is on the [Marketplace](https://marketplace.visualstudio.com/items?itemName=MinhHong.odoo-doctor) (`MinhHong.odoo-doctor`, preview; source in [`editors/vscode`](editors/vscode)); setup for VS Code, Neovim and Helix is in [`docs/lsp.md`](docs/lsp.md).
 
 ---
 
