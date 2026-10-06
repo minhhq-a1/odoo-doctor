@@ -6,8 +6,27 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Plugin loading checks the declared API version strictly: `ODOO_DOCTOR_PLUGIN_API` must be
+  an integer equal to `PLUGIN_API_VERSION`. `True` and `1.0` used to pass (`True == 1`) and a
+  string was refused with a confusing message; now all of them are refused with
+  "must be an integer". Plugins that omit the declaration still load, but print a warning
+  naming the plugin (it was silent). `PLUGIN_API_VERSION` stays 1 and `plugin_api` is unchanged.
+
 ### Added
 
+- **`odoo-doctor rules new <rule-name> [--out DIR]`** scaffolds a third-party rule pack: a
+  `pyproject.toml` with the `odoo_doctor.rules` entry point, a starter rule that imports only
+  from `odoo_doctor.plugin_api`, tests that run without installing anything, a README and a
+  `.gitignore`. It rejects names that are not kebab-case or already exist as built-in rules and
+  never overwrites a directory (exit 3). `docs/custom-rules.md` starts with this quick start.
+- The VS Code extension has an icon (`editors/vscode/images/icon.png`, 512 px, transparent
+  corners); the SVG wrapper stays in the repo and is not shipped in the `.vsix`.
+- Contract tests for the plugin loader: discovery through real `importlib.metadata`
+  entry points (a compatible and a future-version plugin), the mismatch message, and a check
+  that `docs/custom-rules.md` mentions every name `plugin_api` exports. `docs/custom-rules.md`
+  and `docs/stability.md` describe the versioning policy.
 - **CI templates for GitLab CI and Bitbucket Pipelines** (`ci-templates/gitlab-ci.yml`,
   `ci-templates/bitbucket-pipelines.yml`): merge/pull request pipelines scan only the changed
   files (against the merge base), other pipelines scan everything; `ODOO_DOCTOR_*` variables set
@@ -15,8 +34,6 @@ All notable changes to Odoo Doctor are documented here.
   is kept as an artifact. `tests/test_ci_templates.py` checks the YAML, that every flag exists on
   `scan`, and runs the script in a throwaway git repo with a real `origin` (branch pipeline, MR that
   changes a clean addon, MR that changes a bad one, advisory mode). The README documents both.
-- The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
-  heartbeat line); the SVG source stays in the repo and is not shipped in the `.vsix`.
 
 ---
 

@@ -76,7 +76,11 @@ ignored without a warning.
 ### Python
 
 Only `odoo_doctor.plugin_api` is public, versioned by `PLUGIN_API_VERSION` (see
-[custom-rules.md](custom-rules.md)).
+[custom-rules.md](custom-rules.md)). A plugin states the version it targets with the
+integer `ODOO_DOCTOR_PLUGIN_API` in the module its entry point names; the loader
+refuses a mismatch or a non-integer value and warns when it is missing. Names are only
+added to `plugin_api` within a version; removing one bumps `PLUGIN_API_VERSION` after
+the deprecation window above.
 
 ## Not public
 

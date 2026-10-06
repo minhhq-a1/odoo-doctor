@@ -74,6 +74,7 @@ odoo-doctor rules explain rule-name  # Explain a rule
 odoo-doctor rules disable rule-name   # Disable a rule in odoo-doctor.toml
 odoo-doctor rules docs --out docs/rules.md  # Regenerate rules docs (never hand-edit)
 odoo-doctor rules stats [--path DIR] [--json]   # Which rules users suppress most
+odoo-doctor rules new <rule-name> [--out DIR]   # Scaffold a third-party rule pack
 odoo-doctor lsp                # Language server on stdio (needs the lsp extra)
 odoo-doctor scan . --history h.jsonl --badge badge.svg
 odoo-doctor history show h.jsonl --max-drop 3
@@ -234,6 +235,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 |-----------|---------|
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
+| `src/odoo_doctor/core/scaffold.py` | Starter project for a third-party rule pack (`rules new`); generated rules import only `plugin_api` |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
 | `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
 | `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
