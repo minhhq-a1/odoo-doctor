@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from odoo_doctor.discovery.addons import discover_addons
@@ -58,6 +58,39 @@ def _declared_python_packages(raw: dict) -> set[str]:
     }
 
 
+def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
+    """One resolver entry for a model declared (with ``_name``) in one or more modules.
+
+    A declaration that lists its own name in ``_inherit`` extends the model, it does not
+    define it. The defining declaration is the base (its module is the owner and its field
+    attributes win); extensions add their fields, methods and ancestors. The result does
+    not depend on the order the modules were parsed in, and the per-module ``ModelInfo``
+    objects are never modified.
+    """
+    definers = [m for m in declarations if m.name not in m.inherit]
+    base = (definers or declarations)[0]
+    if len(declarations) == 1:
+        return base
+    merged = replace(
+        base,
+        inherit=list(base.inherit),
+        inherits=dict(base.inherits),
+        fields=dict(base.fields),
+        methods=dict(base.methods),
+    )
+    for other in declarations:
+        if other is base:
+            continue
+        merged.inherit.extend(i for i in other.inherit if i not in merged.inherit)
+        for name, target in other.inherits.items():
+            merged.inherits.setdefault(name, target)
+        for name, info in other.fields.items():
+            merged.fields.setdefault(name, info)
+        for name, info in other.methods.items():
+            merged.methods.setdefault(name, info)
+    return merged
+
+
 def build_project_graph(
     addon_paths: list[Path],
     odoo_version: str = "unknown",
@@ -68,7 +101,7 @@ def build_project_graph(
     addons = discover_addons(addon_paths, target_modules=target_modules)
 
     # First pass: collect all models and XML IDs across all modules (for resolver)
-    all_models: dict[str, ModelInfo] = {}
+    declarations: dict[str, list[ModelInfo]] = {}
     all_xml_ids: dict[str, XmlIdInfo] = {}
     module_data: dict[str, dict] = {}
     # Fields extended via _inherit on stub-known models (e.g. custom_note on sale.order)
@@ -125,10 +158,12 @@ def build_project_graph(
         if csv_path.exists():
             access_rules = parse_access_csv(csv_path, module_name=addon.name)
 
-        # Add models with _name to resolver repo
+        # Collect every declaration of a model that has a _name. Several modules may
+        # declare the same name (`_name = 'x'` + `_inherit = ['x', mixin]` extends x);
+        # they are merged after the loop so the last one parsed cannot hide the rest.
         for key, m in models.items():
             if m.name is not None:
-                all_models[key] = m
+                declarations.setdefault(key, []).append(m)
 
         # Track inherit-only extensions — we'll merge them after all modules are processed
         for key, m in models.items():
@@ -156,6 +191,10 @@ def build_project_graph(
             "controllers": controllers,
             "access_rules": access_rules,
         }
+
+    all_models = {
+        name: _merge_declarations(decls) for name, decls in declarations.items()
+    }
 
     # Post-loop: record all fields added to stub-known models via _inherit in the repo.
     # We pass these as 'extended_fields' to the resolver so it can resolve them as FOUND

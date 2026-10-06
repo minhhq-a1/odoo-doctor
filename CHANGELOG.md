@@ -6,6 +6,20 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A model declared in several modules lost its fields and its owner.** `_name = 'x'` together
+  with `_inherit = ['x', mixin]` (how Odoo core adds a mixin to an existing model, e.g. `pos_hr` on
+  `hr.employee`, `sale` on `account.move`) extends `x`, but the project graph let the last module
+  parsed replace the original definition. The resolver then saw `hr.employee` with 0 fields and
+  the wrong owner module. The declarations are now merged (the defining module is the owner, its
+  field attributes win, extensions add theirs), independent of module order. On a scan of Odoo
+  19.0 community (660 modules) this removes 1,308 `view-field-not-in-model`, 185
+  `manifest-missing-dependency`, 79 `button-method-not-found` and 8
+  `monetary-missing-currency-field` false positives (18,740 -> 17,244 findings). Some rules now
+  see fields they could not see before, so a few findings appear that were hidden (for example
+  `compute-missing-depends`).
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
