@@ -26,7 +26,10 @@ class XmlIdInfo:
 class ViewInfo:
     xml_id: str
     model: str
+    # Root tag of the arch, with the pre-17 ``tree`` spelled ``list``; "qweb" for a
+    # ``<t>`` arch; None when the arch is missing or has no element.
     view_type: str | None = None
+    priority: int = 16
     inherit_id: str | None = None
     field_refs: list[str] = field(default_factory=list)
     button_methods: list[str] = field(default_factory=list)
@@ -156,6 +159,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
 
         model = ""
         inherit_id = None
+        view_type: str | None = None
+        priority = 16
         field_refs: list[str] = []
         button_methods: list[str] = []
         field_ref_lines: dict[str, int] = {}
@@ -169,7 +174,11 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
                 model = (field_elem.text or "").strip()
             elif fname == "inherit_id":
                 inherit_id = field_elem.get("ref")
+            elif fname == "priority":
+                text = (field_elem.text or "").strip()
+                priority = int(text) if text.lstrip("-").isdigit() else 16
             elif fname == "arch":
+                view_type = _arch_view_type(field_elem)
                 # Parse the arch content for field/button refs
                 _extract_arch_refs(
                     field_elem,
@@ -188,6 +197,8 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
             ViewInfo(
                 xml_id=xml_id,
                 model=model,
+                view_type=view_type,
+                priority=priority,
                 inherit_id=inherit_id,
                 field_refs=field_refs,
                 button_methods=button_methods,
@@ -201,6 +212,16 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
         )
 
     return views
+
+
+def _arch_view_type(arch: etree._Element) -> str | None:
+    """Root tag of an ``<field name="arch">`` (``tree`` -> ``list``, ``t`` -> ``qweb``)."""
+    for child in arch:
+        if not isinstance(child.tag, str):
+            continue  # comment / processing instruction
+        tag = child.tag
+        return {"tree": "list", "t": "qweb"}.get(tag, tag)
+    return None
 
 
 # Root tags of a view; one that is not the first step of an xpath is an inline subview.

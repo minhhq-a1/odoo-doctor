@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_skc_thing,skc.thing,model_skc_thing,base.group_user,1,1,1,1

@@ -6,6 +6,26 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+False positives found by scanning a real Odoo 19 workspace (14 addons: 45 `orphan-view` and 26
+`removed-model-still-referenced` findings, all medium confidence, none affecting the score).
+
+- `orphan-view` no longer flags a model's default views. Odoo serves a model's primary view of
+  each type (lowest `priority`, then first defined) with no action or reference, so only the
+  *extra* primary views of the same model and type can be dead. QWeb view records are skipped, and a
+  view whose id is mentioned in the module's Python, JS, XML or CSV (`env.ref`, `form_view_ref`,
+  `doAction`) counts as referenced. `ViewInfo` gains `view_type` (filled now) and `priority`.
+- `removed-model-still-referenced` no longer reports every `_inherit` it cannot resolve. A model
+  missing from the scanned set is normally an unscanned dependency (`stock.move.line`,
+  `hr.employee`, enterprise models), not a removed one. The rule now reports a curated list of
+  core models Odoo certainly removed or renamed (`account.invoice` -> `account.move`,
+  `stock.production.lot` -> `stock.lot`, `mail.channel` -> `discuss.channel`, ...), from the
+  version that removed them, and names the replacement. A model the project defines itself is
+  never reported.
+- Golden corpus: new `unscanned_dependencies` case keeps the true positives (an unused extra view,
+  `_inherit = 'account.invoice'`) next to the cases that must stay silent.
+
 ---
 
 ## [0.8.0] — 2026-10-06
