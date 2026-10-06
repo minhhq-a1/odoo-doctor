@@ -291,6 +291,9 @@ def _extract_arch_refs(
                     inside_field or _xpath_enters_subview(expr),
                     _targeted_field(expr),
                 )
+            elif child.tag == "groupby":
+                # a list view's group header: its fields and buttons act on the group's record
+                walk(child, True, anchor)
             elif child.tag == "field":
                 if not inside_field and child.get("position") is None:
                     name = child.get("name")

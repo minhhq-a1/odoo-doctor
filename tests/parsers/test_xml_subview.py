@@ -146,3 +146,28 @@ def test_a_name_seen_with_two_different_anchors_is_not_anchored(tmp_path: Path):
     )
     assert view.field_ref_anchors["a"] is None  # two targets: attribute it to the model
     assert view.field_ref_anchors["d"] is None  # also seen outside any xpath
+
+
+def test_a_groupby_belongs_to_the_group_model_not_the_views(tmp_path: Path):
+    f = _write(
+        tmp_path,
+        """\
+<odoo>
+  <record id="view_list" model="ir.ui.view">
+    <field name="model">my.line</field>
+    <field name="arch" type="xml">
+      <list>
+        <field name="name"/>
+        <groupby name="move_id">
+          <field name="move_only_field"/>
+          <button name="action_post" type="object"/>
+        </groupby>
+      </list>
+    </field>
+  </record>
+</odoo>
+""",
+    )
+    (view,) = parse_views(f, module_name="m")
+    assert view.field_refs == ["name"]
+    assert view.button_methods == []
