@@ -29,6 +29,14 @@ All notable changes to Odoo Doctor are documented here.
     entry, an effort estimate and a golden-corpus case. Its ID is now covered by the
     stability contract.
 
+### Fixed
+
+- `asset-bundle-missing` crashed (`'tuple' object has no attribute 'startswith'`) on manifests
+  whose `assets` use Odoo's directive entries such as `('include', ...)`, `('remove', ...)`,
+  `('prepend', path)` or `('after', target, path)`, so the rule silently skipped those addons.
+  It now checks the file a directive adds (`prepend`, `append`, `before`, `after`, `replace`)
+  and ignores `include`, `remove` and entries it cannot read.
+
 ---
 
 ## [0.7.0] — 2026-10-05
