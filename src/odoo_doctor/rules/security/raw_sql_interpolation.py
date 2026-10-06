@@ -11,6 +11,7 @@ from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python, read_source
+from odoo_doctor.rules._ast_helpers import is_test_file
 from odoo_doctor.rules._taint import Taint, TaintVisitor
 from odoo_doctor.rules.registry import rule
 
@@ -39,6 +40,10 @@ def check_raw_sql_interpolation(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
     """Find cr.execute() calls with dynamically interpolated SQL strings."""
+    # Tests and migration scripts run on a developer's or admin's database, never on
+    # request data, so dynamic SQL there is not an injection vector.
+    if is_test_file(file_path, module_name) or "migrations" in Path(file_path).parts:
+        return []
     tree = parse_python(file_path)
     if tree is None:
         return []
@@ -47,7 +52,8 @@ def check_raw_sql_interpolation(
         file_path,
         module_name,
         odoo_version,
-        _pylint_disabled_ranges(read_source(file_path) or "", tree),
+        _pylint_disabled_ranges(read_source(file_path) or "", tree)
+        + _input_free_hook_ranges(tree),
     )
     visitor.visit(tree)
     return visitor.diagnostics
@@ -57,6 +63,31 @@ def check_raw_sql_interpolation(
 # explicitly asserting the dynamic part is not user data (e.g. a WHERE fragment
 # whose values are bound through parameters), so we honour it like pylint does.
 _PYLINT_DISABLE_RE = re.compile(r"pylint:\s*disable\s*=\s*([\w\-,\s]+)")
+
+
+# ORM hooks that run at install/upgrade time (SQL views are created in `init`).
+_INSTALL_HOOKS = {"init", "_auto_init"}
+
+
+def _input_free_hook_ranges(tree: ast.AST) -> list[tuple[int, int]]:
+    """Line ranges of install-time hooks that take nothing but ``self``.
+
+    With no parameter, no caller-supplied data reaches the SQL they build, only class
+    metadata such as ``self._table`` and ``self._query()``.
+    """
+    ranges = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            takes_only_self = (
+                len(args.args) + len(args.posonlyargs) == 1
+                and not args.kwonlyargs
+                and args.vararg is None
+                and args.kwarg is None
+            )
+            if node.name in _INSTALL_HOOKS and takes_only_self:
+                ranges.append((node.lineno, node.end_lineno or node.lineno))
+    return ranges
 
 
 def _pylint_disabled_ranges(source: str, tree: ast.AST) -> list[tuple[int, int]]:

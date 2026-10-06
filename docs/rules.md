@@ -104,7 +104,7 @@ access_my_model_user,my.model user,model_my_model,base.group_user,1,1,1,0
 
 **Fix**: Pass values as query parameters.
 
-**Note**: When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL(...)` or `','.join(['%s'] * n)` placeholder lists is not reported, while a fragment that reaches the query through a list or a branch is.
+**Note**: When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL(...)` or `','.join(['%s'] * n)` placeholder lists is not reported, while a fragment that reaches the query through a list or a branch is. Test code (`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` that take only `self` (where SQL views are created) are skipped: nothing a request controls reaches them.
 
 Bad:
 

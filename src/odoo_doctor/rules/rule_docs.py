@@ -53,7 +53,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "`extend`, `+=`), `if`/`try`/loop branches and module constants: SQL "
         "built only from constants, `int()` casts, `self._table`, `SQL(...)` or "
         "`','.join(['%s'] * n)` placeholder lists is not reported, while a "
-        "fragment that reaches the query through a list or a branch is.",
+        "fragment that reaches the query through a list or a branch is. Test code "
+        "(`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` "
+        "that take only `self` (where SQL views are created) are skipped: nothing a "
+        "request controls reaches them.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "

@@ -68,6 +68,12 @@ All notable changes to Odoo Doctor are documented here.
   method assigns are now left out. Odoo 19.0: 322 of 936 findings were this (the other 614 read
   fields that really are not declared).
 
+- **`raw-sql-string-interpolation` no longer reports code no request can reach.** Test code
+  (`tests/`) and `migrations/` are skipped, as other rules already do, and so are the install-time
+  hooks `init` / `_auto_init` that take only `self`, where Odoo core creates SQL views from
+  `self._table` and `self._select()`. Odoo 19.0: 15 of the 51 findings were in tests, 7 in `init`
+  and 2 in migrations.
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
