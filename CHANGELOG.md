@@ -6,6 +6,11 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
+  heartbeat line); the SVG source stays in the repo and is not shipped in the `.vsix`.
+
 ---
 
 ## [0.7.1] — 2026-10-06

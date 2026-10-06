@@ -5,3 +5,4 @@ tsconfig.json
 .gitignore
 package-lock.json
 node_modules/**
+images/icon.svg
