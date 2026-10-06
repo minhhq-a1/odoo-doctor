@@ -1,0 +1,55 @@
+# Odoo Doctor step for Bitbucket Pipelines.
+#
+# Copy the `definitions` and `pipelines` blocks into your bitbucket-pipelines.yml, or use
+# this file as it is. Set the variables below as repository or workspace variables
+# (Repository settings > Pipelines > Repository variables); all are optional.
+#
+#   ODOO_DOCTOR_VERSION       pin a release, e.g. "0.8.0" (empty = latest)
+#   ODOO_DOCTOR_PATHS         path to scan (default ".")
+#   ODOO_DOCTOR_ODOO_VERSION  target Odoo version, e.g. "17.0" (empty = auto/config)
+#   ODOO_DOCTOR_FAIL_ON       fail the step on this severity or above: error | warning
+#   ODOO_DOCTOR_MIN_SCORE     fail the step when a module scores below this (0-100)
+#   ODOO_DOCTOR_ADVISORY      "true" = report only, never fail the step
+#
+# Pull request pipelines scan only the files the PR changed (against the merge base).
+# To also scan the whole tree on pushes to your main branch, add
+#   branches:
+#     main:
+#       - step: *odoo-doctor
+# under `pipelines:` (use your own default branch name).
+# Exit codes: 1 = findings at or above the fail-on severity, 2 = score below the minimum,
+# 3 = invalid arguments or git failure.
+
+definitions:
+  steps:
+    - step: &odoo-doctor
+        name: Odoo Doctor
+        image: python:3.12  # the full image: --diff needs git
+        clone:
+          depth: full  # the merge base needs history
+        script:
+          - pip install --quiet "odoo-doctor${ODOO_DOCTOR_VERSION:+==$ODOO_DOCTOR_VERSION}"
+          - |
+            set -eu
+            set --
+            if [ -n "${ODOO_DOCTOR_ODOO_VERSION:-}" ]; then
+              set -- "$@" --odoo-version "$ODOO_DOCTOR_ODOO_VERSION"
+            fi
+            TARGET="${BITBUCKET_PR_DESTINATION_BRANCH:-}"
+            if [ -n "$TARGET" ]; then
+              git fetch --quiet origin "$TARGET"
+              set -- "$@" --diff "$(git merge-base "origin/$TARGET" HEAD)"
+            fi
+            # Machine-readable report for the artifact; the gating run below decides the result.
+            odoo-doctor scan "${ODOO_DOCTOR_PATHS:-.}" --json "$@" > odoo-doctor-report.json || true
+            if [ "${ODOO_DOCTOR_ADVISORY:-false}" != "true" ]; then
+              set -- "$@" --fail-on "${ODOO_DOCTOR_FAIL_ON:-error}" --min-score "${ODOO_DOCTOR_MIN_SCORE:-0}"
+            fi
+            odoo-doctor scan "${ODOO_DOCTOR_PATHS:-.}" "$@"
+        artifacts:
+          - odoo-doctor-report.json
+
+pipelines:
+  pull-requests:
+    "**":
+      - step: *odoo-doctor
