@@ -10,15 +10,16 @@ Health findings for Odoo custom addons, in your editor. This extension starts th
 
 ## Requirements
 
-Install Odoo Doctor with the language server extra, in the Python environment VS Code
-should use:
+Install Odoo Doctor with the language server extra (Python 3.10 or newer):
 
 ```bash
-pip install 'odoo-doctor[lsp]'
+uv tool install 'odoo-doctor[lsp]'     # or: pipx install 'odoo-doctor[lsp]'
 ```
 
-The extension runs `odoo-doctor lsp`. If the executable is not on `PATH`, set
-`odooDoctor.path` to its full path.
+On macOS the system `pip3` is Python 3.9 and cannot install it; use `uv` or `pipx` as
+above. The extension runs `odoo-doctor lsp`. If VS Code cannot find the executable (it
+does not read your shell `PATH` when started from the Dock), set `odooDoctor.path` to its
+full path, e.g. `~/.local/bin/odoo-doctor`.
 
 ## Settings and commands
 

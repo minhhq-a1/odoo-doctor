@@ -10,8 +10,14 @@ extension in [`editors/vscode`](../editors/vscode) wires it up.
 ## Install
 
 ```bash
-pip install 'odoo-doctor[lsp]'
+uv tool install 'odoo-doctor[lsp]'     # or: pipx install 'odoo-doctor[lsp]'
 ```
+
+Needs Python 3.10 or newer. On macOS the system `python3` / `pip3` from Xcode is 3.9, so
+plain `pip3 install` fails with `No matching distribution found`; `uv tool install
+--python 3.12 'odoo-doctor[lsp]'` fetches a suitable Python for you. Inside a virtualenv,
+`pip install 'odoo-doctor[lsp]'` works too. Upgrade with `uv tool upgrade odoo-doctor`.
+Check the install with `odoo-doctor --help` (there is no `--version` flag).
 
 Without the extra, `odoo-doctor lsp` exits with code 3 and tells you what to install.
 
@@ -67,7 +73,7 @@ Install **Odoo Doctor** (`MinhHong.odoo-doctor`, preview) from the Extensions vi
 code --install-extension MinhHong.odoo-doctor
 ```
 
-It also needs the server: `pip install 'odoo-doctor[lsp]'` (see above). To build the
+It also needs the server (see [Install](#install)). To build the
 extension from source instead:
 
 ```bash
@@ -116,6 +122,11 @@ args = ["lsp"]
 
 - *"could not start odoo-doctor lsp"*: the executable is not on VS Code's `PATH` or was
   installed without the extra. Run `odoo-doctor lsp` in a terminal; set `odooDoctor.path`.
+  VS Code started from the Dock does not read your shell `PATH`, so an executable in
+  `~/.local/bin` (where `uv tool` and `pipx` put it) may not be found: use the full path,
+  e.g. `/Users/you/.local/bin/odoo-doctor`.
+- *`pip install` says "No matching distribution found"*: your Python is older than 3.10
+  (the Xcode `python3` on macOS is 3.9). Use `uv tool install` or `pipx` as above.
 - *No findings*: check `odoo-doctor scan <folder>` on the same folder, and that
   `[ignore]` in `odoo-doctor.toml` does not exclude the files.
 - *Stale findings after a branch switch*: run *Odoo Doctor: Rescan workspace*.
