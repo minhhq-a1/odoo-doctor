@@ -184,6 +184,34 @@ If you prefer `pip install`, you can run it directly:
     odoo-doctor scan . --format github --min-score 75 --fail-on error
 ```
 
+### GitLab CI
+
+`ci-templates/gitlab-ci.yml` defines an `odoo-doctor` job. Include it (pin a release tag
+instead of `main` once you depend on it) and override what you need:
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/minhhq-a1/odoo-doctor/main/ci-templates/gitlab-ci.yml"
+
+variables:
+  ODOO_DOCTOR_ODOO_VERSION: "17.0"
+  ODOO_DOCTOR_FAIL_ON: "warning"
+  ODOO_DOCTOR_MIN_SCORE: "75"
+```
+
+Merge request pipelines scan only the files the MR changed (against the merge base, so a
+target branch that moved on does not leak into the scan); default-branch pipelines scan
+everything. The job keeps `odoo-doctor-report.json` as an artifact. Other variables:
+`ODOO_DOCTOR_VERSION` (pin a release), `ODOO_DOCTOR_PATHS`, `ODOO_DOCTOR_ADVISORY=true`
+(report only, never fail).
+
+### Bitbucket Pipelines
+
+Copy `ci-templates/bitbucket-pipelines.yml` into your `bitbucket-pipelines.yml` (Bitbucket has
+no remote include). It runs on every pull request, scans only the changed files and keeps
+`odoo-doctor-report.json` as an artifact. The same `ODOO_DOCTOR_*` names as above are read from
+repository variables; the file's header lists them and shows how to also scan your main branch.
+
 ### SARIF & Baseline Mode
 
 For GitHub Code Scanning and IDE integration:
