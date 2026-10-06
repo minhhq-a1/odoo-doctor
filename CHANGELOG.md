@@ -6,6 +6,17 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] — 2026-10-06
+
+Theme: let others extend Odoo Doctor, and trust what it reports. A scaffold and a stricter
+version check for third-party rule packs, CI templates for GitLab and Bitbucket, hover and
+Windows coverage for the language server, and a round of false-positive fixes found by
+scanning Odoo 19.0 community (660 modules: 18,740 -> 16,061 findings, and 5,853 -> 3,330
+high-confidence ones, the only ones that score). Rule IDs, CLI flags and JSON keys are
+unchanged (see `docs/stability.md`); `rules new` is an added action.
+
 ### Changed
 
 - Plugin loading checks the declared API version strictly: `ODOO_DOCTOR_PLUGIN_API` must be
@@ -122,6 +133,27 @@ All notable changes to Odoo Doctor are documented here.
 - **CI:** the VS Code extension is built and packaged on Linux and Windows (it was only tried on
   macOS), and the language server tests (`tests/lsp`) run on Windows, where file URIs and paths
   differ. `tests/test_ci_workflow.py` keeps both in the workflow.
+
+### Roadmap decisions (explicit close-or-defer)
+
+Closed in 0.8.0: contributor onboarding (`rules new`), plugin loader versioning and contract
+tests, CI templates for GitLab CI and Bitbucket Pipelines, language server hover, CI for the
+VS Code extension on Linux and Windows, and a finding-quality pass on a real Odoo tree. The
+VS Code extension carries the same version and the new icon; it is published manually.
+
+Deferred, with owner version:
+
+| Item | Target | Reason |
+|------|--------|--------|
+| Listing `rules new`, `ci-templates/` and the language server in the stability contract; per-keystroke analysis | 0.9.0 (candidate) | newly shipped; needs real-world use first |
+| Public rule registry / marketplace; signed or verified rule packs; revocation | not scheduled | needs a trust model (Sigstore or publisher keys) and a hosted index; nothing to verify until third-party packs exist |
+| Community stub registry (verified vs community stubs, confidence degradation) | not scheduled | a wrong stub affects the whole graph engine, not one rule |
+| Stubs and rules for Odoo 14-16 | not scheduled | stubs exist for 17-19 only |
+| i18n of messages and docs | not scheduled | translation upkeep is a burden with one contributor |
+| OCA rule mapping, RFC / open governance process | not scheduled | depends on OCA maintainers and on more contributors |
+| Anonymised benchmark dataset, "State of Odoo code health" report | not scheduled | needs an opt-in data path and the remote service decision |
+| Calibrating the confidence of convention rules (`manifest-data-order-risk`, `manifest-missing-required-fields`, the rest of `duplicate-xml-id`, `override-missing-super`) | needs a decision | Odoo 19 core, which loads fine, triggers them 53, 166, 51 and 11 times: they are conventions, not errors |
+| Telling a view root from a subview in an inherited view's xpath (`//list/...` as the first step) | when first needed | needs the parent view's type through `inherit_id`; 5 `view-field-not-in-model` remain on Odoo 19.0 |
 
 ---
 
