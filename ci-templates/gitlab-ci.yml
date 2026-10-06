@@ -1,0 +1,61 @@
+# Odoo Doctor job for GitLab CI.
+#
+# Include it from your .gitlab-ci.yml (pin a release tag instead of `main`):
+#
+#   include:
+#     - remote: "https://raw.githubusercontent.com/minhhq-a1/odoo-doctor/main/ci-templates/gitlab-ci.yml"
+#
+# or copy the `odoo-doctor` job below. Override any variable in your own `variables:`.
+#
+#   ODOO_DOCTOR_VERSION       pin a release, e.g. "0.8.0" (empty = latest)
+#   ODOO_DOCTOR_PATHS         path to scan (default ".")
+#   ODOO_DOCTOR_ODOO_VERSION  target Odoo version, e.g. "17.0" (empty = auto/config)
+#   ODOO_DOCTOR_FAIL_ON       fail the job on this severity or above: error | warning
+#   ODOO_DOCTOR_MIN_SCORE     fail the job when a module scores below this (0-100)
+#   ODOO_DOCTOR_ADVISORY      "true" = report only, never fail the job
+#
+# Merge request pipelines scan only the files the MR changed (against the merge base);
+# pipelines on the default branch scan everything. Exit codes: 1 = findings at or above
+# the fail-on severity, 2 = score below the minimum, 3 = invalid arguments or git failure.
+
+variables:
+  ODOO_DOCTOR_VERSION: ""
+  ODOO_DOCTOR_PATHS: "."
+  ODOO_DOCTOR_ODOO_VERSION: ""
+  ODOO_DOCTOR_FAIL_ON: "error"
+  ODOO_DOCTOR_MIN_SCORE: "0"
+  ODOO_DOCTOR_ADVISORY: "false"
+
+odoo-doctor:
+  stage: test
+  image: python:3.12  # the full image: --diff needs git
+  variables:
+    GIT_DEPTH: "0"  # the merge base needs history
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - pip install --quiet "odoo-doctor${ODOO_DOCTOR_VERSION:+==$ODOO_DOCTOR_VERSION}"
+  script:
+    - |
+      set -eu
+      set --
+      if [ -n "${ODOO_DOCTOR_ODOO_VERSION:-}" ]; then
+        set -- "$@" --odoo-version "$ODOO_DOCTOR_ODOO_VERSION"
+      fi
+      TARGET="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}"
+      if [ -n "$TARGET" ]; then
+        git fetch --quiet origin "$TARGET"
+        set -- "$@" --diff "$(git merge-base "origin/$TARGET" HEAD)"
+      fi
+      # Machine-readable report for the artifact; the gating run below decides the result.
+      odoo-doctor scan "${ODOO_DOCTOR_PATHS:-.}" --json "$@" > odoo-doctor-report.json || true
+      if [ "${ODOO_DOCTOR_ADVISORY:-false}" != "true" ]; then
+        set -- "$@" --fail-on "${ODOO_DOCTOR_FAIL_ON:-error}" --min-score "${ODOO_DOCTOR_MIN_SCORE:-0}"
+      fi
+      odoo-doctor scan "${ODOO_DOCTOR_PATHS:-.}" "$@"
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - odoo-doctor-report.json
