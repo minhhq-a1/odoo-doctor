@@ -16,12 +16,17 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Added
 
+- **`odoo-doctor rules new <rule-name> [--out DIR]`** scaffolds a third-party rule pack: a
+  `pyproject.toml` with the `odoo_doctor.rules` entry point, a starter rule that imports only
+  from `odoo_doctor.plugin_api`, tests that run without installing anything, a README and a
+  `.gitignore`. It rejects names that are not kebab-case or already exist as built-in rules and
+  never overwrites a directory (exit 3). `docs/custom-rules.md` starts with this quick start.
+- The VS Code extension has an icon (`editors/vscode/images/icon.png`, 512 px, transparent
+  corners); the SVG wrapper stays in the repo and is not shipped in the `.vsix`.
 - Contract tests for the plugin loader: discovery through real `importlib.metadata`
   entry points (a compatible and a future-version plugin), the mismatch message, and a check
   that `docs/custom-rules.md` mentions every name `plugin_api` exports. `docs/custom-rules.md`
   and `docs/stability.md` describe the versioning policy.
-- The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
-  heartbeat line); the SVG source stays in the repo and is not shipped in the `.vsix`.
 
 ---
 
