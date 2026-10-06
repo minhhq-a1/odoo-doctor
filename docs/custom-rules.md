@@ -5,6 +5,21 @@
 > to that module follow `PLUGIN_API_VERSION`: additions keep the version,
 > breaking changes bump it.
 
+## Quick start
+
+```bash
+odoo-doctor rules new no-print-statements --out .   # creates odoo-doctor-rules-no-print-statements/
+cd odoo-doctor-rules-no-print-statements
+pip install -e ".[dev]" && pytest
+```
+
+The command writes a ready-to-install pack: `pyproject.toml` with the entry point, a starter
+rule in `src/odoo_doctor_rules_<name>/rules.py` (it flags `print()` calls; replace it with
+your check), tests in `tests/` that build a small source file and assert the findings, a
+README and a `.gitignore`. The name must be kebab-case and must not be an existing rule; the
+command refuses to overwrite an existing directory. The generated rule imports only from
+`odoo_doctor.plugin_api`. The sections below explain each part.
+
 A custom rule lives in your own Python package and registers itself via an
 entry point. Odoo Doctor imports your module at startup, which runs your
 `@rule` decorators.
