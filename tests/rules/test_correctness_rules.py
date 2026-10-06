@@ -114,22 +114,59 @@ def test_compute_reads_undeclared_repo_field_catches(tmp_path: Path):
 
             a = fields.Char()
             b = fields.Char()
+            c = fields.Char()
 
             @api.depends("a")
             def _compute_b(self):
                 for rec in self:
-                    rec.b = rec.b + rec.a if rec.b else rec.a
+                    rec.b = rec.a + rec.c if rec.c else rec.a
         """)
     )
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     ctx = graph.modules["my_mod"]
     diags = check_compute_missing_depends(ctx)
-    # The compute reads rec.b (which is 'b') but 'b' is not in depends.
-    # 'b' is a known field in the repo.
+    # The compute reads rec.c, a known field of the repo that is not in depends.
     assert len(diags) == 1
     assert diags[0].rule == "compute-missing-depends"
     assert diags[0].severity == "warning"
-    assert "b" in diags[0].message
+    assert "'c'" in diags[0].message
+
+
+def test_compute_reading_its_own_output_is_not_a_missing_dependency(tmp_path: Path):
+    """What the method assigns is its result, not an input: `team.x = ...; team.x > limit`."""
+    from odoo_doctor.graph.module_context import build_project_graph
+    from odoo_doctor.rules.correctness.compute_missing_depends import (
+        check_compute_missing_depends,
+    )
+
+    mod = tmp_path / "my_mod"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text(
+        '{"name": "M", "version": "1.0", "depends": ["base"]}'
+    )
+    (mod / "m.py").write_text(
+        dedent("""\
+        from odoo import models, fields, api
+
+        class MyModel(models.Model):
+            _name = "my.model"
+
+            total = fields.Integer(compute="_compute_total")
+            exceeded = fields.Boolean(compute="_compute_total")
+            limit = fields.Integer()
+            count = fields.Integer()
+
+            @api.depends("count", "limit")
+            def _compute_total(self):
+                for rec in self:
+                    rec.total = rec.count * 2
+                    rec.exceeded = rec.total > rec.limit
+                    rec.count += 0
+        """)
+    )
+    ctx = build_project_graph([tmp_path], odoo_version="17.0").modules["my_mod"]
+    # `total` and `exceeded` are assigned here; `count` and `limit` are declared
+    assert check_compute_missing_depends(ctx) == []
 
 
 def test_compute_declared_field_silent(tmp_path: Path):

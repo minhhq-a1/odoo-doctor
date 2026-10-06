@@ -377,6 +377,8 @@ access_x,x,model_my_model,base.group_user,1,0,0,0
 
 **Fix**: List every field the computation reads.
 
+**Note**: A field the method assigns (`rec.total = ...`) is its result, not an input, so reading it back inside the same method is not reported.
+
 Bad:
 
 ```python

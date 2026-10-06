@@ -63,6 +63,11 @@ All notable changes to Odoo Doctor are documented here.
   `migrations/<version>/` for a version before Odoo 10 ran on databases of that era and is not
   reported. Odoo 19.0: 31 -> 0.
 
+- **`compute-missing-depends`: a compute's own result is not an input.** `team.x = ...` followed by
+  `team.x > limit` read the field back and was reported as an undeclared dependency; fields the
+  method assigns are now left out. Odoo 19.0: 322 of 936 findings were this (the other 614 read
+  fields that really are not declared).
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a

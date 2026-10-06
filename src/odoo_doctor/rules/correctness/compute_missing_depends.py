@@ -64,11 +64,13 @@ def check_compute_missing_depends(ctx: ModuleContext) -> list[Diagnostic]:
             if not func_node:
                 continue
 
-            # Find all `self.<attr>` reads inside the method
+            # Find all `self.<attr>` reads inside the method; what the method assigns
+            # is its result, not an input, so reading it back is not a dependency.
             reads = _find_self_attribute_reads(func_node)
+            outputs = _find_self_attribute_writes(func_node)
 
             for attr in reads:
-                if attr in cover_set or attr in _MAGIC_FIELDS:
+                if attr in cover_set or attr in _MAGIC_FIELDS or attr in outputs:
                     continue
 
                 # Resolve the field
@@ -96,19 +98,36 @@ def check_compute_missing_depends(ctx: ModuleContext) -> list[Diagnostic]:
     return diags
 
 
+def _self_aliases(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    aliases = {"self"}
+    for node in ast.walk(func):
+        if isinstance(node, ast.For):
+            if isinstance(node.iter, ast.Name) and node.iter.id in aliases:
+                if isinstance(node.target, ast.Name):
+                    aliases.add(node.target.id)
+    return aliases
+
+
 def _find_self_attribute_reads(
     func: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> set[str]:
     reads = set()
-    self_aliases = {"self"}
-    for node in ast.walk(func):
-        if isinstance(node, ast.For):
-            if isinstance(node.iter, ast.Name) and node.iter.id in self_aliases:
-                if isinstance(node.target, ast.Name):
-                    self_aliases.add(node.target.id)
-
+    self_aliases = _self_aliases(func)
     for node in ast.walk(func):
         if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
             if isinstance(node.value, ast.Name) and node.value.id in self_aliases:
                 reads.add(node.attr)
     return reads
+
+
+def _find_self_attribute_writes(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> set[str]:
+    """Attributes the method assigns on a record (``rec.x = ...``, ``rec.x += ...``)."""
+    writes = set()
+    self_aliases = _self_aliases(func)
+    for node in ast.walk(func):
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store):
+            if isinstance(node.value, ast.Name) and node.value.id in self_aliases:
+                writes.add(node.attr)
+    return writes

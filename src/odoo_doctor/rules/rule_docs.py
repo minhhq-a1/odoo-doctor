@@ -190,6 +190,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "def _compute_total(self):\n"
         "    for rec in self:\n"
         "        rec.total = rec.quantity * rec.unit_price",
+        notes="A field the method assigns (`rec.total = ...`) is its result, not an "
+        "input, so reading it back inside the same method is not reported.",
     ),
     # ---------------------------------------------------------- Performance
     "search-in-loop": RuleDoc(
