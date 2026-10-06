@@ -272,3 +272,26 @@ def test_actions_that_depend_on_the_line_are_withheld_for_a_stale_buffer(
         assert f"Odoo Doctor: disable {RULE} in odoo-doctor.toml" in titles
     finally:
         assert client.close() == 0
+
+
+def test_a_folder_without_addons_shows_a_warning_instead_of_silence(tmp_path: Path):
+    (tmp_path / "repo" / "mod").mkdir(parents=True)  # nested deeper than addons_paths
+    (tmp_path / "repo" / "mod" / "__manifest__.py").write_text('{"name": "mod"}')
+    client = Client(tmp_path)
+    try:
+        client.request(
+            "initialize",
+            {
+                "processId": None,
+                "rootUri": tmp_path.resolve().as_uri(),
+                "workspaceFolders": [
+                    {"uri": tmp_path.resolve().as_uri(), "name": "project"}
+                ],
+                "capabilities": {},
+            },
+        )
+        client.notify("initialized", {})
+        shown = client.wait_for("window/showMessage", lambda p: p["type"] == 2)
+        assert "addons_paths" in shown["message"]
+    finally:
+        client.close()

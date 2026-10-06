@@ -9,6 +9,7 @@ import odoo_doctor.cli.app  # noqa: F401  (importing it registers every native r
 from odoo_doctor.core.config import load_config
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.scanner import collect_scores
+from odoo_doctor.discovery.addons import discover_addons
 
 _plugins_loaded = False
 
@@ -22,6 +23,17 @@ def _load_plugins_once(allow: list[str] | None) -> None:
 
     load_rule_plugins(allow=allow)
     _plugins_loaded = True
+
+
+def addons_found(root: Path) -> bool:
+    """Whether a scan of *root* would see at least one addon.
+
+    An empty scan result is ambiguous: a clean project and a folder where no addon was
+    found (addons nested deeper than ``addons_paths`` reaches) both report no findings.
+    """
+    root = Path(root).resolve()
+    cfg = load_config(root)
+    return bool(discover_addons([(root / p).resolve() for p in cfg.addons_paths]))
 
 
 def scan_project(root: Path) -> dict[str, list[Diagnostic]]:
