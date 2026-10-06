@@ -20,6 +20,12 @@ All notable changes to Odoo Doctor are documented here.
   see fields they could not see before, so a few findings appear that were hidden (for example
   `compute-missing-depends`).
 
+- **Fields of type `Image`, `Json`, `Many2oneReference`, `Properties` and `PropertiesDefinition`
+  were never recorded** (the parser only knew 15 field classes), so every view that showed one
+  (`image_1920`, `alerts`, `lot_properties`, ...) was reported as referencing an unknown field.
+  Any `fields.<Class>(...)` is now a field, which also covers classes other modules add (for
+  example `fields.Serialized`). Odoo 19.0 community: 195 -> 65 `view-field-not-in-model`.
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a

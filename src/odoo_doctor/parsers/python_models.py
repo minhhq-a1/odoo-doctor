@@ -81,7 +81,29 @@ _ODOO_FIELD_TYPES = {
     "Many2many",
     "Monetary",
     "Reference",
+    "Image",
+    "Json",
+    "Many2oneReference",
+    "Properties",
+    "PropertiesDefinition",
 }
+
+
+def _is_field_class(func_name: str, short: str) -> bool:
+    """A call that declares a field: a known Odoo field class, or any ``fields.<Class>``.
+
+    The second form covers field classes other modules add to ``odoo.fields`` (for example
+    ``fields.Serialized`` from ``base_sparse_field``). ``fields.Date.today()`` is a call on a
+    field class and ``fields.helper()`` is lower-case, so neither matches.
+    """
+    if short in _ODOO_FIELD_TYPES:
+        return True
+    return (
+        func_name.count(".") == 1
+        and func_name.startswith("fields.")
+        and short[:1].isupper()
+    )
+
 
 _LIFECYCLE_METHODS = {"create", "write", "unlink", "default_get", "read", "copy"}
 
@@ -207,7 +229,7 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
 
     # Strip "fields." prefix
     short = func_name.split(".")[-1] if "." in func_name else func_name
-    if short not in _ODOO_FIELD_TYPES:
+    if not _is_field_class(func_name, short):
         return None
 
     comodel = None
