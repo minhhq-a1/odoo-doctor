@@ -75,7 +75,7 @@ result = safe_eval(expression, {'uid': self.env.uid})
 
 **Tier**: P0 (critical) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: Models defined in the module with no row in `security/ir.model.access.csv` (or no CSV file at all).
+**Detects**: Models defined in the module with no row in `security/ir.model.access.csv` (or no CSV file at all). A model the module only extends (`_inherit`, with or without repeating its `_name`) needs no row of its own here.
 
 **Why**: A model without access rules is unreachable for non-admin users and is flagged by Odoo at load time.
 
@@ -580,7 +580,7 @@ records = self.env['res.partner'].search(
 
 **Fix**: Declare `ondelete` explicitly.
 
-**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`.
+**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`. So are related or computed fields that are not stored (no `store=True`): they have no foreign-key column.
 
 Bad:
 

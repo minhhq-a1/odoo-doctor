@@ -28,8 +28,8 @@ def check_missing_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
     if not ctx.access_rules:
         # No CSV at all — flag each new model
         for model_info in ctx.models.values():
-            if model_info.name is None:
-                continue  # inherit-only models don't need their own ACL
+            if not model_info.defines:
+                continue  # extending a model (`_inherit`) needs no ACL of its own
             if model_info.is_abstract or model_info.is_transient:
                 continue
             diags.append(
@@ -62,7 +62,7 @@ def check_missing_access_csv(ctx: ModuleContext) -> list[Diagnostic]:
 
     # Flag new models not covered
     for model_info in ctx.models.values():
-        if model_info.name is None:
+        if not model_info.defines:
             continue
         if model_info.is_abstract or model_info.is_transient:
             continue

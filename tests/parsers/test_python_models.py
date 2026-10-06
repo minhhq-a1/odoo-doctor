@@ -158,3 +158,30 @@ def test_a_class_deriving_from_basemodel_is_a_model(tmp_path: Path):
     (model,) = parse_models(path)
     assert model.name == "x.report" and "total" in model.fields
     assert model.defines is True
+
+
+def test_computed_and_related_fields_are_not_stored_unless_asked(tmp_path: Path):
+    model = _model_with(
+        tmp_path,
+        """
+        plain = fields.Many2one('x.a')
+        comp = fields.Many2one('x.a', compute='_c')
+        comp_stored = fields.Many2one('x.a', compute='_c', store=True)
+        comp_callable = fields.Many2one('x.a', compute=_c)
+        rel = fields.Many2one(related='plain.parent_id')
+        rel_stored = fields.Many2one(related='plain.parent_id', store=True)
+        explicit_off = fields.Many2one('x.a', store=False)
+        """,
+    )
+    stored = {name: f.store for name, f in model.fields.items()}
+    assert stored == {
+        "plain": True,
+        "comp": False,
+        "comp_stored": True,
+        "comp_callable": False,
+        "rel": False,
+        "rel_stored": True,
+        "explicit_off": False,
+    }
+    assert model.fields["rel"].related == "plain.parent_id"
+    assert model.fields["plain"].related is None

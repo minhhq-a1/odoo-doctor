@@ -22,6 +22,7 @@ class FieldInfo:
     string: str | None = None
     ondelete: str | None = None
     currency_field: str | None = None  # Monetary only
+    related: str | None = None
     line: int = 0
 
 
@@ -250,7 +251,9 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
     comodel = None
     compute = None
     depends: list[str] = []
-    store = True
+    explicit_store: bool | None = None
+    related = None
+    computed_or_related = False
     required = False
     string = None
     ondelete = None
@@ -270,8 +273,10 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
             comodel = kw.value.value
         elif kw.arg == "compute" and isinstance(kw.value, ast.Constant):
             compute = kw.value.value
+        elif kw.arg == "related" and isinstance(kw.value, ast.Constant):
+            related = kw.value.value
         elif kw.arg == "store" and isinstance(kw.value, ast.Constant):
-            store = bool(kw.value.value)
+            explicit_store = bool(kw.value.value)
         elif kw.arg == "required" and isinstance(kw.value, ast.Constant):
             required = bool(kw.value.value)
         elif kw.arg == "string" and isinstance(kw.value, ast.Constant):
@@ -281,11 +286,18 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
         elif kw.arg == "currency_field" and isinstance(kw.value, ast.Constant):
             currency_field = kw.value.value
 
+    for kw in call.keywords:
+        if kw.arg in ("compute", "related"):  # whatever the value is (a name, a lambda)
+            computed_or_related = True
+    # Odoo stores a field unless it is computed or related; `store=` overrides either way.
+    store = explicit_store if explicit_store is not None else not computed_or_related
+
     return FieldInfo(
         name=name,
         field_type=short,
         comodel=comodel,
         compute=compute,
+        related=related,
         depends=depends,
         store=store,
         required=required,

@@ -1,0 +1,22 @@
+<odoo>
+  <record id="res_core_form_mixin" model="ir.ui.view">
+    <field name="name">res.core.form.mixin</field>
+    <field name="model">res.core</field>
+    <field name="inherit_id" ref="core.res_core_form"/>
+    <field name="arch" type="xml">
+      <data>
+        <field name="payload" position="after">
+          <field name="mixin_flag"/>
+          <button name="unlink" type="object" string="Delete"/>
+        </field>
+        <!-- inserted into the inline subview of line_ids: these belong to res.core.line -->
+        <xpath expr="//field[@name='line_ids']//list//field[@name='qty']" position="after">
+          <field name="line_only_field"/>
+        </xpath>
+        <xpath expr="//field[@name='some_subview_column']" position="after">
+          <field name="another_line_field"/>
+        </xpath>
+      </data>
+    </field>
+  </record>
+</odoo>

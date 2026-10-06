@@ -60,7 +60,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
-        "`security/ir.model.access.csv` (or no CSV file at all).",
+        "`security/ir.model.access.csv` (or no CSV file at all). A model the module "
+        "only extends (`_inherit`, with or without repeating its `_name`) needs no "
+        "row of its own here.",
         why="A model without access rules is unreachable for non-admin users "
         "and is flagged by Odoo at load time.",
         fix="Create `security/ir.model.access.csv` and add an ACL row per model.",
@@ -332,7 +334,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
         notes="Required `Many2one` fields are skipped: Odoo already defaults "
-        "them to `restrict`.",
+        "them to `restrict`. So are related or computed fields that are not stored "
+        "(no `store=True`): they have no foreign-key column.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "

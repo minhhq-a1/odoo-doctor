@@ -74,6 +74,18 @@ All notable changes to Odoo Doctor are documented here.
   `self._table` and `self._select()`. Odoo 19.0: 15 of the 51 findings were in tests, 7 in `init`
   and 2 in migrations.
 
+- **`missing-access-csv` asked for ACL rows for models a module only extends.** `_name = 'x'` with
+  `_inherit = ['x', mixin]` extends `x` (the model's own module owns its ACL); the rule now looks at
+  `ModelInfo.defines`. Odoo 19.0: 47 -> 13.
+- **`missing-ondelete` flagged Many2one fields that have no column.** `ondelete` configures a foreign
+  key; a `related=` or `compute=` Many2one without `store=True` has none. `FieldInfo.store` now
+  follows Odoo (computed and related fields are not stored unless asked) and `FieldInfo.related`
+  is recorded. Odoo 19.0: 283 of 1,431 findings.
+- **Golden corpus case `odoo19_patterns`**: a model defined in one addon and extended with a mixin in
+  another (`_name` + `_inherit` listing itself), annotated / `Image` / `Json` fields, a `<groupby>`,
+  an xpath into an inline subview, a locator, `unlink` from a button, HTML ids in a template and a
+  `field_<model>__<field>` ref. Against `main` before these fixes it produced six false positives.
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a
