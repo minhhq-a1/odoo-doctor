@@ -10,7 +10,10 @@ All notable changes to Odoo Doctor are documented here.
 
 - The VS Code extension is published on the Marketplace as `MinhHong.odoo-doctor` (preview, 0.7.0):
   install it from the Extensions view or with `code --install-extension MinhHong.odoo-doctor`
-  (the server still needs `pip install 'odoo-doctor[lsp]'`). The README and `docs/lsp.md` say so.
+  (the server still needs the `lsp` extra). The README and `docs/lsp.md` say so.
+- Install docs for the language server (`docs/lsp.md`, extension README, README) recommend
+  `uv tool install` / `pipx` and explain the macOS case where the Xcode `pip3` is Python 3.9
+  (Odoo Doctor needs 3.10+) and VS Code started from the Dock cannot see `~/.local/bin`.
 - The VS Code extension is bundled with esbuild: the `.vsix` goes from 358 files (583 KB) to
   6 files (140 KB), which also makes it start faster. `npm run compile` now type-checks with
   `tsc` and bundles; `vscode-languageclient` moved to `devDependencies` because it is part
