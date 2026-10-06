@@ -43,7 +43,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         fix="Pass values as query parameters.",
         bad="self.env.cr.execute(f\"SELECT * FROM res_partner WHERE name = '{name}'\")",
         good='self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))',
-        notes="When the dynamic part is not user data (for example a WHERE "
+        notes="`<anything>._table` is a trusted identifier (set by the model author and "
+        "validated by the registry), and scripts under `tests/`, `migrations/` and "
+        "`upgrades/` (Odoo 18+) are skipped. "
+        "When the dynamic part is not user data (for example a WHERE "
         "fragment whose values are bound through parameters), assert it with "
         "pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule "
         "honours: a trailing comment covers its line, a comment on its own line "
@@ -97,6 +100,13 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="@http.route('/api/data', auth='user')\n"
         "def get_data(self):\n"
         "    return request.env['private.model'].search([])",
+        notes="A route that also calls an access check (`consteq` on an access "
+        "token, `_document_check_access`, a signature or `check_access*` call) is "
+        "reported at medium confidence and does not affect the score; without one "
+        "it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo()"
+        ".get_param('<constant>')` are not elevations. Public website routes "
+        "legitimately use `sudo()`: about one in five routes of Odoo 19 community "
+        "does, so review rather than ban.",
     ),
     "unsafe-template-render": RuleDoc(
         detects="QWeb `t-raw` output, which renders a value without HTML-escaping. "

@@ -1,0 +1,17 @@
+[
+  [
+    "public-controller-sudo-risk",
+    "pr/controllers/main.py",
+    "high"
+  ],
+  [
+    "public-controller-sudo-risk",
+    "pr/controllers/main.py",
+    "medium"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "pr/models/tools.py",
+    "high"
+  ]
+]
