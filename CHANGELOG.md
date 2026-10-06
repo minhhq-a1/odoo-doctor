@@ -49,6 +49,20 @@ All notable changes to Odoo Doctor are documented here.
   Odoo 19.0 community, with the fixes above: `manifest-missing-dependency` 204 -> 2,
   `view-field-not-in-model` 1,503 -> 7, `removed-model-still-referenced` 172 -> 14.
 
+- **`duplicate-xml-id`: markup ids were counted as XML ids.** Every element with an `id` attribute
+  was collected, including `<div id>`, `<span id>` and `<setting id>` inside templates and view
+  arches (and `<delete id>`, which removes a record). Only data-level elements (children of
+  `<odoo>`/`<data>`, nested `<menuitem>`s) define an XML id now. Odoo 19.0: 234 -> 51.
+- **`missing-xml-ref`: implicit ids and report models.** `<module>.field_<model>__<field>` (the id
+  Odoo registers for every field, `create_uid` included) now resolves, and classes deriving from
+  `models.BaseModel` (SQL-view / report models) are models, which also resolves their
+  `model_<name>` ids. Odoo 19.0: 44 -> 6.
+- **`deprecated-api-usage`.** `self.pool['model']` is the registry (a model class, used for
+  `isinstance` checks in Odoo 19 core) and `Registry.get()` is current; only the old calling
+  convention `self.pool.get('model').method(cr, uid, ...)` is reported. `from openerp` in
+  `migrations/<version>/` for a version before Odoo 10 ran on databases of that era and is not
+  reported. Odoo 19.0: 31 -> 0.
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a

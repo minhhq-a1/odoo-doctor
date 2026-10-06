@@ -92,3 +92,65 @@ def test_eval_ref_extraction(tmp_path: Path):
     assert "sale.group_sale_manager" in records[0].refs
     assert "missing_local" in records[0].refs
     assert "sale.view.order.form" in records[0].refs
+
+
+# --- only data-level elements define xml ids ---------------------------------
+
+
+def _ids(tmp_path: Path, xml: str) -> list[str]:
+    f = tmp_path / "d.xml"
+    f.write_text(xml)
+    return [r.xml_id for r in parse_xml_records(f, module_name="m")]
+
+
+def test_html_ids_inside_templates_and_arch_are_not_xml_ids(tmp_path: Path):
+    ids = _ids(
+        tmp_path,
+        """<odoo>
+  <template id="tmpl">
+    <div id="html_div"><span id="html_span">x</span></div>
+  </template>
+  <record id="view" model="ir.ui.view">
+    <field name="arch" type="xml">
+      <form><setting id="a_setting"/><data><div id="in_arch_data"/></data></form>
+    </field>
+  </record>
+</odoo>""",
+    )
+    assert ids == ["m.tmpl", "m.view"]
+
+
+def test_every_kind_of_data_level_element_still_defines_an_id(tmp_path: Path):
+    ids = _ids(
+        tmp_path,
+        """<odoo>
+  <record id="rec" model="res.partner"/>
+  <menuitem id="top_menu" name="Top">
+    <menuitem id="child_menu" name="Child"/>
+  </menuitem>
+  <act_window id="act" name="A" res_model="res.partner"/>
+  <data noupdate="1">
+    <record id="in_data" model="res.partner"/>
+    <template id="in_data_tmpl"><div id="html"/></template>
+  </data>
+</odoo>""",
+    )
+    assert ids == [
+        "m.rec",
+        "m.top_menu",
+        "m.child_menu",
+        "m.act",
+        "m.in_data",
+        "m.in_data_tmpl",
+    ]
+
+
+def test_a_delete_does_not_define_an_id(tmp_path: Path):
+    ids = _ids(
+        tmp_path,
+        """<odoo>
+  <delete model="res.partner" id="old_partner"/>
+  <record id="old_partner" model="res.partner"/>
+</odoo>""",
+    )
+    assert ids == ["m.old_partner"]

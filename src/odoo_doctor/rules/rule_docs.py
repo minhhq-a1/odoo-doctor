@@ -348,15 +348,19 @@ RULE_DOCS: dict[str, RuleDoc] = {
     # --------------------------------------------------------- Upgrade Safety
     "deprecated-api-usage": RuleDoc(
         detects="Old-API patterns: `from openerp` imports, `_columns`, "
-        "`osv.osv` and `self.pool`.",
+        "`osv.osv` and model calls through the pool with `cr, uid`.",
         why="They belong to Odoo 7-9 and are removed in modern versions.",
         fix="Migrate to the new API.",
         bad="from openerp import models\n"
         "class MyModel(osv.osv): ...\n"
-        "self.pool.get('res.partner')",
+        "self.pool.get('res.partner').search(cr, uid, [])",
         good="from odoo import models\n"
         "class MyModel(models.Model): ...\n"
-        "self.env['res.partner']",
+        "self.env['res.partner'].search([])",
+        notes="`self.pool['model']` alone is the registry (a model class, used for "
+        "`isinstance` checks) and is not reported. Scripts in `migrations/<version>/` "
+        "for a version before Odoo 10 may import `openerp`: they ran on databases of "
+        "that era.",
     ),
     "removed-model-still-referenced": RuleDoc(
         detects="`_inherit` targets that cannot be resolved in the project or "

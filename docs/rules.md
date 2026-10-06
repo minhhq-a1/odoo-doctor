@@ -624,18 +624,20 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: Old-API patterns: `from openerp` imports, `_columns`, `osv.osv` and `self.pool`.
+**Detects**: Old-API patterns: `from openerp` imports, `_columns`, `osv.osv` and model calls through the pool with `cr, uid`.
 
 **Why**: They belong to Odoo 7-9 and are removed in modern versions.
 
 **Fix**: Migrate to the new API.
+
+**Note**: `self.pool['model']` alone is the registry (a model class, used for `isinstance` checks) and is not reported. Scripts in `migrations/<version>/` for a version before Odoo 10 may import `openerp`: they ran on databases of that era.
 
 Bad:
 
 ```python
 from openerp import models
 class MyModel(osv.osv): ...
-self.pool.get('res.partner')
+self.pool.get('res.partner').search(cr, uid, [])
 ```
 
 Good:
@@ -643,7 +645,7 @@ Good:
 ```python
 from odoo import models
 class MyModel(models.Model): ...
-self.env['res.partner']
+self.env['res.partner'].search([])
 ```
 
 ### removed-model-still-referenced

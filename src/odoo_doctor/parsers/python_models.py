@@ -63,7 +63,8 @@ class ControllerInfo:
 
 
 # --- Odoo base class names ---
-_MODEL_BASES = {"models.Model", "Model"}
+# `models.BaseModel` is the base of SQL-view / report models (`_auto = False`).
+_MODEL_BASES = {"models.Model", "Model", "models.BaseModel", "BaseModel"}
 _TRANSIENT_BASES = {"models.TransientModel", "TransientModel"}
 _ABSTRACT_BASES = {"models.AbstractModel", "AbstractModel"}
 _ALL_BASES = _MODEL_BASES | _TRANSIENT_BASES | _ABSTRACT_BASES

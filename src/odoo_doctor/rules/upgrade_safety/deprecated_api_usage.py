@@ -30,12 +30,31 @@ _DEPRECATED_PATTERNS: list[tuple[re.Pattern, str, str, str]] = [
         "Replace osv.osv with models.Model and osv.osv_memory with models.TransientModel.",
     ),
     (
-        re.compile(r"\.pool\s*\[|\.pool\.get\s*\("),
+        # The old API calls a model method through the pool with `cr, uid`. A bare
+        # `self.pool['model']` is the registry (a model *class*) and still current.
+        re.compile(
+            r"\.pool\s*(?:\[[^\]]*\]|\.get\s*\([^)]*\))\s*\.\s*\w+\s*\(\s*cr\s*,\s*uid\b"
+        ),
         "Old-style registry access via .pool",
-        "self.pool was deprecated in Odoo 8. Use self.env['model.name'] instead.",
-        "Replace self.pool['model'] or self.pool.get('model') with self.env['model'].",
+        "self.pool.get('model').method(cr, uid, ...) is the Odoo 8 API. Use self.env['model.name'] instead.",
+        "Replace self.pool.get('model').method(cr, uid, ...) with self.env['model'].method(...).",
     ),
 ]
+
+_OPENERP_IMPORT = _DEPRECATED_PATTERNS[0][0]
+
+
+def _is_pre_odoo10_migration(file_path: Path) -> bool:
+    """A script in ``migrations/<version>/`` for a version before Odoo 10.
+
+    It ran on databases of that era, where ``openerp`` was the correct namespace.
+    """
+    parts = file_path.parts
+    if "migrations" not in parts:
+        return False
+    after = parts[parts.index("migrations") + 1 :]
+    match = re.match(r"(\d+)\.", after[0]) if len(after) > 1 else None
+    return match is not None and int(match.group(1)) < 10
 
 
 @rule(
@@ -56,8 +75,11 @@ def check_deprecated_api_usage(
         return []
 
     diags: list[Diagnostic] = []
+    historical = _is_pre_odoo10_migration(file_path)
     for line_no, line_text in enumerate(source.splitlines(), start=1):
         for pattern, title, message, help_text in _DEPRECATED_PATTERNS:
+            if historical and pattern is _OPENERP_IMPORT:
+                continue
             if pattern.search(line_text):
                 diags.append(
                     Diagnostic(

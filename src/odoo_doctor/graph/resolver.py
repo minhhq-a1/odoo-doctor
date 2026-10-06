@@ -153,6 +153,7 @@ class SymbolResolver:
         self._extended_methods: dict[str, dict] = extended_methods or {}
         self._source_index = build_source_index(source_path)
         self._rule_models: set[str] | None = None
+        self._by_underscore: dict[str, list[str]] | None = None
         # module -> declared depends, for modules whose manifest we have seen
         # (scanned addons, plus the Odoo source checkout when configured).
         self._module_dependencies: dict[str, list[str]] = dict(
@@ -332,6 +333,11 @@ class SymbolResolver:
         if self._is_implicit_model_xml_id(xml_id):
             return SymbolLookup(ResolveResult.FOUND, "repo")
 
+        # 4. Implicit ir.model.fields xml ids: `<module>.field_<model with dots as
+        #    underscores>__<field>` exists for every field of every model.
+        if self._is_implicit_field_xml_id(xml_id):
+            return SymbolLookup(ResolveResult.FOUND, "repo")
+
         # XML IDs are module-scoped; we can't prove absence without full knowledge
         return SymbolLookup(ResolveResult.UNKNOWN)
 
@@ -355,6 +361,28 @@ class SymbolResolver:
             return False
         suffix = name[len("model_") :]
         return any(m.replace(".", "_") == suffix for m in self._repo_models)
+
+    def _models_by_underscore_name(self) -> dict[str, list[str]]:
+        """Model names indexed by their ``field_``/``model_`` xml id form (dots -> ``_``)."""
+        if self._by_underscore is None:
+            names = set(self._repo_models)
+            if self._stubs:
+                names.update(self._stubs.models)
+            index: dict[str, list[str]] = {}
+            for name in names:
+                index.setdefault(name.replace(".", "_"), []).append(name)
+            self._by_underscore = index
+        return self._by_underscore
+
+    def _is_implicit_field_xml_id(self, xml_id: str) -> bool:
+        _module, _, name = xml_id.rpartition(".")
+        if not name.startswith("field_") or "__" not in name:
+            return False
+        model_part, _, field_name = name[len("field_") :].partition("__")
+        return any(
+            self.resolve_field(model_name, field_name).status == ResolveResult.FOUND
+            for model_name in self._models_by_underscore_name().get(model_part, [])
+        )
 
     def resolve_xml_id_for_module(
         self, xml_id: str, current_module: str

@@ -43,6 +43,32 @@ class ViewInfo:
 _REF_CALL_RE = re.compile(r"\bref\(['\"]([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)['\"]\)")
 
 
+# Elements a data file nests its records in; a <menuitem> may also nest <menuitem>s.
+_DATA_CONTAINERS = frozenset({"odoo", "openerp", "data"})
+
+
+def _defines_xml_id(elem: etree._Element) -> bool:
+    """Does *elem* (which has an ``id``) define a record, or is it markup inside one?
+
+    Only elements at the data level do: children of ``<odoo>``/``<data>`` and nested
+    ``<menuitem>``s. An ``id`` on a ``<div>``, ``<span>`` or ``<setting>`` inside a template
+    or an arch is an HTML/QWeb id, and ``<delete id=...>`` removes a record, it defines none.
+    """
+    if elem.tag == "delete":
+        return False
+    parent = elem.getparent()
+    if parent is None:
+        return False
+    allowed = (
+        _DATA_CONTAINERS | {"menuitem"} if elem.tag == "menuitem" else _DATA_CONTAINERS
+    )
+    while parent is not None:
+        if parent.tag not in allowed:
+            return False
+        parent = parent.getparent()
+    return True
+
+
 def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
     """Extract all XML IDs from an Odoo data/view file."""
     try:
@@ -55,7 +81,7 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
 
     for elem in root.iter():
         xml_id = elem.get("id")
-        if xml_id is None:
+        if xml_id is None or not _defines_xml_id(elem):
             continue
 
         full_id = f"{module_name}.{xml_id}" if "." not in xml_id else xml_id

@@ -143,3 +143,18 @@ def test_a_field_with_a_type_annotation_is_recorded(tmp_path: Path):
 def test_an_annotation_without_a_value_is_not_a_field(tmp_path: Path):
     model = _model_with(tmp_path, "\nname: str\nother: int = 3\n")
     assert model.fields == {}
+
+
+def test_a_class_deriving_from_basemodel_is_a_model(tmp_path: Path):
+    # SQL-view / report models: `class R(models.BaseModel): _name = 'x.report'; _auto = False`
+    path = tmp_path / "r.py"
+    path.write_text(
+        "from odoo import fields, models\n\n"
+        "class R(models.BaseModel):\n"
+        "    _name = 'x.report'\n"
+        "    _auto = False\n\n"
+        "    total = fields.Float()\n"
+    )
+    (model,) = parse_models(path)
+    assert model.name == "x.report" and "total" in model.fields
+    assert model.defines is True
