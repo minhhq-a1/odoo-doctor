@@ -26,6 +26,14 @@ All notable changes to Odoo Doctor are documented here.
   Any `fields.<Class>(...)` is now a field, which also covers classes other modules add (for
   example `fields.Serialized`). Odoo 19.0 community: 195 -> 65 `view-field-not-in-model`.
 
+- **Views: three more false positives in `view-field-not-in-model` / `button-method-not-found`.**
+  (1) Fields declared with a type annotation (`parent_id: Cat = fields.Many2one(...)`, used in
+  Odoo 19 core) were not recorded. (2) What an inherited view's `<xpath>` inserts into an x2many's
+  inline subview (`//field[@name='order_line']//list//field[...]`, `//page[...]//list/field[...]`)
+  was attributed to the view's own model instead of the comodel. (3) A `<field/button ...
+  position="...">` only locates a node of the parent view (which may be inside a subview), so it
+  is not a reference. Odoo 19.0 community: `view-field-not-in-model` 65 -> 16.
+
 ### Added
 
 - The VS Code extension has an icon (`editors/vscode/images/icon.png`, a medical cross with a

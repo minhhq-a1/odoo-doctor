@@ -167,6 +167,74 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
     return views
 
 
+# Root tags of a view; one that is not the first step of an xpath is an inline subview.
+_VIEW_TAGS = frozenset(
+    {
+        "list",
+        "tree",
+        "form",
+        "kanban",
+        "graph",
+        "pivot",
+        "calendar",
+        "gantt",
+        "map",
+        "activity",
+        "cohort",
+        "search",
+    }
+)
+_STEP_TAG = re.compile(r"[A-Za-z_][\w.-]*")
+
+
+def _xpath_steps(expr: str) -> list[str]:
+    """Split an xpath on ``/`` outside predicates and quotes (``//a/b[@x='/']`` -> a, b)."""
+    steps: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quote = ""
+    for ch in expr:
+        if quote:
+            current.append(ch)
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+            current.append(ch)
+        elif ch == "/" and depth == 0:
+            if current:
+                steps.append("".join(current))
+                current = []
+        else:
+            depth += ch == "["
+            depth -= ch == "]"
+            current.append(ch)
+    if current:
+        steps.append("".join(current))
+    return steps
+
+
+def _xpath_enters_subview(expr: str) -> bool:
+    """Does an inherited-view xpath target a node inside an x2many's inline subview?
+
+    Then what it inserts belongs to the comodel, not to the view's model. That is the
+    case when the path goes through a ``field`` step (``//field[@name='lines']//list//...``)
+    or through a view tag that is not its first step (``//page[@name='x']//list/field``).
+    A view tag as the first step is the root of a view of this model (``//list/field``).
+    """
+    steps = _xpath_steps(expr)
+    for index, step in enumerate(steps):
+        match = _STEP_TAG.match(step)
+        if match is None:
+            continue
+        tag = match.group(0)
+        if tag == "field" and index < len(steps) - 1:
+            return True
+        if index > 0 and tag in _VIEW_TAGS:
+            return True
+    return False
+
+
 def _extract_arch_refs(
     arch_elem: etree._Element,
     field_refs: list[str],
@@ -178,13 +246,19 @@ def _extract_arch_refs(
 
     A <field>/<button> nested inside another <field> belongs to a related
     comodel (inline subview), not to this view's model, so it is not attributed
-    here. (Spec A5: never check a field against the wrong model.)
+    here. (Spec A5: never check a field against the wrong model.) The same goes for
+    what an <xpath> inserts into such a subview, and a field/button carrying a
+    ``position`` attribute only locates a node of the parent view (which may sit in
+    one of its subviews), so it is not a reference either.
     """
 
     def walk(elem: etree._Element, inside_field: bool) -> None:
         for child in elem:
-            if child.tag == "field":
-                if not inside_field:
+            if child.tag == "xpath":
+                enters = _xpath_enters_subview(child.get("expr", ""))
+                walk(child, inside_field or enters)
+            elif child.tag == "field":
+                if not inside_field and child.get("position") is None:
                     name = child.get("name")
                     if name:
                         if name not in field_refs:
@@ -192,7 +266,7 @@ def _extract_arch_refs(
                         field_ref_lines.setdefault(name, child.sourceline or 0)
                 walk(child, True)
             elif child.tag == "button":
-                if not inside_field:
+                if not inside_field and child.get("position") is None:
                     btn_name = child.get("name")
                     btn_type = child.get("type")
                     if btn_name and btn_type == "object":

@@ -202,6 +202,16 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                 if field_info:
                     model.fields[field_info.name] = field_info
 
+        # Annotated field definitions: `parent_id: Cat = fields.Many2one(...)` (Odoo 19 core)
+        if (
+            isinstance(item, ast.AnnAssign)
+            and isinstance(item.target, ast.Name)
+            and isinstance(item.value, ast.Call)
+        ):
+            field_info = _extract_field(item.target.id, item.value, item.lineno)
+            if field_info:
+                model.fields[field_info.name] = field_info
+
         # Method definitions
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
             method = _extract_method(item)

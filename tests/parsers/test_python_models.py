@@ -122,3 +122,24 @@ def test_every_fields_class_is_recorded_as_a_field(tmp_path: Path, declaration: 
 def test_other_calls_are_not_fields(tmp_path: Path, expression: str):
     model = _model_with(tmp_path, "\n" + expression + "\n")
     assert model.fields == {}
+
+
+def test_a_field_with_a_type_annotation_is_recorded(tmp_path: Path):
+    # Odoo 19 core annotates some fields: `parent_id: ResPartnerCategory = fields.Many2one(...)`
+    model = _model_with(
+        tmp_path,
+        """
+        parent_id: Cat = fields.Many2one('x.cat', ondelete='cascade')
+        name: str = fields.Char(required=True)
+        plain = fields.Char()
+        """,
+    )
+    assert set(model.fields) == {"parent_id", "name", "plain"}
+    assert model.fields["parent_id"].comodel == "x.cat"
+    assert model.fields["parent_id"].ondelete == "cascade"
+    assert model.fields["name"].required is True
+
+
+def test_an_annotation_without_a_value_is_not_a_field(tmp_path: Path):
+    model = _model_with(tmp_path, "\nname: str\nother: int = 3\n")
+    assert model.fields == {}
