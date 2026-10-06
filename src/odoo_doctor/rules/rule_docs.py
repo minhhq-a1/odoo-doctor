@@ -53,11 +53,16 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "`extend`, `+=`), `if`/`try`/loop branches and module constants: SQL "
         "built only from constants, `int()` casts, `self._table`, `SQL(...)` or "
         "`','.join(['%s'] * n)` placeholder lists is not reported, while a "
-        "fragment that reaches the query through a list or a branch is.",
+        "fragment that reaches the query through a list or a branch is. Test code "
+        "(`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` "
+        "that take only `self` (where SQL views are created) are skipped: nothing a "
+        "request controls reaches them.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
-        "`security/ir.model.access.csv` (or no CSV file at all).",
+        "`security/ir.model.access.csv` (or no CSV file at all). A model the module "
+        "only extends (`_inherit`, with or without repeating its `_name`) needs no "
+        "row of its own here.",
         why="A model without access rules is unreachable for non-admin users "
         "and is flagged by Odoo at load time.",
         fix="Create `security/ir.model.access.csv` and add an ACL row per model.",
@@ -190,6 +195,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "def _compute_total(self):\n"
         "    for rec in self:\n"
         "        rec.total = rec.quantity * rec.unit_price",
+        notes="A field the method assigns (`rec.total = ...`) is its result, not an "
+        "input, so reading it back inside the same method is not reported.",
     ),
     # ---------------------------------------------------------- Performance
     "search-in-loop": RuleDoc(
@@ -327,7 +334,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
         notes="Required `Many2one` fields are skipped: Odoo already defaults "
-        "them to `restrict`.",
+        "them to `restrict`. So are related or computed fields that are not stored "
+        "(no `store=True`): they have no foreign-key column.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "
@@ -348,15 +356,19 @@ RULE_DOCS: dict[str, RuleDoc] = {
     # --------------------------------------------------------- Upgrade Safety
     "deprecated-api-usage": RuleDoc(
         detects="Old-API patterns: `from openerp` imports, `_columns`, "
-        "`osv.osv` and `self.pool`.",
+        "`osv.osv` and model calls through the pool with `cr, uid`.",
         why="They belong to Odoo 7-9 and are removed in modern versions.",
         fix="Migrate to the new API.",
         bad="from openerp import models\n"
         "class MyModel(osv.osv): ...\n"
-        "self.pool.get('res.partner')",
+        "self.pool.get('res.partner').search(cr, uid, [])",
         good="from odoo import models\n"
         "class MyModel(models.Model): ...\n"
-        "self.env['res.partner']",
+        "self.env['res.partner'].search([])",
+        notes="`self.pool['model']` alone is the registry (a model class, used for "
+        "`isinstance` checks) and is not reported. Scripts in `migrations/<version>/` "
+        "for a version before Odoo 10 may import `openerp`: they ran on databases of "
+        "that era.",
     ),
     "removed-model-still-referenced": RuleDoc(
         detects="`_inherit` targets that cannot be resolved in the project or "

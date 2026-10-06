@@ -336,3 +336,45 @@ def test_public_controller_silent_without_sudo(tmp_path: Path):
     f.write_text(code)
     diags = check_public_controller_sudo(f, "test_mod", "17.0")
     assert len(diags) == 0
+
+
+def test_raw_sql_in_test_code_and_migrations_is_not_reported(tmp_path: Path):
+    """Tests and one-off migration scripts are not an attack surface; the same code in
+    the addon's models still is."""
+    code = dedent("""\
+        class M:
+            def m(self, name):
+                self.env.cr.execute("SELECT * FROM res_partner WHERE name = '%s'" % name)
+    """)
+    for relative, expected in (
+        ("models/m.py", 1),
+        ("tests/test_m.py", 0),
+        ("tests/common/helpers.py", 0),
+        ("migrations/17.0.1.0/pre-m.py", 0),
+    ):
+        f = tmp_path / "mod" / relative
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(code)
+        diags = check_raw_sql_interpolation(f, "mod", "17.0")
+        assert len(diags) == expected, relative
+
+
+def test_raw_sql_in_orm_init_hooks_without_input_is_not_reported(tmp_path: Path):
+    """`init()` creates SQL views at install time from class metadata: nothing a request
+    controls reaches it. A parameter of the caller's would, and so would any other method."""
+    template = dedent("""\
+        class M:
+            def {signature}:
+                self.env.cr.execute("CREATE VIEW %s AS (%s)" % (self._table, {value}))
+    """)
+    for signature, value, expected in (
+        ("init(self)", "self._query()", 0),
+        ("_auto_init(self)", "self._query()", 0),
+        ("init(self, name)", "name", 1),  # data handed in by the caller
+        ("refresh(self)", "self._query()", 1),  # not an install-time hook
+    ):
+        f = tmp_path / "mod" / "models" / "m.py"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(template.format(signature=signature, value=value))
+        diags = check_raw_sql_interpolation(f, "mod", "17.0")
+        assert len(diags) == expected, signature

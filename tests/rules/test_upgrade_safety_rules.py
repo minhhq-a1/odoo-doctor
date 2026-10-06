@@ -99,7 +99,7 @@ def test_deprecated_pool_bracket(tmp_path: Path):
         """\
         class M:
             def m(self, cr, uid, context=None):
-                partner = self.pool['res.partner']
+                ids = self.pool['res.partner'].search(cr, uid, [])
         """,
     )
     diags = check_deprecated_api_usage(f, "mod", "17.0")
@@ -114,12 +114,46 @@ def test_deprecated_pool_get(tmp_path: Path):
         """\
         class M:
             def m(self, cr, uid, context=None):
-                partner = self.pool.get('res.partner')
+                partner = self.pool.get('res.partner').browse(cr, uid, 1)
         """,
     )
     diags = check_deprecated_api_usage(f, "mod", "17.0")
     assert len(diags) == 1
     assert diags[0].rule == "deprecated-api-usage"
+
+
+def test_registry_lookup_through_pool_is_not_deprecated(tmp_path: Path):
+    # Odoo 19 core: `isinstance(model, self.pool['mail.thread'])` reads the registry for a
+    # model class; only the old `cr, uid` calling convention is gone.
+    f = _write(
+        tmp_path,
+        """\
+        class M:
+            def m(self, model):
+                a = isinstance(model, self.pool['mail.thread'])
+                b = self.pool.get('res.partner')
+                return a, b
+        """,
+    )
+    assert check_deprecated_api_usage(f, "mod", "19.0") == []
+
+
+def test_openerp_import_in_a_pre_odoo10_migration_is_not_reported(tmp_path: Path):
+    # `migrations/9.0.2.0/` ran on Odoo 9 databases, where `openerp` was the right name
+    old = tmp_path / "migrations" / "9.0.2.0" / "pre-x.py"
+    old.parent.mkdir(parents=True)
+    old.write_text("from openerp.modules.registry import RegistryManager\n")
+    assert check_deprecated_api_usage(old, "mod", "19.0") == []
+
+    current = tmp_path / "migrations" / "19.0.1.0" / "pre-x.py"
+    current.parent.mkdir(parents=True)
+    current.write_text("from openerp import osv\n")
+    assert len(check_deprecated_api_usage(current, "mod", "19.0")) == 1
+
+    elsewhere = tmp_path / "models" / "m.py"
+    elsewhere.parent.mkdir(parents=True)
+    elsewhere.write_text("from openerp import osv\n")
+    assert len(check_deprecated_api_usage(elsewhere, "mod", "19.0")) == 1
 
 
 def test_clean_code_no_deprecated(tmp_path: Path):
@@ -153,7 +187,7 @@ def test_deprecated_multiple_patterns_same_file(tmp_path: Path):
             }
 
             def m(self, cr, uid, context=None):
-                partner = self.pool['res.partner']
+                partner = self.pool['res.partner'].browse(cr, uid, 1)
         """,
     )
     diags = check_deprecated_api_usage(f, "mod", "17.0")

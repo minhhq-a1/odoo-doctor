@@ -22,6 +22,7 @@ class FieldInfo:
     string: str | None = None
     ondelete: str | None = None
     currency_field: str | None = None  # Monetary only
+    related: str | None = None
     line: int = 0
 
 
@@ -47,6 +48,9 @@ class ModelInfo:
     file_path: str = ""
     line: int = 0
     module: str = ""
+    # True when a class defines the model: it has a `_name` that its own `_inherit` does not
+    # list. `_name = 'x'` with `_inherit = ['x', mixin]` (and `_inherit = 'x'` alone) extends.
+    defines: bool = False
 
 
 @dataclass
@@ -60,7 +64,8 @@ class ControllerInfo:
 
 
 # --- Odoo base class names ---
-_MODEL_BASES = {"models.Model", "Model"}
+# `models.BaseModel` is the base of SQL-view / report models (`_auto = False`).
+_MODEL_BASES = {"models.Model", "Model", "models.BaseModel", "BaseModel"}
 _TRANSIENT_BASES = {"models.TransientModel", "TransientModel"}
 _ABSTRACT_BASES = {"models.AbstractModel", "AbstractModel"}
 _ALL_BASES = _MODEL_BASES | _TRANSIENT_BASES | _ABSTRACT_BASES
@@ -81,7 +86,29 @@ _ODOO_FIELD_TYPES = {
     "Many2many",
     "Monetary",
     "Reference",
+    "Image",
+    "Json",
+    "Many2oneReference",
+    "Properties",
+    "PropertiesDefinition",
 }
+
+
+def _is_field_class(func_name: str, short: str) -> bool:
+    """A call that declares a field: a known Odoo field class, or any ``fields.<Class>``.
+
+    The second form covers field classes other modules add to ``odoo.fields`` (for example
+    ``fields.Serialized`` from ``base_sparse_field``). ``fields.Date.today()`` is a call on a
+    field class and ``fields.helper()`` is lower-case, so neither matches.
+    """
+    if short in _ODOO_FIELD_TYPES:
+        return True
+    return (
+        func_name.count(".") == 1
+        and func_name.startswith("fields.")
+        and short[:1].isupper()
+    )
+
 
 _LIFECYCLE_METHODS = {"create", "write", "unlink", "default_get", "read", "copy"}
 
@@ -180,11 +207,22 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                 if field_info:
                     model.fields[field_info.name] = field_info
 
+        # Annotated field definitions: `parent_id: Cat = fields.Many2one(...)` (Odoo 19 core)
+        if (
+            isinstance(item, ast.AnnAssign)
+            and isinstance(item.target, ast.Name)
+            and isinstance(item.value, ast.Call)
+        ):
+            field_info = _extract_field(item.target.id, item.value, item.lineno)
+            if field_info:
+                model.fields[field_info.name] = field_info
+
         # Method definitions
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
             method = _extract_method(item)
             model.methods[method.name] = method
 
+    model.defines = model.name is not None and model.name not in model.inherit
     return model
 
 
@@ -207,13 +245,15 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
 
     # Strip "fields." prefix
     short = func_name.split(".")[-1] if "." in func_name else func_name
-    if short not in _ODOO_FIELD_TYPES:
+    if not _is_field_class(func_name, short):
         return None
 
     comodel = None
     compute = None
     depends: list[str] = []
-    store = True
+    explicit_store: bool | None = None
+    related = None
+    computed_or_related = False
     required = False
     string = None
     ondelete = None
@@ -233,8 +273,10 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
             comodel = kw.value.value
         elif kw.arg == "compute" and isinstance(kw.value, ast.Constant):
             compute = kw.value.value
+        elif kw.arg == "related" and isinstance(kw.value, ast.Constant):
+            related = kw.value.value
         elif kw.arg == "store" and isinstance(kw.value, ast.Constant):
-            store = bool(kw.value.value)
+            explicit_store = bool(kw.value.value)
         elif kw.arg == "required" and isinstance(kw.value, ast.Constant):
             required = bool(kw.value.value)
         elif kw.arg == "string" and isinstance(kw.value, ast.Constant):
@@ -244,11 +286,18 @@ def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None
         elif kw.arg == "currency_field" and isinstance(kw.value, ast.Constant):
             currency_field = kw.value.value
 
+    for kw in call.keywords:
+        if kw.arg in ("compute", "related"):  # whatever the value is (a name, a lambda)
+            computed_or_related = True
+    # Odoo stores a field unless it is computed or related; `store=` overrides either way.
+    store = explicit_store if explicit_store is not None else not computed_or_related
+
     return FieldInfo(
         name=name,
         field_type=short,
         comodel=comodel,
         compute=compute,
+        related=related,
         depends=depends,
         store=store,
         required=required,

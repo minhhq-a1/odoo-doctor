@@ -6,6 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
+
 from odoo_doctor.parsers.python_models import (
     parse_controllers,
     parse_models,
@@ -72,3 +74,114 @@ def test_parse_controllers_tolerates_non_utf8(tmp_path):
     f = tmp_path / "latin1_ctrl.py"
     f.write_bytes(b"# -*- coding: latin-1 -*-\nNAME = '\xe9'\n")
     assert parse_controllers(f) == []
+
+
+# --- every Odoo field class is a field ---------------------------------------
+
+
+def _model_with(tmp_path: Path, body: str):
+    path = tmp_path / "m.py"
+    path.write_text(
+        "from odoo import fields, models\n\n"
+        "class M(models.Model):\n"
+        "    _name = 'm.m'\n" + dedent(body).replace("\n", "\n    ")
+    )
+    (model,) = parse_models(path)
+    return model
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "img = fields.Image(max_width=128)",
+        "data = fields.Json(compute='_c')",
+        "ref = fields.Many2oneReference(model_field='res_model')",
+        "props = fields.Properties(definition='x_id.defs')",
+        "defs = fields.PropertiesDefinition()",
+        # a field class added by another module, e.g. base_sparse_field's Serialized
+        "blob = fields.Serialized()",
+    ],
+)
+def test_every_fields_class_is_recorded_as_a_field(tmp_path: Path, declaration: str):
+    model = _model_with(tmp_path, "\n" + declaration + "\n")
+    name = declaration.split(" = ")[0]
+    assert name in model.fields
+    assert (
+        model.fields[name].field_type == declaration.split("fields.")[1].split("(")[0]
+    )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "today = fields.Date.today()",  # a call on a field class, not a field
+        "now = fields.Datetime.now()",
+        "value = fields.helper(1)",  # lower-case: a function, not a field class
+    ],
+)
+def test_other_calls_are_not_fields(tmp_path: Path, expression: str):
+    model = _model_with(tmp_path, "\n" + expression + "\n")
+    assert model.fields == {}
+
+
+def test_a_field_with_a_type_annotation_is_recorded(tmp_path: Path):
+    # Odoo 19 core annotates some fields: `parent_id: ResPartnerCategory = fields.Many2one(...)`
+    model = _model_with(
+        tmp_path,
+        """
+        parent_id: Cat = fields.Many2one('x.cat', ondelete='cascade')
+        name: str = fields.Char(required=True)
+        plain = fields.Char()
+        """,
+    )
+    assert set(model.fields) == {"parent_id", "name", "plain"}
+    assert model.fields["parent_id"].comodel == "x.cat"
+    assert model.fields["parent_id"].ondelete == "cascade"
+    assert model.fields["name"].required is True
+
+
+def test_an_annotation_without_a_value_is_not_a_field(tmp_path: Path):
+    model = _model_with(tmp_path, "\nname: str\nother: int = 3\n")
+    assert model.fields == {}
+
+
+def test_a_class_deriving_from_basemodel_is_a_model(tmp_path: Path):
+    # SQL-view / report models: `class R(models.BaseModel): _name = 'x.report'; _auto = False`
+    path = tmp_path / "r.py"
+    path.write_text(
+        "from odoo import fields, models\n\n"
+        "class R(models.BaseModel):\n"
+        "    _name = 'x.report'\n"
+        "    _auto = False\n\n"
+        "    total = fields.Float()\n"
+    )
+    (model,) = parse_models(path)
+    assert model.name == "x.report" and "total" in model.fields
+    assert model.defines is True
+
+
+def test_computed_and_related_fields_are_not_stored_unless_asked(tmp_path: Path):
+    model = _model_with(
+        tmp_path,
+        """
+        plain = fields.Many2one('x.a')
+        comp = fields.Many2one('x.a', compute='_c')
+        comp_stored = fields.Many2one('x.a', compute='_c', store=True)
+        comp_callable = fields.Many2one('x.a', compute=_c)
+        rel = fields.Many2one(related='plain.parent_id')
+        rel_stored = fields.Many2one(related='plain.parent_id', store=True)
+        explicit_off = fields.Many2one('x.a', store=False)
+        """,
+    )
+    stored = {name: f.store for name, f in model.fields.items()}
+    assert stored == {
+        "plain": True,
+        "comp": False,
+        "comp_stored": True,
+        "comp_callable": False,
+        "rel": False,
+        "rel_stored": True,
+        "explicit_off": False,
+    }
+    assert model.fields["rel"].related == "plain.parent_id"
+    assert model.fields["plain"].related is None

@@ -14,6 +14,86 @@ All notable changes to Odoo Doctor are documented here.
   "must be an integer". Plugins that omit the declaration still load, but print a warning
   naming the plugin (it was silent). `PLUGIN_API_VERSION` stays 1 and `plugin_api` is unchanged.
 
+### Fixed
+
+- **A model declared in several modules lost its fields and its owner.** `_name = 'x'` together
+  with `_inherit = ['x', mixin]` (how Odoo core adds a mixin to an existing model, e.g. `pos_hr` on
+  `hr.employee`, `sale` on `account.move`) extends `x`, but the project graph let the last module
+  parsed replace the original definition. The resolver then saw `hr.employee` with 0 fields and
+  the wrong owner module. The declarations are now merged (the defining module is the owner, its
+  field attributes win, extensions add theirs), independent of module order. On a scan of Odoo
+  19.0 community (660 modules) this removes 1,308 `view-field-not-in-model`, 185
+  `manifest-missing-dependency`, 79 `button-method-not-found` and 8
+  `monetary-missing-currency-field` false positives (18,740 -> 17,244 findings). Some rules now
+  see fields they could not see before, so a few findings appear that were hidden (for example
+  `compute-missing-depends`).
+
+- **Fields of type `Image`, `Json`, `Many2oneReference`, `Properties` and `PropertiesDefinition`
+  were never recorded** (the parser only knew 15 field classes), so every view that showed one
+  (`image_1920`, `alerts`, `lot_properties`, ...) was reported as referencing an unknown field.
+  Any `fields.<Class>(...)` is now a field, which also covers classes other modules add (for
+  example `fields.Serialized`). Odoo 19.0 community: 195 -> 65 `view-field-not-in-model`.
+
+- **Views: three more false positives in `view-field-not-in-model` / `button-method-not-found`.**
+  (1) Fields declared with a type annotation (`parent_id: Cat = fields.Many2one(...)`, used in
+  Odoo 19 core) were not recorded. (2) What an inherited view's `<xpath>` inserts into an x2many's
+  inline subview (`//field[@name='order_line']//list//field[...]`, `//page[...]//list/field[...]`)
+  was attributed to the view's own model instead of the comodel. (3) A `<field/button ...
+  position="...">` only locates a node of the parent view (which may be inside a subview), so it
+  is not a reference. Odoo 19.0 community: `view-field-not-in-model` 65 -> 16.
+
+- **Model ownership inside one module, and BaseModel methods.** A module that both defines a model
+  (`_name = 'res.users'` in one file) and extends it (`_inherit = 'res.users'` in others) was merged
+  into an entry that no longer counted as the definition, so the first extending module (`bus`,
+  `point_of_sale`) became the "owner" and every module extending `res.users` or `res.currency` was
+  told to depend on it. `ModelInfo.defines` now records whether a class defines the model, and
+  the merge no longer depends on file order (the `_inherit` list is kept in a stable order too).
+  Methods every model gets from `BaseModel` (`unlink`, `action_archive`, `action_unarchive`,
+  `write`, ...) now resolve, so a button calling them is no longer "not found".
+- **Refs inserted next to a subview node.** An inherited view's `<xpath expr="//field[@name='X']">`
+  where `X` is not a field of the view's model located a node of an inline subview, so the
+  fields and buttons it inserts belong to that subview's model; `view-field-not-in-model` and
+  `button-method-not-found` no longer check them against the parent model.
+  Odoo 19.0 community, with the fixes above: `manifest-missing-dependency` 204 -> 2,
+  `view-field-not-in-model` 1,503 -> 7, `removed-model-still-referenced` 172 -> 14.
+
+- **`duplicate-xml-id`: markup ids were counted as XML ids.** Every element with an `id` attribute
+  was collected, including `<div id>`, `<span id>` and `<setting id>` inside templates and view
+  arches (and `<delete id>`, which removes a record). Only data-level elements (children of
+  `<odoo>`/`<data>`, nested `<menuitem>`s) define an XML id now. Odoo 19.0: 234 -> 51.
+- **`missing-xml-ref`: implicit ids and report models.** `<module>.field_<model>__<field>` (the id
+  Odoo registers for every field, `create_uid` included) now resolves, and classes deriving from
+  `models.BaseModel` (SQL-view / report models) are models, which also resolves their
+  `model_<name>` ids. Odoo 19.0: 44 -> 6.
+- **`deprecated-api-usage`.** `self.pool['model']` is the registry (a model class, used for
+  `isinstance` checks in Odoo 19 core) and `Registry.get()` is current; only the old calling
+  convention `self.pool.get('model').method(cr, uid, ...)` is reported. `from openerp` in
+  `migrations/<version>/` for a version before Odoo 10 ran on databases of that era and is not
+  reported. Odoo 19.0: 31 -> 0.
+
+- **`compute-missing-depends`: a compute's own result is not an input.** `team.x = ...` followed by
+  `team.x > limit` read the field back and was reported as an undeclared dependency; fields the
+  method assigns are now left out. Odoo 19.0: 322 of 936 findings were this (the other 614 read
+  fields that really are not declared).
+
+- **`raw-sql-string-interpolation` no longer reports code no request can reach.** Test code
+  (`tests/`) and `migrations/` are skipped, as other rules already do, and so are the install-time
+  hooks `init` / `_auto_init` that take only `self`, where Odoo core creates SQL views from
+  `self._table` and `self._select()`. Odoo 19.0: 15 of the 51 findings were in tests, 7 in `init`
+  and 2 in migrations.
+
+- **`missing-access-csv` asked for ACL rows for models a module only extends.** `_name = 'x'` with
+  `_inherit = ['x', mixin]` extends `x` (the model's own module owns its ACL); the rule now looks at
+  `ModelInfo.defines`. Odoo 19.0: 47 -> 13.
+- **`missing-ondelete` flagged Many2one fields that have no column.** `ondelete` configures a foreign
+  key; a `related=` or `compute=` Many2one without `store=True` has none. `FieldInfo.store` now
+  follows Odoo (computed and related fields are not stored unless asked) and `FieldInfo.related`
+  is recorded. Odoo 19.0: 283 of 1,431 findings.
+- **Golden corpus case `odoo19_patterns`**: a model defined in one addon and extended with a mixin in
+  another (`_name` + `_inherit` listing itself), annotated / `Image` / `Json` fields, a `<groupby>`,
+  an xpath into an inline subview, a locator, `unlink` from a button, HTML ids in a template and a
+  `field_<model>__<field>` ref. Against `main` before these fixes it produced six false positives.
+
 ### Added
 
 - **`odoo-doctor rules new <rule-name> [--out DIR]`** scaffolds a third-party rule pack: a

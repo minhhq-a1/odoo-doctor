@@ -299,3 +299,71 @@ def test_resolve_method_extended_via_inherit_found():
         extended_methods={"sale.order": {"action_foo": MethodInfo(name="action_foo")}},
     )
     assert r.resolve_method("sale.order", "action_foo").status == ResolveResult.FOUND
+
+
+# --- methods every model inherits from BaseModel -----------------------------
+
+
+def _complete_repo_resolver() -> SymbolResolver:
+    model = ModelInfo(name="x.model", module="m")
+    return SymbolResolver(
+        repo_models={"x.model": model}, repo_xml_ids={}, stub_version="17.0"
+    )
+
+
+def test_base_model_methods_exist_on_every_model():
+    resolver = _complete_repo_resolver()
+    for method in (
+        "unlink",
+        "write",
+        "create",
+        "copy",
+        "action_archive",
+        "action_unarchive",
+        "toggle_active",
+    ):
+        lookup = resolver.resolve_method("x.model", method)
+        assert lookup.status == ResolveResult.FOUND, method
+        assert lookup.source == "builtin"
+
+
+def test_a_method_that_exists_nowhere_is_still_not_found():
+    resolver = _complete_repo_resolver()
+    assert (
+        resolver.resolve_method("x.model", "action_made_up").status
+        == ResolveResult.NOT_FOUND
+    )
+
+
+# --- implicit `field_<model>__<field>` xml ids -------------------------------
+
+
+def _resolver_with_fields() -> SymbolResolver:
+    model = ModelInfo(
+        name="x.model",
+        module="m",
+        fields={"alpha": FieldInfo(name="alpha", field_type="Char")},
+    )
+    return SymbolResolver(
+        repo_models={"x.model": model}, repo_xml_ids={}, stub_version="17.0"
+    )
+
+
+def test_implicit_field_xml_ids_resolve_for_known_fields():
+    resolver = _resolver_with_fields()
+    for xml_id in (
+        "m.field_x_model__alpha",  # a declared field
+        "other.field_x_model__alpha",  # any module prefix: Odoo registers it per module
+        "m.field_x_model__create_uid",  # an ORM-injected field
+    ):
+        assert resolver.resolve_xml_id(xml_id).status == ResolveResult.FOUND, xml_id
+
+
+def test_implicit_field_xml_ids_do_not_hide_a_missing_field_or_model():
+    resolver = _resolver_with_fields()
+    for xml_id in (
+        "m.field_x_model__nope",  # the model has no such field
+        "m.field_no_such_model__alpha",  # no such model
+        "m.field_x_model_alpha",  # not the `__` form
+    ):
+        assert resolver.resolve_xml_id(xml_id).status != ResolveResult.FOUND, xml_id

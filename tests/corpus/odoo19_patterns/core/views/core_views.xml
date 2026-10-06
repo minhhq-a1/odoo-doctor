@@ -1,0 +1,56 @@
+<odoo>
+  <record id="res_core_form" model="ir.ui.view">
+    <field name="name">res.core.form</field>
+    <field name="model">res.core</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="parent_id"/>
+        <field name="image"/>
+        <field name="payload"/>
+        <field name="ext_note"/>
+        <field name="line_ids">
+          <list>
+            <field name="qty"/>
+          </list>
+        </field>
+      </form>
+    </field>
+  </record>
+
+  <record id="res_core_line_list" model="ir.ui.view">
+    <field name="name">res.core.line.list</field>
+    <field name="model">res.core.line</field>
+    <field name="arch" type="xml">
+      <list>
+        <field name="qty"/>
+        <groupby name="core_id">
+          <button name="action_archive" type="object" string="Archive"/>
+          <field name="group_only_field"/>
+        </groupby>
+      </list>
+    </field>
+  </record>
+
+  <template id="core_report">
+    <div id="html_only_id"><span id="html_only_span">Core</span></div>
+  </template>
+
+  <record id="core_form_action" model="ir.actions.act_window">
+    <field name="name">Core</field>
+    <field name="res_model">res.core</field>
+    <field name="view_id" ref="res_core_form"/>
+  </record>
+
+  <record id="core_line_action" model="ir.actions.act_window">
+    <field name="name">Core lines</field>
+    <field name="res_model">res.core.line</field>
+    <field name="view_id" ref="res_core_line_list"/>
+  </record>
+
+  <!-- `field_<model>__<field>` is an id Odoo registers for every field, declared nowhere -->
+  <record id="core_marker" model="res.core">
+    <field name="name">marker</field>
+    <field name="parent_id" ref="field_res_core__create_uid"/>
+  </record>
+</odoo>

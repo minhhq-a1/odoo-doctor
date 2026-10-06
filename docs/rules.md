@@ -75,7 +75,7 @@ result = safe_eval(expression, {'uid': self.env.uid})
 
 **Tier**: P0 (critical) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: Models defined in the module with no row in `security/ir.model.access.csv` (or no CSV file at all).
+**Detects**: Models defined in the module with no row in `security/ir.model.access.csv` (or no CSV file at all). A model the module only extends (`_inherit`, with or without repeating its `_name`) needs no row of its own here.
 
 **Why**: A model without access rules is unreachable for non-admin users and is flagged by Odoo at load time.
 
@@ -104,7 +104,7 @@ access_my_model_user,my.model user,model_my_model,base.group_user,1,1,1,0
 
 **Fix**: Pass values as query parameters.
 
-**Note**: When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL(...)` or `','.join(['%s'] * n)` placeholder lists is not reported, while a fragment that reaches the query through a list or a branch is.
+**Note**: When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL(...)` or `','.join(['%s'] * n)` placeholder lists is not reported, while a fragment that reaches the query through a list or a branch is. Test code (`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` that take only `self` (where SQL views are created) are skipped: nothing a request controls reaches them.
 
 Bad:
 
@@ -377,6 +377,8 @@ access_x,x,model_my_model,base.group_user,1,0,0,0
 
 **Fix**: List every field the computation reads.
 
+**Note**: A field the method assigns (`rec.total = ...`) is its result, not an input, so reading it back inside the same method is not reported.
+
 Bad:
 
 ```python
@@ -578,7 +580,7 @@ records = self.env['res.partner'].search(
 
 **Fix**: Declare `ondelete` explicitly.
 
-**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`.
+**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`. So are related or computed fields that are not stored (no `store=True`): they have no foreign-key column.
 
 Bad:
 
@@ -624,18 +626,20 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: Old-API patterns: `from openerp` imports, `_columns`, `osv.osv` and `self.pool`.
+**Detects**: Old-API patterns: `from openerp` imports, `_columns`, `osv.osv` and model calls through the pool with `cr, uid`.
 
 **Why**: They belong to Odoo 7-9 and are removed in modern versions.
 
 **Fix**: Migrate to the new API.
+
+**Note**: `self.pool['model']` alone is the registry (a model class, used for `isinstance` checks) and is not reported. Scripts in `migrations/<version>/` for a version before Odoo 10 may import `openerp`: they ran on databases of that era.
 
 Bad:
 
 ```python
 from openerp import models
 class MyModel(osv.osv): ...
-self.pool.get('res.partner')
+self.pool.get('res.partner').search(cr, uid, [])
 ```
 
 Good:
@@ -643,7 +647,7 @@ Good:
 ```python
 from odoo import models
 class MyModel(models.Model): ...
-self.env['res.partner']
+self.env['res.partner'].search([])
 ```
 
 ### removed-model-still-referenced
