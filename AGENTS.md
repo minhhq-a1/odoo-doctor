@@ -239,6 +239,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
 | `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
 | `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
+| `ci-templates/` | GitLab CI and Bitbucket Pipelines templates (same script in both); `tests/test_ci_templates.py` runs it in a temp git repo |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
 | `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |

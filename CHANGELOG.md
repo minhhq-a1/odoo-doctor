@@ -27,6 +27,13 @@ All notable changes to Odoo Doctor are documented here.
   entry points (a compatible and a future-version plugin), the mismatch message, and a check
   that `docs/custom-rules.md` mentions every name `plugin_api` exports. `docs/custom-rules.md`
   and `docs/stability.md` describe the versioning policy.
+- **CI templates for GitLab CI and Bitbucket Pipelines** (`ci-templates/gitlab-ci.yml`,
+  `ci-templates/bitbucket-pipelines.yml`): merge/pull request pipelines scan only the changed
+  files (against the merge base), other pipelines scan everything; `ODOO_DOCTOR_*` variables set
+  the version, path, Odoo version, `--fail-on`, `--min-score` and an advisory mode; the JSON report
+  is kept as an artifact. `tests/test_ci_templates.py` checks the YAML, that every flag exists on
+  `scan`, and runs the script in a throwaway git repo with a real `origin` (branch pipeline, MR that
+  changes a clean addon, MR that changes a bad one, advisory mode). The README documents both.
 - **Language server: hover.** Hovering a flagged line shows the rule's explanation from
   `RULE_DOCS` (detects, why, fix, bad/good example, docs link), not repeating the message the
   editor already shows. Findings from Ruff / Pylint-Odoo show their own title and help. A line
