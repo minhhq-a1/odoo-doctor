@@ -328,14 +328,18 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "missing-ondelete": RuleDoc(
         detects="`Many2one` fields on non-transient, non-abstract models "
         "without an explicit `ondelete`.",
-        why="The implicit `set null` policy is rarely a conscious choice; "
-        "declaring it documents the intended behavior.",
+        why="An optional `Many2one` defaults to `set null`: deleting the target "
+        "silently empties the field, which orphans a line whose parent is deleted. "
+        "Declaring the policy documents the intent.",
         fix="Declare `ondelete` explicitly.",
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
         notes="Required `Many2one` fields are skipped: Odoo already defaults "
         "them to `restrict`. So are related or computed fields that are not stored "
-        "(no `store=True`): they have no foreign-key column.",
+        "(no `store=True`): they have no foreign-key column. Low confidence: the "
+        "default is a legitimate choice (about 83% of Odoo 19 community's optional "
+        "stored `Many2one` fields rely on it), so this is a hint that does not "
+        "affect the score.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "

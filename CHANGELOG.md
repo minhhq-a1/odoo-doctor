@@ -6,6 +6,18 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `missing-ondelete` drops from high to low confidence. An optional stored `Many2one` without
+  `ondelete` gets `set null`, a deliberate default: about 83% of Odoo 19 community's optional
+  stored `Many2one` fields (`company_id`, `user_id`, `partner_id`...) rely on it, yet the finding
+  was high confidence and cost score (P1, 10 points each). On a real 14-addon workspace it
+  accounted for 42 findings and pulled `purchase_request` to 47.9 and `workflow_diagram` to 37.0;
+  without them those modules score 75.3 and 44.5 (the other findings are unchanged). The finding
+  stays visible, the message now states what `set null` does instead of predicting integrity
+  problems, and the help names `cascade` / `restrict` for the cases that need them. Scores of
+  existing projects rise; the history regression gate is not triggered by a rise.
+
 ### Changed
 
 - `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the

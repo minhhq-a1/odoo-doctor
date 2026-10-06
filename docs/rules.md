@@ -29,7 +29,7 @@ Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [write-in-loop](#write-in-loop) | P1 | Performance | error | high |  |
 | [expensive-nonstored-compute](#expensive-nonstored-compute) | P2 | Performance | warning | medium |  |
 | [unbounded-search](#unbounded-search) | P2 | Performance | warning | high |  |
-| [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | high |  |
+| [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | low |  |
 | [data-noupdate-risk](#data-noupdate-risk) | P2 | Data Integrity | warning | high |  |
 | [deprecated-api-usage](#deprecated-api-usage) | P1 | Upgrade Safety | warning | high |  |
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
@@ -572,15 +572,15 @@ records = self.env['res.partner'].search(
 
 ### missing-ondelete
 
-**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: low · **Min Odoo version**: 14.0
 
 **Detects**: `Many2one` fields on non-transient, non-abstract models without an explicit `ondelete`.
 
-**Why**: The implicit `set null` policy is rarely a conscious choice; declaring it documents the intended behavior.
+**Why**: An optional `Many2one` defaults to `set null`: deleting the target silently empties the field, which orphans a line whose parent is deleted. Declaring the policy documents the intent.
 
 **Fix**: Declare `ondelete` explicitly.
 
-**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`. So are related or computed fields that are not stored (no `store=True`): they have no foreign-key column.
+**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`. So are related or computed fields that are not stored (no `store=True`): they have no foreign-key column. Low confidence: the default is a legitimate choice (about 83% of Odoo 19 community's optional stored `Many2one` fields rely on it), so this is a hint that does not affect the score.
 
 Bad:
 
