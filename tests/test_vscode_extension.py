@@ -69,3 +69,19 @@ def test_marketplace_identity_is_stable(manifest: dict):
     # publishes a different extension and orphans existing installs.
     assert manifest["publisher"] == "MinhHong"
     assert manifest["name"] == "odoo-doctor"
+
+
+def test_marketplace_icon_is_a_square_png_of_at_least_128px(manifest: dict):
+    # The Marketplace shows `icon` in the gallery and on the extension page; it must be
+    # a PNG (not SVG) of at least 128x128 pixels.
+    assert manifest.get("icon") == "images/icon.png"
+    data = (EXTENSION / manifest["icon"]).read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    assert width == height >= 128
+
+
+def test_icon_source_is_not_shipped_in_the_vsix():
+    ignored = (EXTENSION / ".vscodeignore").read_text(encoding="utf-8").split()
+    assert "images/icon.svg" in ignored

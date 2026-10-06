@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7a4f8c"/>
+      <stop offset="1" stop-color="#43284f"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <!-- medical cross -->
+  <path d="M104 40h48a14 14 0 0 1 14 14v46h46a14 14 0 0 1 14 14v28a14 14 0 0 1-14 14h-46v46a14 14 0 0 1-14 14h-48a14 14 0 0 1-14-14v-46H44a14 14 0 0 1-14-14v-28a14 14 0 0 1 14-14h46V54a14 14 0 0 1 14-14z" fill="#ffffff"/>
+  <!-- heartbeat line -->
+  <polyline points="30,128 88,128 106,92 128,168 148,112 160,128 226,128" fill="none" stroke="#43f0b0" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
