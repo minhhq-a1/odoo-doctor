@@ -46,6 +46,8 @@ def server(monkeypatch):
         lambda params: s.published.append(params),
     )
     monkeypatch.setattr(s, "window_log_message", lambda params: s.logged.append(params))
+    s.shown = []
+    monkeypatch.setattr(s, "window_show_message", lambda params: s.shown.append(params))
     yield s
     s._executor.shutdown(wait=False)
 
@@ -250,3 +252,52 @@ def test_a_request_that_arrives_during_a_failing_scan_is_not_lost(
 
     asyncio.run(go())
     assert len(calls) == 2
+
+
+# --- a scan that found no addon says so --------------------------------------
+
+
+def _scan_of(monkeypatch, findings, has_addons):
+    monkeypatch.setattr(srv, "scan_project", lambda r: findings)
+    monkeypatch.setattr(srv, "addons_found", lambda r: has_addons)
+
+
+def test_a_folder_without_addons_gets_one_warning_that_names_the_fix(
+    server, tmp_path: Path, monkeypatch
+):
+    server.set_roots([tmp_path])
+    _scan_of(monkeypatch, {}, has_addons=False)
+
+    asyncio.run(server.request_scan(tmp_path.resolve()))
+    asyncio.run(server.request_scan(tmp_path.resolve()))  # e.g. a save: no repeat
+
+    assert len(server.shown) == 1
+    warning = server.shown[0]
+    assert warning.type == srv.lsp.MessageType.Warning
+    assert tmp_path.name in warning.message
+    assert "addons_paths" in warning.message
+    assert "odoo-doctor.toml" in warning.message
+
+
+def test_a_clean_project_is_not_reported_as_empty(server, tmp_path: Path, monkeypatch):
+    server.set_roots([tmp_path])
+    _scan_of(monkeypatch, {}, has_addons=True)
+
+    asyncio.run(server.request_scan(tmp_path.resolve()))
+
+    assert server.shown == []
+
+
+def test_addons_appearing_clears_the_warning_so_it_can_come_back(
+    server, tmp_path: Path, monkeypatch
+):
+    server.set_roots([tmp_path])
+    root = tmp_path.resolve()
+    _scan_of(monkeypatch, {}, has_addons=False)
+    asyncio.run(server.request_scan(root))
+    _scan_of(monkeypatch, {}, has_addons=True)  # config fixed
+    asyncio.run(server.request_scan(root))
+    _scan_of(monkeypatch, {}, has_addons=False)  # config broken again
+    asyncio.run(server.request_scan(root))
+
+    assert len(server.shown) == 2

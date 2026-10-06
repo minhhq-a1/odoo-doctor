@@ -29,7 +29,7 @@ from odoo_doctor.lsp.actions import (
     line_in_sync,
 )
 from odoo_doctor.lsp.convert import SOURCE, file_diagnostics
-from odoo_doctor.lsp.engine import scan_project
+from odoo_doctor.lsp.engine import addons_found, scan_project
 from odoo_doctor.rules.registry import default_registry
 
 RESCAN_COMMAND = "odooDoctor.rescan"
@@ -54,6 +54,8 @@ class OdooDoctorServer(LanguageServer):
         self._published: dict[Path, set[str]] = {}
         self._running: set[Path] = set()
         self._dirty: set[Path] = set()
+        # Roots already told that no addon was found, so a save does not repeat it.
+        self._warned_empty: set[Path] = set()
         # One worker: scans share process-wide parse caches and must not overlap.
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="scan")
 
@@ -149,8 +151,38 @@ class OdooDoctorServer(LanguageServer):
                     )
                     continue  # a request that arrived meanwhile still gets its rerun
                 self._publish(root, result)
+                await self._report_empty(root, result)
         finally:
             self._running.discard(root)
+
+    async def _report_empty(
+        self, root: Path, result: dict[str, list[Diagnostic]]
+    ) -> None:
+        """Tell the user once when a scan saw no addon at all, instead of staying silent
+        (a folder whose addons sit deeper than ``addons_paths`` looks just like a clean one)."""
+        if result:
+            self._warned_empty.discard(root)
+            return
+        loop = asyncio.get_running_loop()
+        try:
+            found = await loop.run_in_executor(self._executor, addons_found, root)
+        except Exception:  # only a hint: never let it break the scan loop
+            log.exception("addon discovery for %s failed", root)
+            return
+        if found:
+            self._warned_empty.discard(root)
+        elif root not in self._warned_empty:
+            self._warned_empty.add(root)
+            self.window_show_message(
+                lsp.ShowMessageParams(
+                    type=lsp.MessageType.Warning,
+                    message=(
+                        f"Odoo Doctor found no addons in '{root.name}'. Open the folder "
+                        "that holds your addons (each has a __manifest__.py), or set "
+                        "addons_paths in odoo-doctor.toml."
+                    ),
+                )
+            )
 
     def _publish(self, root: Path, result: dict[str, list[Diagnostic]]) -> None:
         self.findings[root] = result

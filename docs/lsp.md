@@ -127,6 +127,15 @@ args = ["lsp"]
   e.g. `/Users/you/.local/bin/odoo-doctor`.
 - *`pip install` says "No matching distribution found"*: your Python is older than 3.10
   (the Xcode `python3` on macOS is 3.9). Use `uv tool install` or `pipx` as above.
+- *"Odoo Doctor found no addons in '<folder>'"*: the folder is scanned like
+  `odoo-doctor scan <folder>`, which only looks at the folder itself and its direct
+  children for a `__manifest__.py`. Open the folder that holds your addons, or list their
+  parent folders in `odoo-doctor.toml` (paths are relative to the folder you opened):
+
+  ```toml
+  [odoo-doctor]
+  addons_paths = ["extra-addons/my-repo", "extra-addons/other-repo"]
+  ```
 - *No findings*: check `odoo-doctor scan <folder>` on the same folder, and that
   `[ignore]` in `odoo-doctor.toml` does not exclude the files.
 - *Stale findings after a branch switch*: run *Odoo Doctor: Rescan workspace*.

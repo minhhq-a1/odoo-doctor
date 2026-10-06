@@ -12,7 +12,7 @@ from lsprotocol import types as lsp
 
 from odoo_doctor.lsp.actions import find_finding
 from odoo_doctor.lsp.convert import file_diagnostics
-from odoo_doctor.lsp.engine import scan_project
+from odoo_doctor.lsp.engine import addons_found, scan_project
 
 RULE = "raw-sql-string-interpolation"
 
@@ -108,3 +108,31 @@ def test_find_finding_matches_by_rule_and_line(tmp_path: Path):
         code="no-such-rule",
     )
     assert find_finding(findings, other) is None
+
+
+# --- addons_found: tells "clean" apart from "nothing was scanned" -------------
+
+
+def test_addons_found_for_a_project_with_an_addon(tmp_path: Path):
+    assert addons_found(_project(tmp_path))
+
+
+def test_addons_found_is_false_when_addons_sit_deeper_than_the_default_path(
+    tmp_path: Path,
+):
+    (tmp_path / "repo" / "mod").mkdir(parents=True)
+    (tmp_path / "repo" / "mod" / "__manifest__.py").write_text('{"name": "mod"}')
+    assert not addons_found(tmp_path)
+
+
+def test_addons_found_follows_addons_paths_from_the_config(tmp_path: Path):
+    (tmp_path / "repo" / "mod").mkdir(parents=True)
+    (tmp_path / "repo" / "mod" / "__manifest__.py").write_text('{"name": "mod"}')
+    (tmp_path / "odoo-doctor.toml").write_text(
+        '[odoo-doctor]\naddons_paths = ["repo"]\n'
+    )
+    assert addons_found(tmp_path)
+
+
+def test_addons_found_is_false_for_an_empty_folder(tmp_path: Path):
+    assert not addons_found(tmp_path)

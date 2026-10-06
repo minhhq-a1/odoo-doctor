@@ -11,6 +11,9 @@ All notable changes to Odoo Doctor are documented here.
 - The VS Code extension is published on the Marketplace as `MinhHong.odoo-doctor` (preview, 0.7.0):
   install it from the Extensions view or with `code --install-extension MinhHong.odoo-doctor`
   (the server still needs the `lsp` extra). The README and `docs/lsp.md` say so.
+- The language server tells you when a scan found no addon at all (a warning in the
+  editor), instead of staying silent: a folder whose addons sit deeper than `addons_paths`
+  looks exactly like a clean project. `docs/lsp.md` explains how to fix it.
 - Install docs for the language server (`docs/lsp.md`, extension README, README) recommend
   `uv tool install` / `pipx` and explain the macOS case where the Xcode `pip3` is Python 3.9
   (Odoo Doctor needs 3.10+) and VS Code started from the Dock cannot see `~/.local/bin`.
