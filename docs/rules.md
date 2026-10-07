@@ -12,7 +12,7 @@ Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
-| [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | medium |  |
+| [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | low |  |
 | [unsafe-template-render](#unsafe-template-render) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
 | [duplicate-xml-id](#duplicate-xml-id) | P1 | Correctness | error | high |  |
@@ -29,7 +29,7 @@ Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [write-in-loop](#write-in-loop) | P1 | Performance | error | high |  |
 | [expensive-nonstored-compute](#expensive-nonstored-compute) | P2 | Performance | warning | medium |  |
 | [unbounded-search](#unbounded-search) | P2 | Performance | warning | high |  |
-| [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | high |  |
+| [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | low |  |
 | [data-noupdate-risk](#data-noupdate-risk) | P2 | Data Integrity | warning | high |  |
 | [deprecated-api-usage](#deprecated-api-usage) | P1 | Upgrade Safety | warning | high |  |
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
@@ -54,9 +54,9 @@ Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 ser
 
 **Why**: Evaluating dynamic strings allows arbitrary code execution.
 
-**Fix**: Use `odoo.tools.safe_eval` for domains/expressions, or refactor to explicit logic.
+**Fix**: Use `ast.literal_eval` for a stored literal (a domain, a list), `odoo.tools.safe_eval.safe_eval` for an expression that needs variables, or refactor to explicit logic.
 
-**Note**: An argument provably built from constants (a literal, or a variable bound only to constants) is not reported; anything else, including a parameter or a string with interpolated values, is.
+**Note**: An argument provably built from constants (a literal, or a variable bound only to constants) is not reported; anything else, including a parameter or a string with interpolated values, is. The message shows the evaluated expression. A module that binds the name itself (`from odoo.tools.safe_eval import safe_eval as eval`, an Odoo 8/9 idiom) is calling that function, not the builtin, and is not reported. Odoo 19 community contains one bare `exec` (the `shell` command), so a finding here is almost always genuine.
 
 Bad:
 
@@ -206,15 +206,15 @@ Good:
 
 ### sudo-without-comment
 
-**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: low · **Min Odoo version**: 14.0
 
-**Detects**: `.sudo()` calls with no justifying comment on the same line or directly above.
+**Detects**: `.sudo()` calls with no justifying comment on any line of the statement or directly above it (a compound statement counts only its header line(s)).
 
 **Why**: Every privilege elevation should be reviewable; an undocumented `sudo()` is hard to audit.
 
 **Fix**: Add a short comment explaining why elevated privileges are needed.
 
-**Note**: Medium confidence: does not affect the score.
+**Note**: `.sudo(False)` (drops privileges), test files and migration scripts are skipped. A comment on every `sudo()` is a team convention rather than a defect (Odoo's own addons leave most of theirs uncommented), and addons you only vendor are best left out with `[ignore] modules`. Low confidence: does not affect the score, and `min_confidence = "medium"` on a surface hides it.
 
 Bad:
 
@@ -429,7 +429,7 @@ company = self.env.company
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `create()` called inside a loop.
+**Detects**: `create()` called inside a loop (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped).
 
 **Why**: Each call triggers its own INSERT and recomputation round trip.
 
@@ -470,7 +470,7 @@ self.env['my.model'].create(vals_list)
 
 **Fix**: Move the call out of the loop and batch the results.
 
-**Note**: The performance rules skip files inside an addon's `tests/` directory.
+**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported.
 
 Bad:
 
@@ -490,7 +490,7 @@ by_id = {p.id: p for p in partners}
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `write()` called inside a loop.
+**Detects**: `write()` called inside a loop (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped).
 
 **Why**: Each call triggers its own UPDATE and recomputation round trip.
 
@@ -574,15 +574,15 @@ records = self.env['res.partner'].search(
 
 ### missing-ondelete
 
-**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: low · **Min Odoo version**: 14.0
 
 **Detects**: `Many2one` fields on non-transient, non-abstract models without an explicit `ondelete`.
 
-**Why**: The implicit `set null` policy is rarely a conscious choice; declaring it documents the intended behavior.
+**Why**: An optional `Many2one` defaults to `set null`: deleting the target silently empties the field, which orphans a line whose parent is deleted. Declaring the policy documents the intent.
 
 **Fix**: Declare `ondelete` explicitly.
 
-**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`. So are related or computed fields that are not stored (no `store=True`): they have no foreign-key column.
+**Note**: Required `Many2one` fields are skipped: Odoo already defaults them to `restrict`. So are related or computed fields that are not stored (no `store=True`): they have no foreign-key column. Low confidence: the default is a legitimate choice (about 83% of Odoo 19 community's optional stored `Many2one` fields rely on it), so this is a hint that does not affect the score.
 
 Bad:
 
@@ -656,13 +656,13 @@ self.env['res.partner'].search([])
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: medium · **Min Odoo version**: 14.0
 
-**Detects**: `_inherit` targets that cannot be resolved in the project or the Odoo stubs for the target version.
+**Detects**: `_inherit` of a core model that Odoo removed or renamed at or before the target version (for example `account.invoice`, `stock.production.lot`, `mail.channel`) and that the project does not define itself.
 
-**Why**: Models are removed or renamed between versions; inheriting a missing model breaks the import.
+**Why**: Models are removed or renamed between versions; inheriting a missing model breaks the registry load.
 
-**Fix**: Verify the model exists in the target version and update `_inherit`.
+**Fix**: Port the code to the replacement model named in the finding.
 
-**Note**: Medium confidence: does not affect the score.
+**Note**: Based on a curated list of certain removals: a model that is merely absent from the scanned set is usually an unscanned dependency and is not reported. Medium confidence: does not affect the score.
 
 ## Module Hygiene
 
@@ -796,11 +796,11 @@ raise UserError(_("Amount must be positive"))
 
 **Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
 
-**Detects**: Views that no action, menu or inheriting view references.
+**Detects**: Extra primary views that are not their model's default view of that type and that nothing in the module references or inherits.
 
 **Fix**: Reference the view, inherit it, or remove it if unused.
 
-**Note**: Medium confidence: the reference may live in a module that was not scanned. Does not affect the score.
+**Note**: Odoo serves a model's primary view of each type (lowest `priority`, then first defined) without any reference, so that one is never flagged; neither are QWeb views or ids mentioned in Python, JS, XML or CSV. Medium confidence: the reference may live in a module that was not scanned. Does not affect the score.
 
 ### vendored-python-code
 

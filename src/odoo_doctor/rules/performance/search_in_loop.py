@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Generator
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import is_test_file, receiver_is_orm
+from odoo_doctor.rules._ast_helpers import (
+    is_bounded_loop,
+    is_test_file,
+    per_iteration_nodes,
+    receiver_is_orm,
+)
 from odoo_doctor.rules.registry import rule
 
 # browse() only wraps ids in a recordset; it does not hit the database.
@@ -68,15 +72,13 @@ def _walk_for_loops(
         _walk_for_loops(child, diags, file_path, module, version, orm_vars)
 
 
-def _walk_excluding_nested_loops(node: ast.AST) -> Generator[ast.AST, None, None]:
-    from collections import deque
-
-    todo = deque(ast.iter_child_nodes(node))
-    while todo:
-        curr = todo.popleft()
-        yield curr
-        if not isinstance(curr, (ast.For, ast.While)):
-            todo.extend(ast.iter_child_nodes(curr))
+def _is_paged(call: ast.Call) -> bool:
+    """``search(..., limit=N)`` with a batch size: the paging that a ``while`` loop over
+    chunks is made of. ``limit=1`` is a plain lookup per iteration and still counts."""
+    for kw in call.keywords:
+        if kw.arg == "limit":
+            return not (isinstance(kw.value, ast.Constant) and kw.value.value in (0, 1))
+    return False
 
 
 def _check_loop_body(
@@ -88,6 +90,8 @@ def _check_loop_body(
     orm_vars: set[str],
 ) -> None:
     """Check if any ORM method call exists inside a loop body."""
+    if is_bounded_loop(loop):
+        return
     local_orm_vars = set(orm_vars)
     if isinstance(loop, ast.For):
         from odoo_doctor.rules._ast_helpers import node_is_orm
@@ -100,11 +104,13 @@ def _check_loop_body(
                     if isinstance(el, ast.Name):
                         local_orm_vars.add(el.id)
 
-    for node in _walk_excluding_nested_loops(loop):
+    for node in per_iteration_nodes(loop):
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in _ORM_METHODS:
             if not receiver_is_orm(node, local_orm_vars):
+                continue
+            if isinstance(loop, ast.While) and _is_paged(node):
                 continue
             diags.append(
                 Diagnostic(
