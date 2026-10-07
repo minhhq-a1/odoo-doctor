@@ -25,6 +25,14 @@ False positives found by scanning a real Odoo 19 workspace (14 addons: 45 `orpha
   never reported.
 - Golden corpus: new `unscanned_dependencies` case keeps the true positives (an unused extra view,
   `_inherit = 'account.invoice'`) next to the cases that must stay silent.
+- `sudo-without-comment` (75 findings in the same workspace): a comment now counts when it sits on any line of the statement that
+  holds the `.sudo()` or directly above that statement, not only on the call's first line, so a
+  chained `(self.env[...]\n.sudo()\n.get_param(...))` justified by a comment above no longer
+  fires. A compound statement (`if`, `for`, `with`) counts only its header lines. `.sudo(False)`
+  (drops privileges), test files and migration scripts are skipped. The convention itself is
+  unchanged: it is a team policy, and Odoo 19's own addons leave about 80% of their `.sudo()`
+  calls uncommented, so its confidence drops from medium to low. The score is unaffected (only
+  high confidence scores); a surface with `min_confidence = "medium"` now hides it.
 
 ### Changed
 
