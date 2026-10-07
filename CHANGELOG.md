@@ -64,6 +64,21 @@ reviewing a real workspace and Odoo 19 community:
 - The per-iteration walk now lives in `rules/_ast_helpers.py` (`per_iteration_nodes`,
   `is_bounded_loop`), shared by the three rules. New golden corpus case `loop_setup_not_flagged`.
 
+Review of the last two high-confidence security findings of a real workspace, calibrated on
+Odoo 19 community (221 of its 978 controller routes are public and use `sudo()`; 32 of its
+`cr.execute` calls were reported as injections):
+
+- `public-controller-sudo-risk` grades the finding. A route that also calls an access check
+  (`consteq`, `_document_check_access`, `check_access*`, a `_verify_*` / `hmac` / `*_from_token`
+  call) is reported at medium confidence (no score impact; 68 of Odoo's 219 routes), without one it
+  stays high. Minting a token (`generate_access_token`) is not a check. `.sudo(False)` and
+  `env['ir.config_parameter'].sudo().get_param('<constant>')` are no longer elevations. The message
+  says which case applies. `ControllerInfo` gains `guarded`.
+- `raw-sql-string-interpolation` treats `<anything>._table` as a trusted identifier (it was only
+  `self._table` / `cls._table`) and skips `upgrades/` scripts like `migrations/` (renamed in
+  Odoo 18). 32 -> 26 findings on Odoo 19 community. The taint analysis itself is unchanged.
+- New golden corpus case `public_routes_and_sql`.
+
 ### Changed
 
 - `eval-usage` message now shows the evaluated expression and why it is flagged (not provably

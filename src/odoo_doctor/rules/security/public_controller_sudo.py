@@ -38,10 +38,25 @@ def check_public_controller_sudo(
                     severity="error",
                     tier="P1",
                     source="native",
-                    confidence="high",
+                    confidence="medium" if ctrl.guarded else "high",
                     title="Public controller route calls .sudo()",
-                    message=f"Controller method '{ctrl.method_name}' is declared with auth='{ctrl.auth}' and uses .sudo().",
-                    help="Review if sudo is necessary. Public routes with sudo bypass access rights and can lead to privilege escalation.",
+                    message=(
+                        f"Controller method '{ctrl.method_name}' is declared with "
+                        f"auth='{ctrl.auth}' and uses .sudo()"
+                        + (
+                            ", after what looks like an access check (token, "
+                            "signature or record access check)."
+                            if ctrl.guarded
+                            else " with no recognised access check in the route."
+                        )
+                    ),
+                    help=(
+                        "Review if sudo is necessary. Public routes with sudo bypass "
+                        "access rights and can lead to privilege escalation: check "
+                        "an access token (consteq on the record's access_token) or "
+                        "the record access before elevating, and elevate the "
+                        "narrowest recordset."
+                    ),
                     odoo_version=odoo_version,
                 )
             )
