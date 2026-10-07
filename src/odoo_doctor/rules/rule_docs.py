@@ -254,12 +254,21 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="records.write({'state': 'done'})",
     ),
     "n-plus-one-read": RuleDoc(
-        detects="Chained relational attribute access (`rec.partner_id.name`) on "
-        "the loop variable inside a loop.",
-        why="Can trigger one query per record when the prefetch cache is cold.",
-        fix="Prefetch related records before looping, or read the needed fields "
-        "in one batch.",
-        notes="Low confidence: does not affect the score.",
+        detects="Field reads on a record built by `browse(<one id>)` on every "
+        "iteration of a `for` loop or comprehension (the id depends on the loop "
+        "variable).",
+        why="Odoo prefetches: iterating a recordset and reading `line.product_id.name` "
+        "costs one query per field for the whole recordset. A singleton browsed per "
+        "iteration starts with an empty prefetch, so every read hits the database.",
+        fix="Browse all the ids once before the loop and iterate that recordset, or "
+        "call `with_prefetch(ids)` on the browsed record.",
+        bad="for pid in partner_ids:\n"
+        "    name = self.env['res.partner'].browse(pid).country_id.name",
+        good="for partner in self.env['res.partner'].browse(partner_ids):\n"
+        "    name = partner.country_id.name",
+        notes="Looping over a recordset (`for line in order.line_ids:`) is not "
+        "reported, and neither are `with_prefetch(...)`, method calls and `id` / `env`. "
+        "Low confidence: does not affect the score.",
     ),
     "unbounded-search": RuleDoc(
         detects="`search()` / `read()` calls with no `limit` in risky contexts.",

@@ -452,13 +452,27 @@ self.env['my.model'].create(vals_list)
 
 **Tier**: P1 (serious) · **Severity**: warning · **Confidence**: low · **Min Odoo version**: 14.0
 
-**Detects**: Chained relational attribute access (`rec.partner_id.name`) on the loop variable inside a loop.
+**Detects**: Field reads on a record built by `browse(<one id>)` on every iteration of a `for` loop or comprehension (the id depends on the loop variable).
 
-**Why**: Can trigger one query per record when the prefetch cache is cold.
+**Why**: Odoo prefetches: iterating a recordset and reading `line.product_id.name` costs one query per field for the whole recordset. A singleton browsed per iteration starts with an empty prefetch, so every read hits the database.
 
-**Fix**: Prefetch related records before looping, or read the needed fields in one batch.
+**Fix**: Browse all the ids once before the loop and iterate that recordset, or call `with_prefetch(ids)` on the browsed record.
 
-**Note**: Low confidence: does not affect the score.
+**Note**: Looping over a recordset (`for line in order.line_ids:`) is not reported, and neither are `with_prefetch(...)`, method calls and `id` / `env`. Low confidence: does not affect the score.
+
+Bad:
+
+```python
+for pid in partner_ids:
+    name = self.env['res.partner'].browse(pid).country_id.name
+```
+
+Good:
+
+```python
+for partner in self.env['res.partner'].browse(partner_ids):
+    name = partner.country_id.name
+```
 
 ### search-in-loop
 

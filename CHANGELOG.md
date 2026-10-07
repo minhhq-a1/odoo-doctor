@@ -81,6 +81,17 @@ Odoo 19 community (221 of its 978 controller routes are public and use `sudo()`;
 
 ### Changed
 
+- `n-plus-one-read` is redefined around the real N+1 of the ORM. It reported any chained attribute
+  read on any `for` loop variable (`for line in order.line_ids: line.product_id.name`), i.e. nearly
+  every record loop: 5748 findings on Odoo 19 community and 45 on the two OCA addons of a reviewed
+  workspace, yet Odoo prefetches such reads per recordset, so they cost one query per field, not per
+  record. It now reports a field read on a record built by `browse(<one id>)` on every iteration
+  of a `for` loop or comprehension (the id depends on the loop variable, also through a name
+  assigned from it): that singleton starts with an empty prefetch, so each read is a query.
+  `with_prefetch(...)` (before or after `browse`), `browse` of a collection or of a loop-independent id,
+  method calls and `id` / `env` are not reads. 235 findings on Odoo 19 community, none on the OCA
+  addons. Still low confidence, never scored; the title, message and help changed accordingly.
+  New golden corpus case `n_plus_one_prefetch`.
 - `eval-usage` message now shows the evaluated expression and why it is flagged (not provably
   constant, or built from interpolated text), and the help names `ast.literal_eval` and
   `safe_eval`. Detection is otherwise unchanged: on Odoo 19 community the rule reports a single
