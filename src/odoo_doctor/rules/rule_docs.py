@@ -75,14 +75,20 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "eval-usage": RuleDoc(
         detects="Calls to the builtins `eval()` / `exec()` on non-literal input.",
         why="Evaluating dynamic strings allows arbitrary code execution.",
-        fix="Use `odoo.tools.safe_eval` for domains/expressions, or refactor to "
-        "explicit logic.",
+        fix="Use `ast.literal_eval` for a stored literal (a domain, a list), "
+        "`odoo.tools.safe_eval.safe_eval` for an expression that needs variables, "
+        "or refactor to explicit logic.",
         bad="result = eval(expression)",
         good="from odoo.tools.safe_eval import safe_eval\n"
         "result = safe_eval(expression, {'uid': self.env.uid})",
         notes="An argument provably built from constants (a literal, or a "
         "variable bound only to constants) is not reported; anything else, "
-        "including a parameter or a string with interpolated values, is.",
+        "including a parameter or a string with interpolated values, is. The "
+        "message shows the evaluated expression. A module that binds the name "
+        "itself (`from odoo.tools.safe_eval import safe_eval as eval`, an Odoo 8/9 "
+        "idiom) is calling that function, not the builtin, and is not reported. "
+        "Odoo 19 community contains one bare `exec` (the `shell` command), so a "
+        "finding here is almost always genuine.",
     ),
     "public-controller-sudo-risk": RuleDoc(
         detects="`@http.route` handlers with `auth='public'` or `auth='none'` "
