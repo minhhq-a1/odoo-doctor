@@ -302,10 +302,14 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ------------------------------------------------------- Maintainability
     "orphan-view": RuleDoc(
-        detects="Views that no action, menu or inheriting view references.",
+        detects="Extra primary views that are not their model's default view of that "
+        "type and that nothing in the module references or inherits.",
         fix="Reference the view, inherit it, or remove it if unused.",
-        notes="Medium confidence: the reference may live in a module that was "
-        "not scanned. Does not affect the score.",
+        notes="Odoo serves a model's primary view of each type (lowest `priority`, "
+        "then first defined) without any reference, so that one is never flagged; "
+        "neither are QWeb views or ids mentioned in Python, JS, XML or CSV. Medium "
+        "confidence: the reference may live in a module that was not scanned. Does "
+        "not affect the score.",
     ),
     "field-no-string-on-required": RuleDoc(
         detects="`required=True` fields without an explicit `string`.",
@@ -371,12 +375,15 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "that era.",
     ),
     "removed-model-still-referenced": RuleDoc(
-        detects="`_inherit` targets that cannot be resolved in the project or "
-        "the Odoo stubs for the target version.",
+        detects="`_inherit` of a core model that Odoo removed or renamed at or before "
+        "the target version (for example `account.invoice`, `stock.production.lot`, "
+        "`mail.channel`) and that the project does not define itself.",
         why="Models are removed or renamed between versions; inheriting a "
-        "missing model breaks the import.",
-        fix="Verify the model exists in the target version and update `_inherit`.",
-        notes="Medium confidence: does not affect the score.",
+        "missing model breaks the registry load.",
+        fix="Port the code to the replacement model named in the finding.",
+        notes="Based on a curated list of certain removals: a model that is merely "
+        "absent from the scanned set is usually an unscanned dependency and is not "
+        "reported. Medium confidence: does not affect the score.",
     ),
     # --------------------------------------------------------------- Frontend
     "asset-bundle-missing": RuleDoc(

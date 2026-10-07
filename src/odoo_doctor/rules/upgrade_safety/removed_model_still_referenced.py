@@ -13,6 +13,31 @@ if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
 
 
+# Core models Odoo removed or renamed: model -> (first version without it, replacement).
+# Only models whose removal is certain belong here. A model that merely is not in the
+# scanned set is usually an unscanned dependency (stock, mrp, enterprise, OCA...), so
+# "cannot be resolved" is not evidence that it was removed.
+_REMOVED_MODELS: dict[str, tuple[int, str]] = {
+    "product.uom": (12, "uom.uom"),
+    "hr.holidays": (12, "hr.leave / hr.leave.allocation"),
+    "procurement.order": (12, "stock.rule / procurement.group"),
+    "stock.pack.operation": (12, "stock.move.line"),
+    "account.invoice": (13, "account.move"),
+    "account.invoice.line": (13, "account.move.line"),
+    "account.invoice.tax": (13, "account.move.line"),
+    "account.register.payments": (13, "account.payment.register"),
+    "account.abstract.payment": (13, "account.payment"),
+    "stock.production.lot": (16, "stock.lot"),
+    "mail.channel": (17, "discuss.channel"),
+    "mail.channel.partner": (17, "discuss.channel.member"),
+}
+
+
+def _major(version: str) -> int | None:
+    head = version.split(".", 1)[0]
+    return int(head) if head.isdigit() else None
+
+
 @rule(
     name="removed-model-still-referenced",
     category="Upgrade Safety",
@@ -23,24 +48,21 @@ if TYPE_CHECKING:
     min_version="14.0",
 )
 def check_removed_model_still_referenced(ctx: ModuleContext) -> list[Diagnostic]:
-    """Flag models inherited/referenced that cannot be resolved in the project or stubs."""
+    """Flag `_inherit` of a core model Odoo removed or renamed before this version."""
     diags: list[Diagnostic] = []
+    major = _major(ctx.odoo_version)
+    if major is None:
+        return diags
 
     for model_info in ctx.models.values():
         for inherited in model_info.inherit:
-            # Skip self-inheritance (model inherits itself to extend)
-            if inherited == model_info.name:
+            removed = _REMOVED_MODELS.get(inherited)
+            if removed is None or major < removed[0]:
                 continue
-
-            lookup = ctx.resolver.resolve_model(inherited)
-
-            if lookup.status == ResolveResult.FOUND:
+            # A project (or stub/source index) that provides the model owns it.
+            if ctx.resolver.resolve_model(inherited).status == ResolveResult.FOUND:
                 continue
-
-            # NOT_FOUND means provably absent (complete model set available).
-            # UNKNOWN means we cannot prove existence — could be a removed model,
-            # an unscanned third-party dependency, or a typo.  Either way, flag
-            # with medium confidence so it won't affect scoring but is visible.
+            since, replacement = removed
             diags.append(
                 Diagnostic(
                     module=ctx.name,
@@ -53,17 +75,15 @@ def check_removed_model_still_referenced(ctx: ModuleContext) -> list[Diagnostic]
                     tier="P1",
                     source="native",
                     confidence="medium",
-                    title=f"Model '{inherited}' not found in Odoo {ctx.odoo_version}",
+                    title=f"Model '{inherited}' was removed in Odoo {since}.0",
                     message=(
-                        f"Model '{inherited}' is inherited but could not be resolved "
-                        f"in the project or Odoo {ctx.odoo_version} stubs. "
-                        f"It may have been removed, renamed, or belongs to an "
-                        f"unscanned dependency."
+                        f"Model '{inherited}' is inherited but Odoo removed it in "
+                        f"{since}.0 and it is not defined in the scanned project."
                     ),
                     help=(
-                        f"Verify that '{inherited}' still exists in Odoo "
-                        f"{ctx.odoo_version}. If it was removed or renamed, "
-                        f"update your _inherit declaration."
+                        f"Port the code to '{replacement}'. (Medium confidence: a "
+                        f"compatibility module outside the scan may still define "
+                        f"'{inherited}'.)"
                     ),
                     odoo_version=ctx.odoo_version,
                 )
