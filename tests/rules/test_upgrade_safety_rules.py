@@ -209,8 +209,54 @@ def test_deprecated_unreadable_file(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_removed_model_inherits_unknown(tmp_path: Path):
-    """Inheriting a model that doesn't exist anywhere should be flagged."""
+def _removed_model_ctx(tmp_path: Path, inherit: str, version: str = "17.0"):
+    addon = tmp_path / "test_addon"
+    (addon / "models").mkdir(parents=True)
+    (addon / "__manifest__.py").write_text(
+        f"{{'name': 'Test Addon', 'version': '{version}.1.0.0', "
+        "'depends': ['base'], 'data': [], 'license': 'LGPL-3'}\n"
+    )
+    (addon / "models" / "m.py").write_text(
+        dedent(
+            f"""\
+            from odoo import models
+
+            class MyModel(models.Model):
+                _name = 'my.model'
+                _inherit = {inherit!r}
+            """
+        )
+    )
+    return build_project_graph([tmp_path], odoo_version=version).modules["test_addon"]
+
+
+def test_removed_model_unresolvable_but_not_known_removed_is_silent(tmp_path: Path):
+    """A model outside the scanned set is usually an unscanned dependency (stock, mrp,
+    enterprise, OCA...), not a removed one: flagging it is noise."""
+    for name in ("stock.move.line", "hr.employee", "completely.nonexistent.model"):
+        ctx = _removed_model_ctx(tmp_path / name.replace(".", "_"), name, "19.0")
+        assert check_removed_model_still_referenced(ctx) == []
+
+
+def test_removed_model_known_removal_is_flagged_with_replacement(tmp_path: Path):
+    ctx = _removed_model_ctx(tmp_path, "account.invoice", "17.0")
+    diags = check_removed_model_still_referenced(ctx)
+    assert len(diags) == 1
+    assert diags[0].rule == "removed-model-still-referenced"
+    assert "account.invoice" in diags[0].message
+    assert "account.move" in diags[0].help
+    assert diags[0].confidence == "medium"
+
+
+def test_removed_model_flagged_only_from_the_version_that_removed_it(tmp_path: Path):
+    before = _removed_model_ctx(tmp_path / "a", "mail.channel", "16.0")
+    after = _removed_model_ctx(tmp_path / "b", "mail.channel", "17.0")
+    assert check_removed_model_still_referenced(before) == []
+    assert len(check_removed_model_still_referenced(after)) == 1
+
+
+def test_removed_model_redefined_in_project_is_not_flagged(tmp_path: Path):
+    """A project that defines the model itself (compat layer) owns it."""
     addon = tmp_path / "test_addon"
     (addon / "models").mkdir(parents=True)
     (addon / "__manifest__.py").write_text(
@@ -222,20 +268,17 @@ def test_removed_model_inherits_unknown(tmp_path: Path):
             """\
             from odoo import models
 
-            class MyModel(models.Model):
-                _name = 'my.model'
-                _inherit = 'completely.nonexistent.model'
+            class Legacy(models.Model):
+                _name = 'account.invoice'
+
+            class Child(models.Model):
+                _name = 'my.child'
+                _inherit = 'account.invoice'
             """
         )
     )
-
-    graph = build_project_graph([tmp_path], odoo_version="17.0")
-    ctx = graph.modules["test_addon"]
-    diags = check_removed_model_still_referenced(ctx)
-    assert len(diags) == 1
-    assert diags[0].rule == "removed-model-still-referenced"
-    assert "completely.nonexistent.model" in diags[0].message
-    assert diags[0].confidence == "medium"
+    ctx = build_project_graph([tmp_path], odoo_version="17.0").modules["test_addon"]
+    assert check_removed_model_still_referenced(ctx) == []
 
 
 def test_removed_model_inherits_known_model(tmp_path: Path):

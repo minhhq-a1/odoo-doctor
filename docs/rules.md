@@ -654,13 +654,13 @@ self.env['res.partner'].search([])
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: medium · **Min Odoo version**: 14.0
 
-**Detects**: `_inherit` targets that cannot be resolved in the project or the Odoo stubs for the target version.
+**Detects**: `_inherit` of a core model that Odoo removed or renamed at or before the target version (for example `account.invoice`, `stock.production.lot`, `mail.channel`) and that the project does not define itself.
 
-**Why**: Models are removed or renamed between versions; inheriting a missing model breaks the import.
+**Why**: Models are removed or renamed between versions; inheriting a missing model breaks the registry load.
 
-**Fix**: Verify the model exists in the target version and update `_inherit`.
+**Fix**: Port the code to the replacement model named in the finding.
 
-**Note**: Medium confidence: does not affect the score.
+**Note**: Based on a curated list of certain removals: a model that is merely absent from the scanned set is usually an unscanned dependency and is not reported. Medium confidence: does not affect the score.
 
 ## Module Hygiene
 
@@ -794,11 +794,11 @@ raise UserError(_("Amount must be positive"))
 
 **Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: medium · **Min Odoo version**: 14.0
 
-**Detects**: Views that no action, menu or inheriting view references.
+**Detects**: Extra primary views that are not their model's default view of that type and that nothing in the module references or inherits.
 
 **Fix**: Reference the view, inherit it, or remove it if unused.
 
-**Note**: Medium confidence: the reference may live in a module that was not scanned. Does not affect the score.
+**Note**: Odoo serves a model's primary view of each type (lowest `priority`, then first defined) without any reference, so that one is never flagged; neither are QWeb views or ids mentioned in Python, JS, XML or CSV. Medium confidence: the reference may live in a module that was not scanned. Does not affect the score.
 
 ### vendored-python-code
 

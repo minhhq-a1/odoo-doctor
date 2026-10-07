@@ -1,0 +1,12 @@
+[
+  [
+    "orphan-view",
+    "skc/views/thing.xml",
+    "medium"
+  ],
+  [
+    "removed-model-still-referenced",
+    "skc/models/thing.py",
+    "medium"
+  ]
+]
