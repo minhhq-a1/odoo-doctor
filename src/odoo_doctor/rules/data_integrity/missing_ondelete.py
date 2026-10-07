@@ -17,12 +17,12 @@ if TYPE_CHECKING:
     category="Data Integrity",
     tier="P1",
     severity="warning",
-    default_confidence="high",
+    default_confidence="low",
     needs_context=True,
     min_version="14.0",
 )
 def check_missing_ondelete(ctx: ModuleContext) -> list[Diagnostic]:
-    """Flag Many2one fields without explicit ondelete."""
+    """Flag optional stored Many2one fields without explicit ondelete (advisory)."""
     diags: list[Diagnostic] = []
 
     for model_info in ctx.models.values():
@@ -56,10 +56,19 @@ def check_missing_ondelete(ctx: ModuleContext) -> list[Diagnostic]:
                     severity="warning",
                     tier="P1",
                     source="native",
-                    confidence="high",
+                    confidence="low",
                     title=f"Many2one '{field.name}' has no explicit ondelete",
-                    message=f"Field '{field.name}' on model '{model_info.name}' is a Many2one without an explicit ondelete policy. The default 'set null' may cause data integrity issues.",
-                    help="Add ondelete='restrict', 'cascade', or 'set null' explicitly to document the intended behavior.",
+                    message=(
+                        f"Field '{field.name}' on model '{model_info.name}' is a "
+                        "Many2one without an explicit ondelete policy, so Odoo applies "
+                        "'set null': deleting the target silently empties this field."
+                    ),
+                    help=(
+                        "If that is intended nothing needs to change (Odoo's own "
+                        "addons mostly rely on it). Use ondelete='cascade' for a line "
+                        "that must not outlive its parent, or 'restrict' to forbid "
+                        "deleting a target that is still referenced."
+                    ),
                     odoo_version=ctx.odoo_version,
                 )
             )
