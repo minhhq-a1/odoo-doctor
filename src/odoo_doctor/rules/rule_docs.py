@@ -118,15 +118,20 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "not count toward the score by default.",
     ),
     "sudo-without-comment": RuleDoc(
-        detects="`.sudo()` calls with no justifying comment on the same line "
-        "or directly above.",
+        detects="`.sudo()` calls with no justifying comment on any line of the "
+        "statement or directly above it (a compound statement counts only its "
+        "header line(s)).",
         why="Every privilege elevation should be reviewable; an undocumented "
         "`sudo()` is hard to audit.",
         fix="Add a short comment explaining why elevated privileges are needed.",
         bad="partner = self.env['res.partner'].sudo().browse(pid)",
         good="# sudo: portal users cannot read partners but need the display name\n"
         "partner = self.env['res.partner'].sudo().browse(pid)",
-        notes="Medium confidence: does not affect the score.",
+        notes="`.sudo(False)` (drops privileges), test files and migration scripts "
+        "are skipped. A comment on every `sudo()` is a team convention rather than a "
+        "defect (Odoo's own addons leave most of theirs uncommented), and addons you "
+        "only vendor are best left out with `[ignore] modules`. Low confidence: does "
+        'not affect the score, and `min_confidence = "medium"` on a surface hides it.',
     ),
     "record-rule-without-domain": RuleDoc(
         detects="`ir.rule` records without a restricting `domain_force`.",
@@ -308,10 +313,14 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ------------------------------------------------------- Maintainability
     "orphan-view": RuleDoc(
-        detects="Views that no action, menu or inheriting view references.",
+        detects="Extra primary views that are not their model's default view of that "
+        "type and that nothing in the module references or inherits.",
         fix="Reference the view, inherit it, or remove it if unused.",
-        notes="Medium confidence: the reference may live in a module that was "
-        "not scanned. Does not affect the score.",
+        notes="Odoo serves a model's primary view of each type (lowest `priority`, "
+        "then first defined) without any reference, so that one is never flagged; "
+        "neither are QWeb views or ids mentioned in Python, JS, XML or CSV. Medium "
+        "confidence: the reference may live in a module that was not scanned. Does "
+        "not affect the score.",
     ),
     "field-no-string-on-required": RuleDoc(
         detects="`required=True` fields without an explicit `string`.",
@@ -334,14 +343,18 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "missing-ondelete": RuleDoc(
         detects="`Many2one` fields on non-transient, non-abstract models "
         "without an explicit `ondelete`.",
-        why="The implicit `set null` policy is rarely a conscious choice; "
-        "declaring it documents the intended behavior.",
+        why="An optional `Many2one` defaults to `set null`: deleting the target "
+        "silently empties the field, which orphans a line whose parent is deleted. "
+        "Declaring the policy documents the intent.",
         fix="Declare `ondelete` explicitly.",
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
         notes="Required `Many2one` fields are skipped: Odoo already defaults "
         "them to `restrict`. So are related or computed fields that are not stored "
-        "(no `store=True`): they have no foreign-key column.",
+        "(no `store=True`): they have no foreign-key column. Low confidence: the "
+        "default is a legitimate choice (about 83% of Odoo 19 community's optional "
+        "stored `Many2one` fields rely on it), so this is a hint that does not "
+        "affect the score.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "
@@ -377,12 +390,15 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "that era.",
     ),
     "removed-model-still-referenced": RuleDoc(
-        detects="`_inherit` targets that cannot be resolved in the project or "
-        "the Odoo stubs for the target version.",
+        detects="`_inherit` of a core model that Odoo removed or renamed at or before "
+        "the target version (for example `account.invoice`, `stock.production.lot`, "
+        "`mail.channel`) and that the project does not define itself.",
         why="Models are removed or renamed between versions; inheriting a "
-        "missing model breaks the import.",
-        fix="Verify the model exists in the target version and update `_inherit`.",
-        notes="Medium confidence: does not affect the score.",
+        "missing model breaks the registry load.",
+        fix="Port the code to the replacement model named in the finding.",
+        notes="Based on a curated list of certain removals: a model that is merely "
+        "absent from the scanned set is usually an unscanned dependency and is not "
+        "reported. Medium confidence: does not affect the score.",
     ),
     # --------------------------------------------------------------- Frontend
     "asset-bundle-missing": RuleDoc(
