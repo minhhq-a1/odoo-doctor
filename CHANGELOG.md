@@ -6,6 +6,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.8.1] — 2026-10-07
+
+Theme: trust the findings of a real workspace. A 14-addon Odoo 19 workspace scan was reviewed rule
+by rule against Odoo 19 community (and the published sources of two OCA addons it contains); each
+rule below was calibrated on that evidence. Rule IDs, CLI flags and JSON keys are unchanged (see
+`docs/stability.md`). Scores of existing projects can rise: `missing-ondelete` no longer scores,
+and `public-controller-sudo-risk` scores only routes without an access check.
+
 ### Fixed
 
 False positives found by scanning a real Odoo 19 workspace (14 addons: 45 `orphan-view` and 26
