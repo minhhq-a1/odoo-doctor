@@ -427,7 +427,7 @@ company = self.env.company
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `create()` called inside a loop.
+**Detects**: `create()` called inside a loop (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped).
 
 **Why**: Each call triggers its own INSERT and recomputation round trip.
 
@@ -468,7 +468,7 @@ self.env['my.model'].create(vals_list)
 
 **Fix**: Move the call out of the loop and batch the results.
 
-**Note**: The performance rules skip files inside an addon's `tests/` directory.
+**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported.
 
 Bad:
 
@@ -488,7 +488,7 @@ by_id = {p.id: p for p in partners}
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `write()` called inside a loop.
+**Detects**: `write()` called inside a loop (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped).
 
 **Why**: Each call triggers its own UPDATE and recomputation round trip.
 
