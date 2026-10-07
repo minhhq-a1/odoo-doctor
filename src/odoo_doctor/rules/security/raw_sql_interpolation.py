@@ -27,6 +27,11 @@ _CR_OBJECTS = {
 }
 
 
+def _is_upgrade_script(file_path: Path) -> bool:
+    """`migrations/` (up to Odoo 17) and `upgrades/` (Odoo 18+) hold one-off scripts."""
+    return bool({"migrations", "upgrades"} & set(Path(file_path).parts))
+
+
 @rule(
     name="raw-sql-string-interpolation",
     category="Security",
@@ -40,9 +45,9 @@ def check_raw_sql_interpolation(
     file_path: Path, module_name: str, odoo_version: str
 ) -> list[Diagnostic]:
     """Find cr.execute() calls with dynamically interpolated SQL strings."""
-    # Tests and migration scripts run on a developer's or admin's database, never on
+    # Tests and migration/upgrade scripts run on a developer's or admin's database, never on
     # request data, so dynamic SQL there is not an injection vector.
-    if is_test_file(file_path, module_name) or "migrations" in Path(file_path).parts:
+    if is_test_file(file_path, module_name) or _is_upgrade_script(file_path):
         return []
     tree = parse_python(file_path)
     if tree is None:

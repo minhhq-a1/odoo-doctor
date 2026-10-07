@@ -59,6 +59,8 @@ class ControllerInfo:
     route: str
     auth: str = "user"
     uses_sudo: bool = False
+    # A call that checks access (token comparison, signature, record access check).
+    guarded: bool = False
     file_path: str = ""
     line: int = 0
 
@@ -148,12 +150,14 @@ def parse_controllers(file_path: Path) -> list[ControllerInfo]:
                 continue
             route, auth = route_info
             uses_sudo = _body_uses_sudo(item, source)
+            guarded = _body_checks_access(item)
             controllers.append(
                 ControllerInfo(
                     method_name=item.name,
                     route=route,
                     auth=auth,
                     uses_sudo=uses_sudo,
+                    guarded=guarded,
                     file_path=str(file_path),
                     line=item.lineno,
                 )
@@ -357,10 +361,78 @@ def _body_calls_super(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 
 def _body_uses_sudo(func: ast.FunctionDef | ast.AsyncFunctionDef, source: str) -> bool:
+    """Does the route elevate privileges?
+
+    ``.sudo(False)`` drops them, and ``env['ir.config_parameter'].sudo().get_param('k')``
+    with a constant key only reads a setting a public user cannot otherwise reach: neither
+    is an elevation worth reporting.
+    """
+    parents: dict[ast.AST, ast.AST] = {}
     for node in ast.walk(func):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr == "sudo":
-                return True
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+    for node in ast.walk(func):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr != "sudo":
+            continue
+        values = [*node.args[:1], *(k.value for k in node.keywords)]
+        if any(isinstance(v, ast.Constant) and v.value is False for v in values):
+            continue
+        if _is_constant_config_read(node, parents):
+            continue
+        return True
+    return False
+
+
+def _is_constant_config_read(sudo: ast.Call, parents: dict[ast.AST, ast.AST]) -> bool:
+    receiver = sudo.func.value  # type: ignore[attr-defined]
+    on_config = (
+        isinstance(receiver, ast.Subscript)
+        and isinstance(receiver.slice, ast.Constant)
+        and receiver.slice.value == "ir.config_parameter"
+    )
+    attr = parents.get(sudo)
+    call = parents.get(attr) if attr is not None else None
+    return bool(
+        on_config
+        and isinstance(attr, ast.Attribute)
+        and attr.attr == "get_param"
+        and isinstance(call, ast.Call)
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+    )
+
+
+# Fragments of the names of functions that enforce an access check; minting a token
+# (`generate_access_token`) or computing a flag is not one.
+_ACCESS_CHECK_FRAGMENTS = (
+    "consteq",
+    "hmac",
+    "verify",
+    "check_access",
+    "check_token",
+    "from_token",
+    "validate_token",
+)
+_NOT_A_CHECK_PREFIXES = ("generate", "_generate", "_compute", "compute")
+
+
+def _body_checks_access(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Call):
+            continue
+        name = (
+            node.func.id
+            if isinstance(node.func, ast.Name)
+            else node.func.attr
+            if isinstance(node.func, ast.Attribute)
+            else ""
+        )
+        if name.lstrip("_").startswith(_NOT_A_CHECK_PREFIXES) or not name:
+            continue
+        if any(fragment in name for fragment in _ACCESS_CHECK_FRAGMENTS):
+            return True
     return False
 
 

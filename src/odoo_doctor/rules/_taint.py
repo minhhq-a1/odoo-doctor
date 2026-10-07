@@ -75,11 +75,7 @@ def taint_of(node: ast.expr, lookup: Lookup) -> Taint:
     if isinstance(node, ast.Name):
         return lookup(node.id)
     if isinstance(node, ast.Attribute):
-        if (
-            node.attr == "_table"
-            and isinstance(node.value, ast.Name)
-            and node.value.id in {"self", "cls"}
-        ):
+        if node.attr == "_table":
             return Taint.SAFE
         return Taint.UNKNOWN
     if isinstance(node, ast.JoinedStr):

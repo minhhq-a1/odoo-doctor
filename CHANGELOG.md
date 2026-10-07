@@ -6,6 +6,79 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+False positives found by scanning a real Odoo 19 workspace (14 addons: 45 `orphan-view` and 26
+`removed-model-still-referenced` findings, all medium confidence, none affecting the score).
+
+- `orphan-view` no longer flags a model's default views. Odoo serves a model's primary view of
+  each type (lowest `priority`, then first defined) with no action or reference, so only the
+  *extra* primary views of the same model and type can be dead. QWeb view records are skipped, and a
+  view whose id is mentioned in the module's Python, JS, XML or CSV (`env.ref`, `form_view_ref`,
+  `doAction`) counts as referenced. `ViewInfo` gains `view_type` (filled now) and `priority`.
+- `removed-model-still-referenced` no longer reports every `_inherit` it cannot resolve. A model
+  missing from the scanned set is normally an unscanned dependency (`stock.move.line`,
+  `hr.employee`, enterprise models), not a removed one. The rule now reports a curated list of
+  core models Odoo certainly removed or renamed (`account.invoice` -> `account.move`,
+  `stock.production.lot` -> `stock.lot`, `mail.channel` -> `discuss.channel`, ...), from the
+  version that removed them, and names the replacement. A model the project defines itself is
+  never reported.
+- Golden corpus: new `unscanned_dependencies` case keeps the true positives (an unused extra view,
+  `_inherit = 'account.invoice'`) next to the cases that must stay silent.
+- `sudo-without-comment` (75 findings in the same workspace): a comment now counts when it sits on any line of the statement that
+  holds the `.sudo()` or directly above that statement, not only on the call's first line, so a
+  chained `(self.env[...]\n.sudo()\n.get_param(...))` justified by a comment above no longer
+  fires. A compound statement (`if`, `for`, `with`) counts only its header lines. `.sudo(False)`
+  (drops privileges), test files and migration scripts are skipped. The convention itself is
+  unchanged: it is a team policy, and Odoo 19's own addons leave about 80% of their `.sudo()`
+  calls uncommented, so its confidence drops from medium to low. The score is unaffected (only
+  high confidence scores); a surface with `min_confidence = "medium"` now hides it.
+- `missing-ondelete` drops from high to low confidence. An optional stored `Many2one` without
+  `ondelete` gets `set null`, a deliberate default: about 83% of Odoo 19 community's optional
+  stored `Many2one` fields (`company_id`, `user_id`, `partner_id`...) rely on it, yet the finding
+  was high confidence and cost score (P1, 10 points each). On a real 14-addon workspace it
+  accounted for 42 findings and pulled `purchase_request` to 47.9 and `workflow_diagram` to 37.0;
+  without them those modules score 75.3 and 44.5 (the other findings are unchanged). The finding
+  stays visible, the message now states what `set null` does instead of predicting integrity
+  problems, and the help names `cascade` / `restrict` for the cases that need them. Scores of
+  existing projects rise; the history regression gate is not triggered by a rise.
+- `eval-usage` no longer reports a bare `eval(...)` / `exec(...)` when the module binds that
+  name itself, e.g. `from odoo.tools.safe_eval import safe_eval as eval` (an Odoo 8/9 idiom
+  still found in ported addons) or `eval = safe_eval`: that call is the sandboxed function, not
+  the builtin. Module-level bindings count (also inside `if` / `try`); a method named `eval`
+  shadows nothing. New golden corpus case `eval_shadowed`.
+
+False positives of the loop rules (`search-in-loop`, `create-in-loop`, `write-in-loop`) found by
+reviewing a real workspace and Odoo 19 community:
+
+- The loop's own iterable was treated as part of the loop, so the most common line in Odoo,
+  `for rec in self.env['x'].search([...]):`, was reported as a search in a loop. The iterable and
+  the `else` clause run once and are no longer in scope; the iterable of an *inner* loop still
+  counts for the outer one (it runs once per outer iteration), and a `while` condition still counts.
+  On Odoo 19 community 87 of 522 `search-in-loop` findings were this; 2 of the 9 loop findings of the
+  two OCA addons in the reviewed workspace (`queue_job`, `purchase_request`) were too.
+- Loops over chunks (`split_every(...)`, `range(start, stop, step)`) and over a literal tuple/list
+  of constants no longer count: they run once per chunk or a fixed number of times.
+- A `while` loop paged with `search(..., limit=N)` (N other than 0/1) no longer counts: the search is
+  the batching. `limit=1` is still a lookup per iteration and is reported.
+- The per-iteration walk now lives in `rules/_ast_helpers.py` (`per_iteration_nodes`,
+  `is_bounded_loop`), shared by the three rules. New golden corpus case `loop_setup_not_flagged`.
+
+Review of the last two high-confidence security findings of a real workspace, calibrated on
+Odoo 19 community (221 of its 978 controller routes are public and use `sudo()`; 32 of its
+`cr.execute` calls were reported as injections):
+
+- `public-controller-sudo-risk` grades the finding. A route that also calls an access check
+  (`consteq`, `_document_check_access`, `check_access*`, a `_verify_*` / `hmac` / `*_from_token`
+  call) is reported at medium confidence (no score impact; 68 of Odoo's 219 routes), without one it
+  stays high. Minting a token (`generate_access_token`) is not a check. `.sudo(False)` and
+  `env['ir.config_parameter'].sudo().get_param('<constant>')` are no longer elevations. The message
+  says which case applies. `ControllerInfo` gains `guarded`.
+- `raw-sql-string-interpolation` treats `<anything>._table` as a trusted identifier (it was only
+  `self._table` / `cls._table`) and skips `upgrades/` scripts like `migrations/` (renamed in
+  Odoo 18). 32 -> 26 findings on Odoo 19 community. The taint analysis itself is unchanged.
+- New golden corpus case `public_routes_and_sql`.
+
 ### Changed
 
 - `n-plus-one-read` is redefined around the real N+1 of the ORM. It reported any chained attribute
@@ -19,9 +92,10 @@ All notable changes to Odoo Doctor are documented here.
   method calls and `id` / `env` are not reads. 235 findings on Odoo 19 community, none on the OCA
   addons. Still low confidence, never scored; the title, message and help changed accordingly.
   New golden corpus case `n_plus_one_prefetch`.
-
-### Changed
-
+- `eval-usage` message now shows the evaluated expression and why it is flagged (not provably
+  constant, or built from interpolated text), and the help names `ast.literal_eval` and
+  `safe_eval`. Detection is otherwise unchanged: on Odoo 19 community the rule reports a single
+  bare `exec` (the `shell` command), so its high confidence stands.
 - `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the
   scan roots hold no addon. `scan PATH` scans only the folders directly inside PATH, so
   `scan .` on a repository root used to produce a silent, empty report (0 modules, score 100).

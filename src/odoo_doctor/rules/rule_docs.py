@@ -43,7 +43,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         fix="Pass values as query parameters.",
         bad="self.env.cr.execute(f\"SELECT * FROM res_partner WHERE name = '{name}'\")",
         good='self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))',
-        notes="When the dynamic part is not user data (for example a WHERE "
+        notes="`<anything>._table` is a trusted identifier (set by the model author and "
+        "validated by the registry), and scripts under `tests/`, `migrations/` and "
+        "`upgrades/` (Odoo 18+) are skipped. "
+        "When the dynamic part is not user data (for example a WHERE "
         "fragment whose values are bound through parameters), assert it with "
         "pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule "
         "honours: a trailing comment covers its line, a comment on its own line "
@@ -75,14 +78,20 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "eval-usage": RuleDoc(
         detects="Calls to the builtins `eval()` / `exec()` on non-literal input.",
         why="Evaluating dynamic strings allows arbitrary code execution.",
-        fix="Use `odoo.tools.safe_eval` for domains/expressions, or refactor to "
-        "explicit logic.",
+        fix="Use `ast.literal_eval` for a stored literal (a domain, a list), "
+        "`odoo.tools.safe_eval.safe_eval` for an expression that needs variables, "
+        "or refactor to explicit logic.",
         bad="result = eval(expression)",
         good="from odoo.tools.safe_eval import safe_eval\n"
         "result = safe_eval(expression, {'uid': self.env.uid})",
         notes="An argument provably built from constants (a literal, or a "
         "variable bound only to constants) is not reported; anything else, "
-        "including a parameter or a string with interpolated values, is.",
+        "including a parameter or a string with interpolated values, is. The "
+        "message shows the evaluated expression. A module that binds the name "
+        "itself (`from odoo.tools.safe_eval import safe_eval as eval`, an Odoo 8/9 "
+        "idiom) is calling that function, not the builtin, and is not reported. "
+        "Odoo 19 community contains one bare `exec` (the `shell` command), so a "
+        "finding here is almost always genuine.",
     ),
     "public-controller-sudo-risk": RuleDoc(
         detects="`@http.route` handlers with `auth='public'` or `auth='none'` "
@@ -97,6 +106,13 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="@http.route('/api/data', auth='user')\n"
         "def get_data(self):\n"
         "    return request.env['private.model'].search([])",
+        notes="A route that also calls an access check (`consteq` on an access "
+        "token, `_document_check_access`, a signature or `check_access*` call) is "
+        "reported at medium confidence and does not affect the score; without one "
+        "it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo()"
+        ".get_param('<constant>')` are not elevations. Public website routes "
+        "legitimately use `sudo()`: about one in five routes of Odoo 19 community "
+        "does, so review rather than ban.",
     ),
     "unsafe-template-render": RuleDoc(
         detects="QWeb `t-raw` output, which renders a value without HTML-escaping. "
@@ -112,15 +128,20 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "not count toward the score by default.",
     ),
     "sudo-without-comment": RuleDoc(
-        detects="`.sudo()` calls with no justifying comment on the same line "
-        "or directly above.",
+        detects="`.sudo()` calls with no justifying comment on any line of the "
+        "statement or directly above it (a compound statement counts only its "
+        "header line(s)).",
         why="Every privilege elevation should be reviewable; an undocumented "
         "`sudo()` is hard to audit.",
         fix="Add a short comment explaining why elevated privileges are needed.",
         bad="partner = self.env['res.partner'].sudo().browse(pid)",
         good="# sudo: portal users cannot read partners but need the display name\n"
         "partner = self.env['res.partner'].sudo().browse(pid)",
-        notes="Medium confidence: does not affect the score.",
+        notes="`.sudo(False)` (drops privileges), test files and migration scripts "
+        "are skipped. A comment on every `sudo()` is a team convention rather than a "
+        "defect (Odoo's own addons leave most of theirs uncommented), and addons you "
+        "only vendor are best left out with `[ignore] modules`. Low confidence: does "
+        'not affect the score, and `min_confidence = "medium"` on a surface hides it.',
     ),
     "record-rule-without-domain": RuleDoc(
         detects="`ir.rule` records without a restricting `domain_force`.",
@@ -209,17 +230,24 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "    partner = self.env['res.partner'].search([('id', '=', line.pid)])",
         good="partners = self.env['res.partner'].search([('id', 'in', lines.mapped('pid'))])\n"
         "by_id = {p.id: p for p in partners}",
-        notes="The performance rules skip files inside an addon's `tests/` directory.",
+        notes="The performance rules skip files inside an addon's `tests/` directory. "
+        "Only what runs on every iteration counts: the loop's own iterable "
+        "(`for rec in self.env[...].search(...)`) and its `else` clause run once. "
+        "Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal "
+        "tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are "
+        "not reported.",
     ),
     "create-in-loop": RuleDoc(
-        detects="`create()` called inside a loop.",
+        detects="`create()` called inside a loop (its iterable and `else` clause "
+        "excluded; chunked and constant-literal loops are skipped).",
         why="Each call triggers its own INSERT and recomputation round trip.",
         fix="Collect the values and call `create()` once with a list.",
         bad="for vals in vals_list:\n    self.env['my.model'].create(vals)",
         good="self.env['my.model'].create(vals_list)",
     ),
     "write-in-loop": RuleDoc(
-        detects="`write()` called inside a loop.",
+        detects="`write()` called inside a loop (its iterable and `else` clause "
+        "excluded; chunked and constant-literal loops are skipped).",
         why="Each call triggers its own UPDATE and recomputation round trip.",
         fix="Write once on the whole recordset when the values are identical.",
         bad="for rec in records:\n    rec.write({'state': 'done'})",
@@ -311,10 +339,14 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ------------------------------------------------------- Maintainability
     "orphan-view": RuleDoc(
-        detects="Views that no action, menu or inheriting view references.",
+        detects="Extra primary views that are not their model's default view of that "
+        "type and that nothing in the module references or inherits.",
         fix="Reference the view, inherit it, or remove it if unused.",
-        notes="Medium confidence: the reference may live in a module that was "
-        "not scanned. Does not affect the score.",
+        notes="Odoo serves a model's primary view of each type (lowest `priority`, "
+        "then first defined) without any reference, so that one is never flagged; "
+        "neither are QWeb views or ids mentioned in Python, JS, XML or CSV. Medium "
+        "confidence: the reference may live in a module that was not scanned. Does "
+        "not affect the score.",
     ),
     "field-no-string-on-required": RuleDoc(
         detects="`required=True` fields without an explicit `string`.",
@@ -337,14 +369,18 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "missing-ondelete": RuleDoc(
         detects="`Many2one` fields on non-transient, non-abstract models "
         "without an explicit `ondelete`.",
-        why="The implicit `set null` policy is rarely a conscious choice; "
-        "declaring it documents the intended behavior.",
+        why="An optional `Many2one` defaults to `set null`: deleting the target "
+        "silently empties the field, which orphans a line whose parent is deleted. "
+        "Declaring the policy documents the intent.",
         fix="Declare `ondelete` explicitly.",
         bad='partner_id = fields.Many2one("res.partner")',
         good='partner_id = fields.Many2one("res.partner", ondelete="restrict")',
         notes="Required `Many2one` fields are skipped: Odoo already defaults "
         "them to `restrict`. So are related or computed fields that are not stored "
-        "(no `store=True`): they have no foreign-key column.",
+        "(no `store=True`): they have no foreign-key column. Low confidence: the "
+        "default is a legitimate choice (about 83% of Odoo 19 community's optional "
+        "stored `Many2one` fields rely on it), so this is a hint that does not "
+        "affect the score.",
     ),
     "data-noupdate-risk": RuleDoc(
         detects="Records of critical models (`ir.rule`, `ir.config_parameter`, "
@@ -380,12 +416,15 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "that era.",
     ),
     "removed-model-still-referenced": RuleDoc(
-        detects="`_inherit` targets that cannot be resolved in the project or "
-        "the Odoo stubs for the target version.",
+        detects="`_inherit` of a core model that Odoo removed or renamed at or before "
+        "the target version (for example `account.invoice`, `stock.production.lot`, "
+        "`mail.channel`) and that the project does not define itself.",
         why="Models are removed or renamed between versions; inheriting a "
-        "missing model breaks the import.",
-        fix="Verify the model exists in the target version and update `_inherit`.",
-        notes="Medium confidence: does not affect the score.",
+        "missing model breaks the registry load.",
+        fix="Port the code to the replacement model named in the finding.",
+        notes="Based on a curated list of certain removals: a model that is merely "
+        "absent from the scanned set is usually an unscanned dependency and is not "
+        "reported. Medium confidence: does not affect the score.",
     ),
     # --------------------------------------------------------------- Frontend
     "asset-bundle-missing": RuleDoc(

@@ -104,7 +104,7 @@ prints the top 5 under *Fix first*; `--json` has the top 10 per module as
 `modules.<name>.fix_priorities`:
 
 ```json
-{"rank": 1, "rule": "missing-ondelete", "file_path": "...", "line": 79,
+{"rank": 1, "rule": "duplicate-xml-id", "file_path": "...", "line": 79,
  "impact": 10.0, "effort": 1, "roi": 10.0, "projected_score": 52.1,
  "score_gain": 4.7, "fixable": false}
 ```
