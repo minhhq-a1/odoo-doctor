@@ -8,6 +8,20 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Changed
 
+- `n-plus-one-read` is redefined around the real N+1 of the ORM. It reported any chained attribute
+  read on any `for` loop variable (`for line in order.line_ids: line.product_id.name`), i.e. nearly
+  every record loop: 5748 findings on Odoo 19 community and 45 on the two OCA addons of a reviewed
+  workspace, yet Odoo prefetches such reads per recordset, so they cost one query per field, not per
+  record. It now reports a field read on a record built by `browse(<one id>)` on every iteration
+  of a `for` loop or comprehension (the id depends on the loop variable, also through a name
+  assigned from it): that singleton starts with an empty prefetch, so each read is a query.
+  `with_prefetch(...)` (before or after `browse`), `browse` of a collection or of a loop-independent id,
+  method calls and `id` / `env` are not reads. 235 findings on Odoo 19 community, none on the OCA
+  addons. Still low confidence, never scored; the title, message and help changed accordingly.
+  New golden corpus case `n_plus_one_prefetch`.
+
+### Changed
+
 - `odoo-doctor scan` now prints a `[WARN] No Odoo addon found under: …` line on stderr when the
   scan roots hold no addon. `scan PATH` scans only the folders directly inside PATH, so
   `scan .` on a repository root used to produce a silent, empty report (0 modules, score 100).
