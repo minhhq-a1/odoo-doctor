@@ -8,6 +8,31 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Fixed
 
+False positives found by scanning a real Odoo 19 workspace (14 addons: 45 `orphan-view` and 26
+`removed-model-still-referenced` findings, all medium confidence, none affecting the score).
+
+- `orphan-view` no longer flags a model's default views. Odoo serves a model's primary view of
+  each type (lowest `priority`, then first defined) with no action or reference, so only the
+  *extra* primary views of the same model and type can be dead. QWeb view records are skipped, and a
+  view whose id is mentioned in the module's Python, JS, XML or CSV (`env.ref`, `form_view_ref`,
+  `doAction`) counts as referenced. `ViewInfo` gains `view_type` (filled now) and `priority`.
+- `removed-model-still-referenced` no longer reports every `_inherit` it cannot resolve. A model
+  missing from the scanned set is normally an unscanned dependency (`stock.move.line`,
+  `hr.employee`, enterprise models), not a removed one. The rule now reports a curated list of
+  core models Odoo certainly removed or renamed (`account.invoice` -> `account.move`,
+  `stock.production.lot` -> `stock.lot`, `mail.channel` -> `discuss.channel`, ...), from the
+  version that removed them, and names the replacement. A model the project defines itself is
+  never reported.
+- Golden corpus: new `unscanned_dependencies` case keeps the true positives (an unused extra view,
+  `_inherit = 'account.invoice'`) next to the cases that must stay silent.
+- `sudo-without-comment` (75 findings in the same workspace): a comment now counts when it sits on any line of the statement that
+  holds the `.sudo()` or directly above that statement, not only on the call's first line, so a
+  chained `(self.env[...]\n.sudo()\n.get_param(...))` justified by a comment above no longer
+  fires. A compound statement (`if`, `for`, `with`) counts only its header lines. `.sudo(False)`
+  (drops privileges), test files and migration scripts are skipped. The convention itself is
+  unchanged: it is a team policy, and Odoo 19's own addons leave about 80% of their `.sudo()`
+  calls uncommented, so its confidence drops from medium to low. The score is unaffected (only
+  high confidence scores); a surface with `min_confidence = "medium"` now hides it.
 - `missing-ondelete` drops from high to low confidence. An optional stored `Many2one` without
   `ondelete` gets `set null`, a deliberate default: about 83% of Odoo 19 community's optional
   stored `Many2one` fields (`company_id`, `user_id`, `partner_id`...) rely on it, yet the finding

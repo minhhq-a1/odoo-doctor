@@ -1,0 +1,27 @@
+<odoo>
+  <!-- default form and list view of the model: Odoo serves them, no reference needed -->
+  <record id="thing_form" model="ir.ui.view">
+    <field name="name">skc.thing.form</field>
+    <field name="model">skc.thing</field>
+    <field name="arch" type="xml"><form><field name="name"/></form></field>
+  </record>
+  <record id="thing_list" model="ir.ui.view">
+    <field name="name">skc.thing.list</field>
+    <field name="model">skc.thing</field>
+    <field name="arch" type="xml"><list><field name="name"/></list></field>
+  </record>
+  <!-- extra form view reached from Python (env.ref): not an orphan -->
+  <record id="thing_form_alt" model="ir.ui.view">
+    <field name="name">skc.thing.form.alt</field>
+    <field name="model">skc.thing</field>
+    <field name="priority">20</field>
+    <field name="arch" type="xml"><form><field name="name"/></form></field>
+  </record>
+  <!-- extra form view that nothing uses: real orphan -->
+  <record id="thing_form_dead" model="ir.ui.view">
+    <field name="name">skc.thing.form.dead</field>
+    <field name="model">skc.thing</field>
+    <field name="priority">30</field>
+    <field name="arch" type="xml"><form><field name="name"/></form></field>
+  </record>
+</odoo>
