@@ -1,3 +1,3 @@
 """Odoo Doctor — unified health scoring for custom Odoo addons."""
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
