@@ -66,6 +66,7 @@ FROZEN_RULE_IDS = [
     "missing-external-dependency",
     "vendored-python-code",
     "unsafe-template-render",
+    "access-write-without-group",
     "rpc-sudo-without-access-check",
 ]
 

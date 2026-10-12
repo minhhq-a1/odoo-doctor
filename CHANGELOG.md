@@ -8,6 +8,13 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Added
 
+- New rule `access-write-without-group` (Security, P1): a row of `ir.model.access.csv` with an empty
+  `group_id:id` that grants `perm_write` or `perm_unlink` applies to every user, portal and public
+  users included. It is reported at high confidence; a row that only grants `create` is medium
+  (public forms do that on purpose) and does not score. Rows for `TransientModel` wizards are
+  skipped. Calibrated on Odoo 19 community (690 modules, 62 group-less rows, all read-only: 0
+  findings) and on a real workspace, where it flags e.g. a model that manages access groups and is
+  writable by everyone. Native rules are now 38.
 - New rule `rpc-sudo-without-access-check` (Security, P1): a public model method or an authenticated
   route that calls `.sudo()` on records or values chosen by its parameters, with no access check in
   the method (an IDOR). High confidence, which scores, only when a parameter reaches a write,
@@ -16,7 +23,7 @@ All notable changes to Odoo Doctor are documented here.
   parameters handed to another method (where a check may live), check-style calls and `raise`
   of `AccessError` / `Forbidden` are medium or ignored. Public routes stay with
   `public-controller-sudo-risk`. Calibrated on Odoo 19 community (690 modules: 1 high, 5 medium; a
-  first draft gave 97 high) and on a real workspace. Native rules are now 38.
+  first draft gave 97 high) and on a real workspace. Native rules are now 39.
 
 ### Fixed
 
@@ -26,6 +33,15 @@ All notable changes to Odoo Doctor are documented here.
   `min_version` gate. 36 of the 37 native rules declare one, so such a scan reported only Ruff
   results and a score of 100. `unknown` now keeps the rules enabled (a known version below the
   floor still gates them). Scores of projects scanned without a detectable version can drop.
+
+### Changed
+
+- The `No Odoo addon found` warning now says where the addons are. When the scan roots hold none,
+  odoo-doctor looks up to four folders deeper (skipping hidden, `node_modules`, `venv` and similar
+  folders) and prints the folders whose children are addons, e.g.
+  `odoo-doctor scan extra-addons/my_repo   (14 addons)`, at most three plus a count of the rest.
+  Discovery itself is unchanged, `scan PATH` still scans only the folders directly inside PATH, and
+  the hint goes to stderr only.
 
 ---
 

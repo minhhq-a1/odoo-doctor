@@ -1,5 +1,10 @@
 [
   [
+    "access-write-without-group",
+    "wiz/security/ir.model.access.csv",
+    "high"
+  ],
+  [
     "missing-ondelete",
     "wiz/models/wizard.py",
     "low"
