@@ -96,7 +96,7 @@ Key concepts that span files:
 3. Merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z` and create a GitHub Release — `.github/workflows/publish.yml` publishes to PyPI via Trusted Publishing.
 4. VS Code extension (not automated, needs the publisher's token): after the PyPI release, publish the same version from `main` with `cd editors/vscode && npm ci && npx vsce publish`, or upload the `.vsix` that `npm run package` builds at https://marketplace.visualstudio.com/manage/publishers/MinhHong. Never put the token in the repo or in chat.
 
-Current version: `0.8.2`.
+Current version: `0.9.0`.
 
 ## Configuration
 
@@ -104,4 +104,4 @@ Current version: `0.8.2`.
 
 ## Further Reading
 
-`docs/custom-rules.md` (plugin / `@rule` contract), `docs/stubs.md` (generating stubs for a new Odoo version via `python -m odoo_doctor.graph.stubs.build_stubs source|rpc`), `docs/score-history.md`, `CONTRIBUTING.md`.
+`docs/custom-rules.md` (plugin / `@rule` contract), `docs/stubs.md` (generating stubs for a new Odoo version via `python -m odoo_doctor.graph.stubs.build_stubs source|rpc`), `docs/score-history.md`, `docs/stability.md` (public surface and exit codes, fenced by `tests/test_stability_contract.py`), `docs/support.md` (Python/Odoo matrix, support policy), `docs/performance.md` (reference scan timings), `CONTRIBUTING.md`.

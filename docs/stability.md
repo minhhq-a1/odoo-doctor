@@ -32,14 +32,34 @@ policy below, and it is the contract intended for 1.0.
 
 ### Command line
 
-Commands: `scan`, `fix`, `rules` (actions `list`, `explain`, `disable`, `enable`,
-`docs`, `stats`), `init`, `install`, `history` (`show`, `import`). Their flags are
+Commands: `scan`, `fix`, `rules`, `init`, `install`, `history` (`show`, `import`), and the
+global flag `--version` (prints `odoo-doctor <version>` and exits 0). The `rules` actions
+are `list`, `explain`, `disable`, `enable`, `docs`, `stats` and `new`. Their flags are
 public; the exact set is frozen in `tests/test_stability_contract.py`. The text printed
 for humans (terminal tables, colours, wording) is **not** public; use `--json` or
 `--format` for anything a script reads.
 
-**Exit codes** (`scan`): `0` clean, `1` findings at or above `--fail-on`, `2` score below
-`--min-score` (or a history regression), `3` invalid arguments or a git failure.
+`odoo-doctor lsp` (the language server) is experimental and not covered by this contract
+until it is listed here; it exits 3 when the optional `lsp` extra is not installed.
+
+**Exit codes.** `scan`: `0` clean, `1` findings at or above `--fail-on`, `2` score below
+`--min-score` (or a history regression), `3` invalid arguments or a git failure. The
+other commands follow the same convention where it applies:
+
+| Command | Code | Meaning |
+| --- | --- | --- |
+| any | `0` | success |
+| any | `2` | usage error raised by the argument parser itself (unknown flag, missing argument) |
+| `fix` | `3` | neither or both of `--fix` and `--fix-dry-run` |
+| `rules disable` / `enable` | `3` | unknown rule |
+| `rules docs` | `3` | `--format` is neither `markdown` nor `html` |
+| `rules docs --check` | `1` | the page on disk is out of date |
+| `rules` | `3` | unknown action, or `explain`/`disable`/`enable`/`new` without a rule name |
+| `history show --max-drop N` | `2` | the newest score dropped by more than `N` points |
+| `history import` | `3` | invalid `--timestamp`, or no report could be imported |
+| `install` | `1` | the packaged skills are missing (reinstall the package) |
+
+Do not rely on the exit code of anything not listed here.
 
 ### Machine-readable output
 

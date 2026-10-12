@@ -8,6 +8,36 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.9.0] — 2026-10-12
+
+Theme: freeze and document what 1.0 will promise. No new rules and no change to rule IDs, JSON
+keys or existing flags; findings and scores are the same as 0.8.2. Native rules stay at 40.
+
+### Added
+
+- `odoo-doctor --version` prints `odoo-doctor <version>` and exits 0.
+- `docs/support.md`: the supported Python and Odoo versions, which of them CI covers, and the
+  release support policy (latest release only, one-minor deprecation window).
+- `docs/performance.md`: reference scan timings on Odoo 19 community (636 modules: 47.7 s cold,
+  1.6 s with an unchanged `--cache`, 0.8 s for one module) and how to reproduce them.
+
+### Changed
+
+- `docs/stability.md` now lists every `rules` action (including `new`), the `--version` flag and
+  the experimental status of `lsp`, and documents the exit code of every command, not only
+  `scan`. Behaviour is unchanged: the table records what the commands already did, including
+  that a usage error raised by the argument parser itself exits 2.
+- `tests/test_stability_contract.py` freezes `--version` and those exit codes, so a script that
+  relies on them cannot break silently.
+
+### Not in this release
+
+The Notion plan for 0.9.0 also listed `migrate-config`, a rule registry with signed packs, a docs
+website and a public RC programme. `migrate-config` has nothing to migrate (no config key has
+changed incompatibly); the others are not started and are not part of the stability contract.
+
+---
+
 ## [0.8.2] — 2026-10-12
 
 Theme: three new Security rules, and fixes for two silent failures found by reviewing the output on
