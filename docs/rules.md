@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 38 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -12,6 +12,7 @@ Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
+| [rpc-sudo-without-access-check](#rpc-sudo-without-access-check) | P1 | Security | error | high |  |
 | [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | low |  |
 | [unsafe-template-render](#unsafe-template-render) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
@@ -202,6 +203,34 @@ Good:
     <field name="model_id" ref="model_my_model"/>
     <field name="domain_force">[('user_id', '=', user.id)]</field>
 </record>
+```
+
+### rpc-sudo-without-access-check
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: Public model methods (no leading underscore) and authenticated routes that call `.sudo()` on records or values chosen by their parameters, with no access check in the method: `check_access*`, `has_access`, a token or group test, a check-style helper, or a `raise` that refuses the caller. Public routes (`auth='public'`) are left to `public-controller-sudo-risk`.
+
+**Why**: A public method is reachable with any record ids and arguments. Elevating with `sudo()` on what the caller picked lets them read or change records their rights and record rules would refuse (an IDOR).
+
+**Fix**: Check the caller's rights on the records before elevating (`record.check_access('read')` / `has_access`), or drop `sudo()` and let the record rules apply; elevate only the narrowest recordset.
+
+**Note**: High confidence only when a parameter reaches a write, unlink or create on the elevated recordset and the method does not scope by the caller (`env.user`, `uid`). Reads, `search` results (already filtered by the caller's rules) and parameters handed to another method (where a check may live) are medium or ignored; medium does not affect the score.
+
+Bad:
+
+```python
+def close(self, rid):
+    self.env['x.y'].sudo().browse(rid).write({'state': 'closed'})
+```
+
+Good:
+
+```python
+def close(self, rid):
+    rec = self.env['x.y'].browse(rid)
+    rec.check_access('write')
+    rec.sudo().write({'state': 'closed'})
 ```
 
 ### sudo-without-comment

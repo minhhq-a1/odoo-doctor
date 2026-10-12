@@ -66,6 +66,7 @@ FROZEN_RULE_IDS = [
     "missing-external-dependency",
     "vendored-python-code",
     "unsafe-template-render",
+    "rpc-sudo-without-access-check",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------
