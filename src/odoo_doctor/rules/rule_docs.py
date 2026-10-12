@@ -114,6 +114,26 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "legitimately use `sudo()`: about one in five routes of Odoo 19 community "
         "does, so review rather than ban.",
     ),
+    "dynamic-method-dispatch": RuleDoc(
+        detects="`getattr(obj, name)(...)` (called directly or through a variable) "
+        "where `name` is not a constant. A name built on a constant prefix "
+        "(`'_get_%s' % kind`), looked up in a module-level table, checked in the "
+        "same function (`in` / `==`, `startswith`) or taken from a logger is ignored.",
+        why="Whoever controls the name can run any method of the object, ORM methods "
+        "such as `unlink()` or `sudo()` included. Refusing names that start with `_` "
+        "is not enough.",
+        fix="Map the accepted names to methods in a dict or a set and reject the "
+        "rest, or build the name on a constant prefix.",
+        bad="def download(self, method_print):\n"
+        "    return getattr(self, method_print)()",
+        good="REPORTS = {'xlsx': '_report_xlsx', 'pdf': '_report_pdf'}\n\n"
+        "def download(self, kind):\n"
+        "    return getattr(self, REPORTS[kind])()",
+        lang="python",
+        notes="High confidence when the name comes from the parameters of a public "
+        "method (reachable by RPC or HTTP). Names read from records or other data, and "
+        "names in private helpers, are medium and do not affect the score.",
+    ),
     "unsafe-template-render": RuleDoc(
         detects="QWeb `t-raw` output, which renders a value without HTML-escaping. "
         'The safe `t-raw="0"` idiom (the body passed to a `t-call`) is ignored.',

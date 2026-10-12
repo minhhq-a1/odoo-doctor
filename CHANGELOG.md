@@ -6,6 +6,17 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- New rule `dynamic-method-dispatch` (Security, P1): `getattr(obj, name)(...)` where the code does
+  not fix `name`, so whoever controls it can run any method of the object (`unlink()`, `sudo()`...).
+  High confidence when the name comes from the parameters of a public method (reachable by RPC or
+  HTTP); medium, not scoring, for names read from records or in private helpers. Names built on a
+  constant prefix, looked up in a module-level table, checked in the same function or taken from a
+  logger are ignored. Calibrated on Odoo 19 community (690 modules: 0 high, 5 medium) and on a real
+  workspace, where the one high finding is a controller that calls a method named by a request
+  parameter. Native rules are now 38.
+
 ### Fixed
 
 - A scan whose Odoo version could not be detected no longer switches the native rules off. The
