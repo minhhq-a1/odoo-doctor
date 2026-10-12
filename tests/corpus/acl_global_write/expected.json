@@ -1,0 +1,12 @@
+[
+  [
+    "access-write-without-group",
+    "aw/security/ir.model.access.csv",
+    "high"
+  ],
+  [
+    "access-write-without-group",
+    "aw/security/ir.model.access.csv",
+    "medium"
+  ]
+]

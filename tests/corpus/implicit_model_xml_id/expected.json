@@ -1,5 +1,10 @@
 [
   [
+    "access-write-without-group",
+    "shop/security/ir.model.access.csv",
+    "high"
+  ],
+  [
     "data-noupdate-risk",
     "shop/security/rules.xml",
     "medium"

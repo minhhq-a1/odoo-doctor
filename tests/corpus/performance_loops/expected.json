@@ -1,5 +1,10 @@
 [
   [
+    "access-write-without-group",
+    "perf/security/ir.model.access.csv",
+    "high"
+  ],
+  [
     "create-in-loop",
     "perf/models/runner.py",
     "high"

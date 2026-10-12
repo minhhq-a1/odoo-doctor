@@ -66,6 +66,7 @@ FROZEN_RULE_IDS = [
     "missing-external-dependency",
     "vendored-python-code",
     "unsafe-template-render",
+    "access-write-without-group",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------

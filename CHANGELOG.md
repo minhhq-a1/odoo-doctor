@@ -6,6 +6,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- New rule `access-write-without-group` (Security, P1): a row of `ir.model.access.csv` with an empty
+  `group_id:id` that grants `perm_write` or `perm_unlink` applies to every user, portal and public
+  users included. It is reported at high confidence; a row that only grants `create` is medium
+  (public forms do that on purpose) and does not score. Rows for `TransientModel` wizards are
+  skipped. Calibrated on Odoo 19 community (690 modules, 62 group-less rows, all read-only: 0
+  findings) and on a real workspace, where it flags e.g. a model that manages access groups and is
+  writable by everyone. Native rules are now 38.
+
 ---
 
 ## [0.8.1] — 2026-10-07

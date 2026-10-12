@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_aw_open,aw.open,model_aw_open,,1,1,1,1
+access_aw_form,aw.form,model_aw_form,,1,0,1,0
+access_aw_safe,aw.safe,model_aw_safe,base.group_user,1,1,1,1
+access_aw_wizard,aw.wizard,model_aw_wizard,,1,1,1,1
