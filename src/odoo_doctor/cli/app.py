@@ -66,6 +66,10 @@ import odoo_doctor.rules.security.unsafe_template_render
 import odoo_doctor.rules.security.access_write_without_group
 import odoo_doctor.rules.security.dynamic_method_dispatch
 import odoo_doctor.rules.security.rpc_sudo_without_access_check
+import odoo_doctor.rules.upgrade_safety.sql_constraints_unsupported
+import odoo_doctor.rules.upgrade_safety.removed_orm_api_usage
+import odoo_doctor.rules.upgrade_safety.cron_removed_fields
+import odoo_doctor.rules.upgrade_safety.view_attrs_states_removed
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers

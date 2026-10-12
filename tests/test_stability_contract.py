@@ -69,6 +69,10 @@ FROZEN_RULE_IDS = [
     "access-write-without-group",
     "dynamic-method-dispatch",
     "rpc-sudo-without-access-check",
+    "sql-constraints-unsupported",
+    "removed-orm-api-usage",
+    "cron-removed-fields",
+    "view-attrs-states-removed",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------

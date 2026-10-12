@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_ra_legacy,ra.legacy,model_ra_legacy,base.group_user,1,1,1,1
+access_ra_modern,ra.modern,model_ra_modern,base.group_user,1,1,1,1

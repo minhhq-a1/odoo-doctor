@@ -54,18 +54,30 @@ def receiver_is_orm(call: ast.Call, orm_vars: set[str] | None = None) -> bool:
     return node_is_orm(call.func.value, orm_vars)
 
 
+def _path_below_addon(file_path: Path | str, module_name: str) -> tuple[str, ...]:
+    """Path components below the addon directory (the last two if it is not on the path)."""
+    parts = Path(file_path).parts
+    if module_name in parts:
+        return parts[len(parts) - parts[::-1].index(module_name) :]
+    return parts[-2:]
+
+
 def is_test_file(file_path: Path | str, module_name: str) -> bool:
     """True if the file sits in a `tests/` directory *inside* the addon.
 
     Only path components below the addon directory count, so an addon that lives
     under some unrelated `tests/` folder is not mistaken for test code.
     """
-    parts = Path(file_path).parts
-    if module_name in parts:
-        rel = parts[len(parts) - parts[::-1].index(module_name) :]
-    else:
-        rel = parts[-2:]
-    return "tests" in rel[:-1]
+    return "tests" in _path_below_addon(file_path, module_name)[:-1]
+
+
+def is_migration_file(file_path: Path | str, module_name: str) -> bool:
+    """True for a script in the addon's `migrations/` directory.
+
+    Those scripts run against databases of the version being left, so APIs removed in
+    the new version are legitimate there.
+    """
+    return "migrations" in _path_below_addon(file_path, module_name)[:-1]
 
 
 def per_iteration_nodes(loop: ast.For | ast.While) -> Iterator[ast.AST]:
@@ -113,5 +125,30 @@ def is_bounded_loop(loop: ast.For | ast.While) -> bool:
         if name == "split_every":
             return True
         if name == "range" and len(it.args) == 3:
+            return True
+    return False
+
+
+_MODEL_BASE_NAMES = {"Model", "TransientModel", "AbstractModel", "BaseModel"}
+
+
+def is_model_class(cls: ast.ClassDef) -> bool:
+    """True for a class that declares an Odoo model.
+
+    It either derives from ``models.Model`` / ``TransientModel`` / ``AbstractModel`` /
+    ``BaseModel`` or sets ``_name`` / ``_inherit`` itself. A plain Python mixin without
+    either is not a model, even though models may inherit from it.
+    """
+    for base in cls.bases:
+        name = base.attr if isinstance(base, ast.Attribute) else getattr(base, "id", "")
+        if name in _MODEL_BASE_NAMES:
+            return True
+    for stmt in cls.body:
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else []
+        if isinstance(stmt, ast.AnnAssign):
+            targets = [stmt.target]
+        if any(
+            isinstance(t, ast.Name) and t.id in ("_name", "_inherit") for t in targets
+        ):
             return True
     return False

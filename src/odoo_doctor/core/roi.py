@@ -69,6 +69,10 @@ EFFORT_BY_RULE: dict[str, int] = {
     "expensive-nonstored-compute": 2,
     "deprecated-api-usage": 2,
     "removed-model-still-referenced": 2,
+    "sql-constraints-unsupported": 2,
+    "removed-orm-api-usage": 2,
+    "cron-removed-fields": 1,
+    "view-attrs-states-removed": 3,
     # 3: restructuring
     "public-controller-sudo-risk": 3,
     "search-in-loop": 3,
