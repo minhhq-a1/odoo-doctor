@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 38 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 39 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -10,6 +10,7 @@ Odoo Doctor ships 38 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [missing-access-csv](#missing-access-csv) | P0 | Security | error | high |  |
 | [raw-sql-string-interpolation](#raw-sql-string-interpolation) | P0 | Security | error | high |  |
 | [access-write-without-group](#access-write-without-group) | P1 | Security | error | high |  |
+| [dynamic-method-dispatch](#dynamic-method-dispatch) | P1 | Security | error | high |  |
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
@@ -141,6 +142,34 @@ Good:
 
 ```csv
 access_x,x,model_x,base.group_user,1,1,1,1
+```
+
+### dynamic-method-dispatch
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: `getattr(obj, name)(...)` (called directly or through a variable) where `name` is not a constant. A name built on a constant prefix (`'_get_%s' % kind`), looked up in a module-level table, checked in the same function (`in` / `==`, `startswith`) or taken from a logger is ignored.
+
+**Why**: Whoever controls the name can run any method of the object, ORM methods such as `unlink()` or `sudo()` included. Refusing names that start with `_` is not enough.
+
+**Fix**: Map the accepted names to methods in a dict or a set and reject the rest, or build the name on a constant prefix.
+
+**Note**: High confidence when the name comes from the parameters of a public method (reachable by RPC or HTTP). Names read from records or other data, and names in private helpers, are medium and do not affect the score.
+
+Bad:
+
+```python
+def download(self, method_print):
+    return getattr(self, method_print)()
+```
+
+Good:
+
+```python
+REPORTS = {'xlsx': '_report_xlsx', 'pdf': '_report_pdf'}
+
+def download(self, kind):
+    return getattr(self, REPORTS[kind])()
 ```
 
 ### missing-multicompany-rule

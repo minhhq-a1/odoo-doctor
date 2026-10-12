@@ -54,6 +54,7 @@ EFFORT_BY_RULE: dict[str, int] = {
     # 2: local code change
     "raw-sql-string-interpolation": 2,
     "eval-usage": 2,
+    "dynamic-method-dispatch": 2,
     "record-rule-without-domain": 2,
     "missing-multicompany-rule": 2,
     "manifest-license-incompatible": 3,
