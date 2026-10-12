@@ -6,15 +6,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
-### Fixed
+---
 
-- `scan --format github` now posts the sticky PR comment, and `--format sarif` no longer does. The
-  posting block sat in the SARIF branch of `scan` since PR 7: a SARIF scan commented on the pull
-  request of the current checkout through `gh` (the test suite did it on real PRs from a logged-in
-  machine), while `--format github`, the one the Action runs, never posted anything.
-- New `--no-pr-comment` turns the comment off for `--format github`; the Action's `pr-comment: false`
-  input now passes it (it only controlled `--score-delta` before).
-- The test suite puts a stub `gh` first on `PATH`, so no test can act as the developer's GitHub login.
+## [0.8.2] — 2026-10-12
+
+Theme: three new Security rules, and fixes for two silent failures found by reviewing the output on
+a real Odoo 19 workspace and on Odoo 19 community (690 modules): native rules switched off when the
+Odoo version is unknown, and the PR comment posted by the wrong output format. Native rules are now
+40. Rule IDs, CLI flags and JSON keys of existing rules are unchanged (see `docs/stability.md`);
+`--no-pr-comment` is new. Scores can move: the new rules can lower a score, and a project scanned
+without a detectable Odoo version now runs the native rules it silently skipped before.
 
 ### Added
 
@@ -24,7 +25,7 @@ All notable changes to Odoo Doctor are documented here.
   (public forms do that on purpose) and does not score. Rows for `TransientModel` wizards are
   skipped. Calibrated on Odoo 19 community (690 modules, 62 group-less rows, all read-only: 0
   findings) and on a real workspace, where it flags e.g. a model that manages access groups and is
-  writable by everyone. Native rules are now 38.
+  writable by everyone.
 - New rule `dynamic-method-dispatch` (Security, P1): `getattr(obj, name)(...)` where the code does
   not fix `name`, so whoever controls it can run any method of the object (`unlink()`, `sudo()`...).
   High confidence when the name comes from the parameters of a public method (reachable by RPC or
@@ -32,7 +33,7 @@ All notable changes to Odoo Doctor are documented here.
   constant prefix, looked up in a module-level table, checked in the same function or taken from a
   logger are ignored. Calibrated on Odoo 19 community (690 modules: 0 high, 5 medium) and on a real
   workspace, where the one high finding is a controller that calls a method named by a request
-  parameter. Native rules are now 39.
+  parameter.
 - New rule `rpc-sudo-without-access-check` (Security, P1): a public model method or an authenticated
   route that calls `.sudo()` on records or values chosen by its parameters, with no access check in
   the method (an IDOR). High confidence, which scores, only when a parameter reaches a write,
@@ -41,16 +42,7 @@ All notable changes to Odoo Doctor are documented here.
   parameters handed to another method (where a check may live), check-style calls and `raise`
   of `AccessError` / `Forbidden` are medium or ignored. Public routes stay with
   `public-controller-sudo-risk`. Calibrated on Odoo 19 community (690 modules: 1 high, 5 medium; a
-  first draft gave 97 high) and on a real workspace. Native rules are now 40.
-
-### Fixed
-
-- A scan whose Odoo version could not be detected no longer switches the native rules off. The
-  version comes from `--odoo-version`, the config, then a manifest version shaped like `17.0.x.y.z`;
-  a custom addon versioned `1.0` with no config gave `unknown`, and `unknown` failed every
-  `min_version` gate. 36 of the 37 native rules declare one, so such a scan reported only Ruff
-  results and a score of 100. `unknown` now keeps the rules enabled (a known version below the
-  floor still gates them). Scores of projects scanned without a detectable version can drop.
+  first draft gave 97 high) and on a real workspace.
 
 ### Changed
 
@@ -60,6 +52,22 @@ All notable changes to Odoo Doctor are documented here.
   `odoo-doctor scan extra-addons/my_repo   (14 addons)`, at most three plus a count of the rest.
   Discovery itself is unchanged, `scan PATH` still scans only the folders directly inside PATH, and
   the hint goes to stderr only.
+
+### Fixed
+
+- `scan --format github` now posts the sticky PR comment, and `--format sarif` no longer does. The
+  posting block sat in the SARIF branch of `scan` since PR 7: a SARIF scan commented on the pull
+  request of the current checkout through `gh` (the test suite did it on real PRs from a logged-in
+  machine), while `--format github`, the one the Action runs, never posted anything.
+- New `--no-pr-comment` turns the comment off for `--format github`; the Action's `pr-comment: false`
+  input now passes it (it only controlled `--score-delta` before).
+- The test suite puts a stub `gh` first on `PATH`, so no test can act as the developer's GitHub login.
+- A scan whose Odoo version could not be detected no longer switches the native rules off. The
+  version comes from `--odoo-version`, the config, then a manifest version shaped like `17.0.x.y.z`;
+  a custom addon versioned `1.0` with no config gave `unknown`, and `unknown` failed every
+  `min_version` gate. 36 of the 37 native rules declare one, so such a scan reported only Ruff
+  results and a score of 100. `unknown` now keeps the rules enabled (a known version below the
+  floor still gates them). Scores of projects scanned without a detectable version can drop.
 
 ---
 
