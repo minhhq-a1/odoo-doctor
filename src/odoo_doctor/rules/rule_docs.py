@@ -127,6 +127,7 @@ RULE_DOCS: dict[str, RuleDoc] = {
         lang="csv",
         notes="A row that only grants `create` is reported at medium confidence and "
         "does not affect the score: public forms create records anonymously on purpose.",
+    ),
     "dynamic-method-dispatch": RuleDoc(
         detects="`getattr(obj, name)(...)` (called directly or through a variable) "
         "where `name` is not a constant. A name built on a constant prefix "
