@@ -127,3 +127,49 @@ def test_a_diff_scan_with_nothing_changed_is_not_a_missing_addon(tmp_path: Path)
 
     assert result.returncode == 0
     assert WARNING not in result.stderr  # the addon exists, only nothing changed
+
+
+def test_the_warning_names_the_folder_that_holds_the_nested_addons(tmp_path: Path):
+    # a workspace: tmp/extra-addons/<repo>/<module>, scanned from the workspace root
+    _addon(tmp_path / "extra-addons" / "repo_a", "mod_one")
+    _addon(tmp_path / "extra-addons" / "repo_a", "mod_two")
+    _addon(tmp_path / "extra-addons" / "repo_b", "mod_three")
+    (tmp_path / "odoo-doctor.toml").write_text(CONFIG)
+
+    result = _scan(tmp_path, str(tmp_path), "--json")
+
+    assert result.returncode == 0
+    assert WARNING in result.stderr
+    assert "Found addons deeper" in result.stderr
+    assert f"scan {tmp_path / 'extra-addons' / 'repo_a'}" in result.stderr
+    assert f"scan {tmp_path / 'extra-addons' / 'repo_b'}" in result.stderr
+    assert "2 addons" in result.stderr  # repo_a holds two
+    assert "Found addons deeper" not in result.stdout
+
+
+def test_no_nested_hint_when_nothing_is_nested(tmp_path: Path):
+    (tmp_path / "docs").mkdir()
+    result = _scan(tmp_path, str(tmp_path), "--json")
+    assert WARNING in result.stderr
+    assert "Found addons deeper" not in result.stderr
+
+
+def test_the_nested_hint_skips_vendored_and_hidden_folders(tmp_path: Path):
+    _addon(tmp_path / "node_modules" / "pkg", "mod")
+    _addon(tmp_path / ".venv" / "lib", "mod")
+    _addon(tmp_path / "real", "mod")
+    (tmp_path / "odoo-doctor.toml").write_text(CONFIG)
+
+    result = _scan(tmp_path, str(tmp_path), "--json")
+
+    assert f"scan {tmp_path / 'real'}" in result.stderr
+    assert "node_modules" not in result.stderr
+    assert ".venv" not in result.stderr
+
+
+def test_the_nested_hint_is_capped(tmp_path: Path):
+    for i in range(8):
+        _addon(tmp_path / "ws" / f"repo{i}", "mod")
+    result = _scan(tmp_path, str(tmp_path), "--json")
+    assert result.stderr.count("scan ") <= 5
+    assert "more" in result.stderr
