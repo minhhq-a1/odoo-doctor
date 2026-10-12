@@ -15,6 +15,15 @@ All notable changes to Odoo Doctor are documented here.
   results and a score of 100. `unknown` now keeps the rules enabled (a known version below the
   floor still gates them). Scores of projects scanned without a detectable version can drop.
 
+### Changed
+
+- The `No Odoo addon found` warning now says where the addons are. When the scan roots hold none,
+  odoo-doctor looks up to four folders deeper (skipping hidden, `node_modules`, `venv` and similar
+  folders) and prints the folders whose children are addons, e.g.
+  `odoo-doctor scan extra-addons/my_repo   (14 addons)`, at most three plus a count of the rest.
+  Discovery itself is unchanged, `scan PATH` still scans only the folders directly inside PATH, and
+  the hint goes to stderr only.
+
 ---
 
 ## [0.8.1] — 2026-10-07
