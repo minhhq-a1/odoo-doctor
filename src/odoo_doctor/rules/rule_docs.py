@@ -148,6 +148,31 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "method (reachable by RPC or HTTP). Names read from records or other data, and "
         "names in private helpers, are medium and do not affect the score.",
     ),
+    "rpc-sudo-without-access-check": RuleDoc(
+        detects="Public model methods (no leading underscore) and authenticated "
+        "routes that call `.sudo()` on records or values chosen by their parameters, "
+        "with no access check in the method: `check_access*`, `has_access`, a token "
+        "or group test, a check-style helper, or a `raise` that refuses the caller. "
+        "Public routes (`auth='public'`) are left to `public-controller-sudo-risk`.",
+        why="A public method is reachable with any record ids and arguments. Elevating "
+        "with `sudo()` on what the caller picked lets them read or change records "
+        "their rights and record rules would refuse (an IDOR).",
+        fix="Check the caller's rights on the records before elevating "
+        "(`record.check_access('read')` / `has_access`), or drop `sudo()` and let the "
+        "record rules apply; elevate only the narrowest recordset.",
+        bad="def close(self, rid):\n"
+        "    self.env['x.y'].sudo().browse(rid).write({'state': 'closed'})",
+        good="def close(self, rid):\n"
+        "    rec = self.env['x.y'].browse(rid)\n"
+        "    rec.check_access('write')\n"
+        "    rec.sudo().write({'state': 'closed'})",
+        lang="python",
+        notes="High confidence only when a parameter reaches a write, unlink or create "
+        "on the elevated recordset and the method does not scope by the caller "
+        "(`env.user`, `uid`). Reads, `search` results (already filtered by the caller's "
+        "rules) and parameters handed to another method (where a check may live) are "
+        "medium or ignored; medium does not affect the score.",
+    ),
     "unsafe-template-render": RuleDoc(
         detects="QWeb `t-raw` output, which renders a value without HTML-escaping. "
         'The safe `t-raw="0"` idiom (the body passed to a `t-call`) is ignored.',

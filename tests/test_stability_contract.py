@@ -68,6 +68,7 @@ FROZEN_RULE_IDS = [
     "unsafe-template-render",
     "access-write-without-group",
     "dynamic-method-dispatch",
+    "rpc-sudo-without-access-check",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------
