@@ -40,3 +40,14 @@ def test_action_invokes_scan_with_format_github():
 
     assert "odoo-doctor scan" in script
     assert "--format github" in script
+
+
+def test_action_pr_comment_input_controls_the_comment_itself():
+    # `pr-comment: false` must turn the comment off, not only the score delta
+    with open("action.yml") as f:
+        data = yaml.safe_load(f)
+
+    run_step = next(
+        step for step in data["runs"]["steps"] if step.get("name") == "Run odoo-doctor"
+    )
+    assert "--no-pr-comment" in run_step["run"]
