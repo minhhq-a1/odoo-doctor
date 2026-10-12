@@ -371,3 +371,36 @@ def test_normalize_keeps_existing_url_and_skips_unknown_rules():
     kept = normalize_diagnostics([_diag(rule="eval-usage", url="https://x.test")])
     assert kept[0].url == "https://x.test"
     assert normalize_diagnostics([_diag(rule="E501")])[0].url is None
+
+
+# --- an undetected Odoo version must not switch rules off ---
+
+
+def test_rule_with_min_version_stays_enabled_when_the_version_is_unknown():
+    from odoo_doctor.core.pipeline import rule_is_enabled
+    from odoo_doctor.rules.registry import RuleMeta
+
+    meta = RuleMeta(
+        name="test-rule",
+        category="Security",
+        tier="P1",
+        severity="error",
+        default_confidence="high",
+        needs_context=True,
+        min_version="14.0",
+    )
+    # 'unknown' cannot show the project is older than the floor
+    assert rule_is_enabled(meta, "unknown", set()) is True
+    # a version that is known and too low still gates the rule
+    assert rule_is_enabled(meta, "13.0", {"odoo:13"}) is False
+
+
+def test_version_gate_keeps_findings_when_the_version_is_unknown():
+    d = _diag(rule="search-in-loop")
+    result = apply_version_gates([d], {"search-in-loop": "14.0"}, "unknown")
+    assert len(result) == 1
+
+
+def test_version_gate_still_drops_when_the_version_is_known_and_too_low():
+    d = _diag(rule="search-in-loop")
+    assert apply_version_gates([d], {"search-in-loop": "14.0"}, "13.0") == []

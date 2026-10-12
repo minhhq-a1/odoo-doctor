@@ -16,6 +16,15 @@ All notable changes to Odoo Doctor are documented here.
   findings) and on a real workspace, where it flags e.g. a model that manages access groups and is
   writable by everyone. Native rules are now 38.
 
+### Fixed
+
+- A scan whose Odoo version could not be detected no longer switches the native rules off. The
+  version comes from `--odoo-version`, the config, then a manifest version shaped like `17.0.x.y.z`;
+  a custom addon versioned `1.0` with no config gave `unknown`, and `unknown` failed every
+  `min_version` gate. 36 of the 37 native rules declare one, so such a scan reported only Ruff
+  results and a score of 100. `unknown` now keeps the rules enabled (a known version below the
+  floor still gates them). Scores of projects scanned without a detectable version can drop.
+
 ---
 
 ## [0.8.1] — 2026-10-07

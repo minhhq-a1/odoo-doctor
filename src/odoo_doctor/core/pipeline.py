@@ -29,7 +29,14 @@ _SOURCE_RANK = {"native": 2, "pylint-odoo": 1, "ruff": 1, "oca": 1}
 
 
 def _version_gte(detected: str, minimum: str) -> bool:
-    """Return True if detected >= minimum using first segment (e.g. '17.0' >= '14.0')."""
+    """Return True if detected >= minimum using first segment (e.g. '17.0' >= '14.0').
+
+    An undetected version (``unknown``) passes: ``min_version`` is a floor for features the
+    rule relies on, and a project that cannot be shown to sit below it should not lose the
+    rule. Failing closed here switched off 36 of the 37 native rules silently.
+    """
+    if detected == "unknown":
+        return True
     try:
         det = float(detected.split(".")[0])
         mn = float(minimum.split(".")[0])
