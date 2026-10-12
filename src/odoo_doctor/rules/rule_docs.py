@@ -114,6 +114,20 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "legitimately use `sudo()`: about one in five routes of Odoo 19 community "
         "does, so review rather than ban.",
     ),
+    "access-write-without-group": RuleDoc(
+        detects="Rows in `ir.model.access.csv` with an empty `group_id:id` that grant "
+        "`perm_write`, `perm_unlink` or `perm_create`. Rows for wizards "
+        "(`TransientModel`) are ignored.",
+        why="A row without a group applies to every user, portal and public users "
+        "included, so anyone can modify or delete the model's records.",
+        fix="Set `group_id:id` to `base.group_user` or a dedicated group, and keep "
+        "the group-less row read-only if it must stay.",
+        bad="access_x,x,model_x,,1,1,1,1",
+        good="access_x,x,model_x,base.group_user,1,1,1,1",
+        lang="csv",
+        notes="A row that only grants `create` is reported at medium confidence and "
+        "does not affect the score: public forms create records anonymously on purpose.",
+    ),
     "unsafe-template-render": RuleDoc(
         detects="QWeb `t-raw` output, which renders a value without HTML-escaping. "
         'The safe `t-raw="0"` idiom (the body passed to a `t-call`) is ignored.',

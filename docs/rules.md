@@ -2,13 +2,14 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 37 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 38 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
 | [eval-usage](#eval-usage) | P0 | Security | error | high |  |
 | [missing-access-csv](#missing-access-csv) | P0 | Security | error | high |  |
 | [raw-sql-string-interpolation](#raw-sql-string-interpolation) | P0 | Security | error | high |  |
+| [access-write-without-group](#access-write-without-group) | P1 | Security | error | high |  |
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
@@ -116,6 +117,30 @@ Good:
 
 ```python
 self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))
+```
+
+### access-write-without-group
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: Rows in `ir.model.access.csv` with an empty `group_id:id` that grant `perm_write`, `perm_unlink` or `perm_create`. Rows for wizards (`TransientModel`) are ignored.
+
+**Why**: A row without a group applies to every user, portal and public users included, so anyone can modify or delete the model's records.
+
+**Fix**: Set `group_id:id` to `base.group_user` or a dedicated group, and keep the group-less row read-only if it must stay.
+
+**Note**: A row that only grants `create` is reported at medium confidence and does not affect the score: public forms create records anonymously on purpose.
+
+Bad:
+
+```csv
+access_x,x,model_x,,1,1,1,1
+```
+
+Good:
+
+```csv
+access_x,x,model_x,base.group_user,1,1,1,1
 ```
 
 ### missing-multicompany-rule

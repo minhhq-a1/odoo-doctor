@@ -1,5 +1,25 @@
 [
   [
+    "access-write-without-group",
+    "mc/security/ir.model.access.csv",
+    "high"
+  ],
+  [
+    "access-write-without-group",
+    "mc/security/ir.model.access.csv",
+    "high"
+  ],
+  [
+    "access-write-without-group",
+    "mc/security/ir.model.access.csv",
+    "high"
+  ],
+  [
+    "access-write-without-group",
+    "mc/security/ir.model.access.csv",
+    "high"
+  ],
+  [
     "hardcoded-company-or-currency",
     "mc/models/util.py",
     "medium"
