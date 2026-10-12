@@ -42,3 +42,21 @@ def test_discover_addons_tolerates_non_utf8_manifest(tmp_path):
     # Must not raise; the addon is discovered (replaced char) rather than crashing
     result = discover_addons([tmp_path])
     assert len(result) == 1
+
+
+def test_find_nested_addon_roots_counts_addons_per_folder_and_skips_direct_children(
+    tmp_path,
+):
+    from odoo_doctor.discovery.addons import find_nested_addon_roots
+
+    def addon(path):
+        path.mkdir(parents=True)
+        (path / "__manifest__.py").write_text("{}")
+
+    addon(tmp_path / "direct")  # depth 1: the scan itself sees this one
+    addon(tmp_path / "ws" / "repo" / "a")
+    addon(tmp_path / "ws" / "repo" / "b")
+    addon(tmp_path / "ws" / "repo" / "a" / "inner")  # inside an addon: not entered
+    addon(tmp_path / "l1" / "l2" / "l3" / "l4" / "l5" / "too_deep")
+
+    assert find_nested_addon_roots(tmp_path) == [(tmp_path / "ws" / "repo", 2)]

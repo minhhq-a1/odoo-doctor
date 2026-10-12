@@ -9,7 +9,7 @@ Odoo Doctor ships 38 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [eval-usage](#eval-usage) | P0 | Security | error | high |  |
 | [missing-access-csv](#missing-access-csv) | P0 | Security | error | high |  |
 | [raw-sql-string-interpolation](#raw-sql-string-interpolation) | P0 | Security | error | high |  |
-| [dynamic-method-dispatch](#dynamic-method-dispatch) | P1 | Security | error | high |  |
+| [access-write-without-group](#access-write-without-group) | P1 | Security | error | high |  |
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
@@ -119,32 +119,28 @@ Good:
 self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", (name,))
 ```
 
-### dynamic-method-dispatch
+### access-write-without-group
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `getattr(obj, name)(...)` (called directly or through a variable) where `name` is not a constant. A name built on a constant prefix (`'_get_%s' % kind`), looked up in a module-level table, checked in the same function (`in` / `==`, `startswith`) or taken from a logger is ignored.
+**Detects**: Rows in `ir.model.access.csv` with an empty `group_id:id` that grant `perm_write`, `perm_unlink` or `perm_create`. Rows for wizards (`TransientModel`) are ignored.
 
-**Why**: Whoever controls the name can run any method of the object, ORM methods such as `unlink()` or `sudo()` included. Refusing names that start with `_` is not enough.
+**Why**: A row without a group applies to every user, portal and public users included, so anyone can modify or delete the model's records.
 
-**Fix**: Map the accepted names to methods in a dict or a set and reject the rest, or build the name on a constant prefix.
+**Fix**: Set `group_id:id` to `base.group_user` or a dedicated group, and keep the group-less row read-only if it must stay.
 
-**Note**: High confidence when the name comes from the parameters of a public method (reachable by RPC or HTTP). Names read from records or other data, and names in private helpers, are medium and do not affect the score.
+**Note**: A row that only grants `create` is reported at medium confidence and does not affect the score: public forms create records anonymously on purpose.
 
 Bad:
 
-```python
-def download(self, method_print):
-    return getattr(self, method_print)()
+```csv
+access_x,x,model_x,,1,1,1,1
 ```
 
 Good:
 
-```python
-REPORTS = {'xlsx': '_report_xlsx', 'pdf': '_report_pdf'}
-
-def download(self, kind):
-    return getattr(self, REPORTS[kind])()
+```csv
+access_x,x,model_x,base.group_user,1,1,1,1
 ```
 
 ### missing-multicompany-rule

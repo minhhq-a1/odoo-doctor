@@ -63,6 +63,7 @@ import odoo_doctor.rules.manifest.license_compatibility
 import odoo_doctor.rules.manifest.external_dependencies
 import odoo_doctor.rules.manifest.vendored_python_code
 import odoo_doctor.rules.security.unsafe_template_render
+import odoo_doctor.rules.security.access_write_without_group
 import odoo_doctor.rules.security.dynamic_method_dispatch
 
 # Import fixer modules to trigger fixer registration.
@@ -871,6 +872,26 @@ def _warn_if_no_addons(addons_paths: list[Path], path_arg: str | None) -> None:
         f"{hint}",
         err=True,
     )
+    _echo_nested_addon_hint(addons_paths)
+
+
+_NESTED_HINT_SHOWN = 3
+
+
+def _echo_nested_addon_hint(addons_paths: list[Path]) -> None:
+    """Point at the folders that do hold addons, a few levels below the scan roots."""
+    from odoo_doctor.discovery.addons import find_nested_addon_roots
+
+    found = [item for base in addons_paths for item in find_nested_addon_roots(base)]
+    if not found:
+        return
+    lines = ["       Found addons deeper down. Try:"]
+    for folder, count in found[:_NESTED_HINT_SHOWN]:
+        noun = "addon" if count == 1 else "addons"
+        lines.append(f"         odoo-doctor scan {folder}   ({count} {noun})")
+    if len(found) > _NESTED_HINT_SHOWN:
+        lines.append(f"         (+{len(found) - _NESTED_HINT_SHOWN} more folders)")
+    typer.echo("\n".join(lines), err=True)
 
 
 def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
