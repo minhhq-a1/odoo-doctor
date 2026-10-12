@@ -67,6 +67,7 @@ FROZEN_RULE_IDS = [
     "vendored-python-code",
     "unsafe-template-render",
     "access-write-without-group",
+    "dynamic-method-dispatch",
     "rpc-sudo-without-access-check",
 ]
 

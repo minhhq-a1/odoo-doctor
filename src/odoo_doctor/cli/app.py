@@ -64,6 +64,7 @@ import odoo_doctor.rules.manifest.external_dependencies
 import odoo_doctor.rules.manifest.vendored_python_code
 import odoo_doctor.rules.security.unsafe_template_render
 import odoo_doctor.rules.security.access_write_without_group
+import odoo_doctor.rules.security.dynamic_method_dispatch
 import odoo_doctor.rules.security.rpc_sudo_without_access_check
 
 # Import fixer modules to trigger fixer registration.

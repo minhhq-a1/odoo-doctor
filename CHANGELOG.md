@@ -15,6 +15,14 @@ All notable changes to Odoo Doctor are documented here.
   skipped. Calibrated on Odoo 19 community (690 modules, 62 group-less rows, all read-only: 0
   findings) and on a real workspace, where it flags e.g. a model that manages access groups and is
   writable by everyone. Native rules are now 38.
+- New rule `dynamic-method-dispatch` (Security, P1): `getattr(obj, name)(...)` where the code does
+  not fix `name`, so whoever controls it can run any method of the object (`unlink()`, `sudo()`...).
+  High confidence when the name comes from the parameters of a public method (reachable by RPC or
+  HTTP); medium, not scoring, for names read from records or in private helpers. Names built on a
+  constant prefix, looked up in a module-level table, checked in the same function or taken from a
+  logger are ignored. Calibrated on Odoo 19 community (690 modules: 0 high, 5 medium) and on a real
+  workspace, where the one high finding is a controller that calls a method named by a request
+  parameter. Native rules are now 39.
 - New rule `rpc-sudo-without-access-check` (Security, P1): a public model method or an authenticated
   route that calls `.sudo()` on records or values chosen by its parameters, with no access check in
   the method (an IDOR). High confidence, which scores, only when a parameter reaches a write,
@@ -23,7 +31,7 @@ All notable changes to Odoo Doctor are documented here.
   parameters handed to another method (where a check may live), check-style calls and `raise`
   of `AccessError` / `Forbidden` are medium or ignored. Public routes stay with
   `public-controller-sudo-risk`. Calibrated on Odoo 19 community (690 modules: 1 high, 5 medium; a
-  first draft gave 97 high) and on a real workspace. Native rules are now 39.
+  first draft gave 97 high) and on a real workspace. Native rules are now 40.
 
 ### Fixed
 
