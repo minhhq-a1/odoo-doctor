@@ -66,5 +66,8 @@ runs:
         if [ "${{ inputs.pr-comment }}" == "true" ] && [ "$DIFF_BASE" != "" ]; then
           ARGS+=(--score-delta "$DIFF_BASE")
         fi
+        if [ "${{ inputs.pr-comment }}" != "true" ]; then
+          ARGS+=(--no-pr-comment)
+        fi
         
         odoo-doctor scan "${{ inputs.paths }}" --format github "${ARGS[@]}"

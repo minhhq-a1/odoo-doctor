@@ -98,6 +98,11 @@ def scan(
     score_delta: str | None = typer.Option(
         None, "--score-delta", help="Compute score difference vs this base ref"
     ),
+    pr_comment: bool = typer.Option(
+        True,
+        "--pr-comment/--no-pr-comment",
+        help="With --format github, post or update the sticky PR comment",
+    ),
     min_score: int | None = typer.Option(
         None, "--min-score", help="Exit 2 if any module scores below this (0-100)"
     ),
@@ -250,21 +255,22 @@ def scan(
         from odoo_doctor.reporters.github_annotations import render_github_annotations
 
         typer.echo(render_github_annotations(diags, config_root))
+
+        # In github output, we also want to post PR comment
+        if pr_comment:
+            from odoo_doctor.reporters.pr_comment import (
+                post_pr_comment,
+                render_pr_comment_body,
+            )
+
+            body = render_pr_comment_body(
+                diags, scores, delta=delta_str, surfaces=cfg.surfaces.get("pr_comment")
+            )
+            post_pr_comment(body)
     elif output_format == "sarif":
         from odoo_doctor.reporters.sarif import render_sarif
 
         typer.echo(render_sarif(diags, config_root))
-
-        # In github output, we also want to post PR comment
-        from odoo_doctor.reporters.pr_comment import (
-            post_pr_comment,
-            render_pr_comment_body,
-        )
-
-        body = render_pr_comment_body(
-            diags, scores, delta=delta_str, surfaces=cfg.surfaces.get("pr_comment")
-        )
-        post_pr_comment(body)
     else:
         typer.echo(render_terminal(diags, scores))
 

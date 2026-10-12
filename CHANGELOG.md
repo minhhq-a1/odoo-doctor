@@ -6,6 +6,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `scan --format github` now posts the sticky PR comment, and `--format sarif` no longer does. The
+  posting block sat in the SARIF branch of `scan` since PR 7: a SARIF scan commented on the pull
+  request of the current checkout through `gh` (the test suite did it on real PRs from a logged-in
+  machine), while `--format github`, the one the Action runs, never posted anything.
+- New `--no-pr-comment` turns the comment off for `--format github`; the Action's `pr-comment: false`
+  input now passes it (it only controlled `--score-delta` before).
+- The test suite puts a stub `gh` first on `PATH`, so no test can act as the developer's GitHub login.
+
 ### Added
 
 - New rule `access-write-without-group` (Security, P1): a row of `ir.model.access.csv` with an empty

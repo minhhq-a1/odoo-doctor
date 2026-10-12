@@ -234,7 +234,7 @@ odoo-doctor scan . --baseline .odoo-doctor-baseline.json --fail-on warning
 
 - **`--format github`**: Emits GitHub Actions annotations inline.
 - **`--score-delta <base-ref>`**: Opt-in PR score delta. It does a worktree-isolated second scan and needs git history (`fetch-depth: 0` in Actions).
-- **Sticky PR comment**: Posted/updated via `gh` when `--format github` runs in a PR with a valid `GH_TOKEN`. Idempotent via a hidden marker.
+- **Sticky PR comment**: Posted/updated via `gh` when `--format github` runs in a PR with a valid `GH_TOKEN`. Idempotent via a hidden marker. Only `--format github` posts it; `--no-pr-comment` (or `pr-comment: false` on the Action) turns it off.
 
 ### CI failure policy
 
