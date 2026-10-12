@@ -1,0 +1,38 @@
+<odoo>
+    <record id="view_legacy_form" model="ir.ui.view">
+        <field name="name">ra.legacy.form</field>
+        <field name="model">ra.legacy</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="refresh" type="object" string="Refresh" states="draft"/>
+                </header>
+                <field name="name" attrs="{'invisible': [('name', '=', False)]}"/>
+            </form>
+        </field>
+    </record>
+    <record id="view_modern_form" model="ir.ui.view">
+        <field name="name">ra.modern.form</field>
+        <field name="model">ra.modern</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="name" invisible="not name"/>
+            </form>
+        </field>
+    </record>
+    <record id="view_legacy_form_port" model="ir.ui.view">
+        <field name="name">ra.legacy.form.port</field>
+        <field name="model">ra.legacy</field>
+        <field name="inherit_id" ref="view_legacy_form"/>
+        <field name="arch" type="xml">
+            <!-- An empty attribute edit removes states: how a pre-17 view is ported. -->
+            <xpath expr="//button[@name='refresh']" position="attributes">
+                <attribute name="invisible">not name</attribute>
+                <attribute name="states"></attribute>
+            </xpath>
+        </field>
+    </record>
+    <template id="qweb_with_attrs">
+        <div attrs="x" states="y"/>
+    </template>
+</odoo>

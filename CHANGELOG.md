@@ -8,6 +8,43 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.9.1] — 2026-10-12
+
+Theme: four Upgrade Safety rules found by scanning real Odoo 19 repositories. Each one catches
+code that Odoo 17, 18 or 19 refuses or silently ignores and that no existing rule noticed. Native
+rules are now 44. Rule IDs, CLI flags and JSON keys of existing rules are unchanged (see
+`docs/stability.md`); a project on Odoo 17 or later can see its score drop where it still uses
+these APIs.
+
+### Added
+
+- New rule `sql-constraints-unsupported` (Upgrade Safety, P1, Odoo 19+): a model that sets
+  `_sql_constraints`. Odoo 19 only logs a warning for the attribute and creates none of the
+  constraints, so a UNIQUE or CHECK silently stops being enforced. Use `models.Constraint`. Plain
+  mixins, empty lists, test files and `migrations/` scripts are ignored.
+- New rule `removed-orm-api-usage` (Upgrade Safety, P1, Odoo 17+): overrides and calls of
+  `fields_view_get` and `invalidate_cache` (removed in 17) and `name_get` (removed in 18). A call
+  on `self`/`env` is high confidence; a call on an unrelated object is medium and does not score.
+- New rule `cron-removed-fields` (Upgrade Safety, P1, Odoo 18+): `numbercall` or `doall` on an
+  `ir.cron` record, fields the model no longer has. A job that used `numbercall` to run a limited
+  number of times now repeats on every interval.
+- New rule `view-attrs-states-removed` (Upgrade Safety, P1, Odoo 17+): `attrs` / `states` in the
+  architecture of a view, which Odoo 17 and later refuse. An empty `<attribute name="states"/>`
+  edit (it removes the attribute, the way a pre-17 view is ported) and QWeb templates are not
+  reported.
+
+Each version gate was checked against the ORM and view source of Odoo 17.0, 18.0 and 19.0. The
+rules give 0 findings on the community addons of Odoo 17.0 (578 modules), 18.0 (624) and 19.0
+(636). On a real Odoo 19 workspace of four repositories `sql-constraints-unsupported` reports 5
+findings (for example `_sql_constraints` on a customs-declaration model) and
+`removed-orm-api-usage` 5 (`name_get` / `fields_view_get` overrides and `invalidate_cache` calls in
+third-party addons), all true. `cron-removed-fields` and `view-attrs-states-removed` find nothing
+there: the one cron file that sets `numbercall` is not listed in its manifest, and the one view hit
+was a false positive (an empty `states` edit, which removes the attribute), now fixed and frozen in
+the golden corpus (`tests/corpus/removed_apis`) together with `migrations/` scripts.
+
+---
+
 ## [0.9.0] — 2026-10-12
 
 Theme: freeze and document what 1.0 will promise. No new rules and no change to rule IDs, JSON

@@ -1,0 +1,32 @@
+[
+  [
+    "cron-removed-fields",
+    "ra/data/cron.xml",
+    "high"
+  ],
+  [
+    "removed-orm-api-usage",
+    "ra/models/legacy.py",
+    "high"
+  ],
+  [
+    "removed-orm-api-usage",
+    "ra/models/legacy.py",
+    "high"
+  ],
+  [
+    "removed-orm-api-usage",
+    "ra/models/legacy.py",
+    "high"
+  ],
+  [
+    "sql-constraints-unsupported",
+    "ra/models/legacy.py",
+    "high"
+  ],
+  [
+    "view-attrs-states-removed",
+    "ra/views/views.xml",
+    "high"
+  ]
+]

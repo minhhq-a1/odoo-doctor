@@ -573,4 +573,65 @@ RULE_DOCS: dict[str, RuleDoc] = {
         notes="Medium confidence (does not affect the score). JavaScript libraries "
         "under `static/` are normal in Odoo and are not reported.",
     ),
+    "sql-constraints-unsupported": RuleDoc(
+        detects="A model class that sets `_sql_constraints` to a non-empty list, on "
+        "Odoo 19 and later. Plain Python mixins, empty lists and test files are ignored.",
+        why="Odoo 19 no longer reads `_sql_constraints`: it only logs a warning and "
+        "creates none of the constraints, so a UNIQUE or CHECK the model relied on "
+        "silently stops being enforced.",
+        fix="Declare each constraint as a class attribute with `models.Constraint`, "
+        "after checking the database for rows that would violate a UNIQUE one.",
+        bad="_sql_constraints = [('name_uniq', 'unique(name)', 'Name must be unique')]",
+        good="_name_uniq = models.Constraint('UNIQUE(name)', 'Name must be unique')",
+        lang="python",
+        notes="Gated to Odoo 19 and later (`min_version`). Verified against the Odoo 19 "
+        "ORM source, which logs that the attribute is no longer supported.",
+    ),
+    "removed-orm-api-usage": RuleDoc(
+        detects="Overrides and calls of ORM methods the running Odoo version no longer "
+        "defines: `fields_view_get` and `invalidate_cache` (removed in 17), `name_get` "
+        "(removed in 18). A call on `self` or `env` is high confidence; a call on an "
+        "unrelated object is medium and does not affect the score.",
+        why="An override of a removed method is dead code, because nothing calls it any "
+        "more, and a call raises `AttributeError`.",
+        fix="Use `get_view()` for `fields_view_get`, `invalidate_model()` / "
+        "`invalidate_recordset()` for `invalidate_cache`, and "
+        "`_compute_display_name` for `name_get`.",
+        bad="def name_get(self):\n    return [(r.id, r.name) for r in self]",
+        good="@api.depends('name')\n"
+        "def _compute_display_name(self):\n"
+        "    for r in self:\n"
+        "        r.display_name = r.name",
+        lang="python",
+        notes="Each method is reported only from the Odoo version whose ORM source no "
+        "longer defines it. `super().name_get()` inside an override is not reported "
+        "twice.",
+    ),
+    "cron-removed-fields": RuleDoc(
+        detects="`ir.cron` records in data or demo files that set `numbercall` or "
+        "`doall`, on Odoo 18 and later.",
+        why="`ir.cron` no longer has these fields since Odoo 18. A job that used "
+        "`numbercall` to run a limited number of times now repeats on every interval.",
+        fix="Remove the fields. If the job must stop after some runs, have its method "
+        "deactivate the cron.",
+        bad='<field name="numbercall">-1</field>\n<field name="doall" eval="False"/>',
+        good="<!-- nothing: the interval fields are enough -->",
+        lang="xml",
+        notes="Only `ir.cron` records are checked; the same field names on other "
+        "models are left alone.",
+    ),
+    "view-attrs-states-removed": RuleDoc(
+        detects='Elements with `attrs` or `states` (or an `<attribute name="attrs">` '
+        "xpath edit) in the architecture of an `ir.ui.view` record, on Odoo 17 and "
+        "later. One finding per view. QWeb templates are not checked.",
+        why='Odoo 17 and later refuse such a view ("Since 17.0, the attrs and states '
+        'attributes are no longer used"), so the module cannot be installed or updated.',
+        fix="Put the condition in the attribute itself: `invisible`, `readonly` or "
+        "`required` take a Python expression on the record's fields.",
+        bad="<field name=\"note\" attrs=\"{'invisible': [('state', '=', 'draft')]}\"/>",
+        good='<field name="note" invisible="state == \'draft\'"/>',
+        lang="xml",
+        notes='`states="draft,sent"` on a button becomes '
+        "`invisible=\"state not in ('draft', 'sent')\"`.",
+    ),
 }

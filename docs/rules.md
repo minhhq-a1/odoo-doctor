@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 40 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 44 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -34,8 +34,12 @@ Odoo Doctor ships 40 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [unbounded-search](#unbounded-search) | P2 | Performance | warning | high |  |
 | [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | low |  |
 | [data-noupdate-risk](#data-noupdate-risk) | P2 | Data Integrity | warning | high |  |
+| [cron-removed-fields](#cron-removed-fields) | P1 | Upgrade Safety | error | high |  |
 | [deprecated-api-usage](#deprecated-api-usage) | P1 | Upgrade Safety | warning | high |  |
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
+| [removed-orm-api-usage](#removed-orm-api-usage) | P1 | Upgrade Safety | error | high |  |
+| [sql-constraints-unsupported](#sql-constraints-unsupported) | P1 | Upgrade Safety | error | high |  |
+| [view-attrs-states-removed](#view-attrs-states-removed) | P1 | Upgrade Safety | error | high |  |
 | [manifest-missing-dependency](#manifest-missing-dependency) | P1 | Module Hygiene | error | high |  |
 | [manifest-data-order-risk](#manifest-data-order-risk) | P2 | Module Hygiene | error | high | Yes |
 | [manifest-license-incompatible](#manifest-license-incompatible) | P2 | Module Hygiene | warning | high |  |
@@ -721,6 +725,31 @@ Good:
 
 ## Upgrade Safety
 
+### cron-removed-fields
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0
+
+**Detects**: `ir.cron` records in data or demo files that set `numbercall` or `doall`, on Odoo 18 and later.
+
+**Why**: `ir.cron` no longer has these fields since Odoo 18. A job that used `numbercall` to run a limited number of times now repeats on every interval.
+
+**Fix**: Remove the fields. If the job must stop after some runs, have its method deactivate the cron.
+
+**Note**: Only `ir.cron` records are checked; the same field names on other models are left alone.
+
+Bad:
+
+```xml
+<field name="numbercall">-1</field>
+<field name="doall" eval="False"/>
+```
+
+Good:
+
+```xml
+<!-- nothing: the interval fields are enough -->
+```
+
 ### deprecated-api-usage
 
 **Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
@@ -760,6 +789,82 @@ self.env['res.partner'].search([])
 **Fix**: Port the code to the replacement model named in the finding.
 
 **Note**: Based on a curated list of certain removals: a model that is merely absent from the scanned set is usually an unscanned dependency and is not reported. Medium confidence: does not affect the score.
+
+### removed-orm-api-usage
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 17.0
+
+**Detects**: Overrides and calls of ORM methods the running Odoo version no longer defines: `fields_view_get` and `invalidate_cache` (removed in 17), `name_get` (removed in 18). A call on `self` or `env` is high confidence; a call on an unrelated object is medium and does not affect the score.
+
+**Why**: An override of a removed method is dead code, because nothing calls it any more, and a call raises `AttributeError`.
+
+**Fix**: Use `get_view()` for `fields_view_get`, `invalidate_model()` / `invalidate_recordset()` for `invalidate_cache`, and `_compute_display_name` for `name_get`.
+
+**Note**: Each method is reported only from the Odoo version whose ORM source no longer defines it. `super().name_get()` inside an override is not reported twice.
+
+Bad:
+
+```python
+def name_get(self):
+    return [(r.id, r.name) for r in self]
+```
+
+Good:
+
+```python
+@api.depends('name')
+def _compute_display_name(self):
+    for r in self:
+        r.display_name = r.name
+```
+
+### sql-constraints-unsupported
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 19.0
+
+**Detects**: A model class that sets `_sql_constraints` to a non-empty list, on Odoo 19 and later. Plain Python mixins, empty lists and test files are ignored.
+
+**Why**: Odoo 19 no longer reads `_sql_constraints`: it only logs a warning and creates none of the constraints, so a UNIQUE or CHECK the model relied on silently stops being enforced.
+
+**Fix**: Declare each constraint as a class attribute with `models.Constraint`, after checking the database for rows that would violate a UNIQUE one.
+
+**Note**: Gated to Odoo 19 and later (`min_version`). Verified against the Odoo 19 ORM source, which logs that the attribute is no longer supported.
+
+Bad:
+
+```python
+_sql_constraints = [('name_uniq', 'unique(name)', 'Name must be unique')]
+```
+
+Good:
+
+```python
+_name_uniq = models.Constraint('UNIQUE(name)', 'Name must be unique')
+```
+
+### view-attrs-states-removed
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 17.0
+
+**Detects**: Elements with `attrs` or `states` (or an `<attribute name="attrs">` xpath edit) in the architecture of an `ir.ui.view` record, on Odoo 17 and later. One finding per view. QWeb templates are not checked.
+
+**Why**: Odoo 17 and later refuse such a view ("Since 17.0, the attrs and states attributes are no longer used"), so the module cannot be installed or updated.
+
+**Fix**: Put the condition in the attribute itself: `invisible`, `readonly` or `required` take a Python expression on the record's fields.
+
+**Note**: `states="draft,sent"` on a button becomes `invisible="state not in ('draft', 'sent')"`.
+
+Bad:
+
+```xml
+<field name="note" attrs="{'invisible': [('state', '=', 'draft')]}"/>
+```
+
+Good:
+
+```xml
+<field name="note" invisible="state == 'draft'"/>
+```
 
 ## Module Hygiene
 
