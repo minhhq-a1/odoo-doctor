@@ -71,6 +71,9 @@ The full, generated reference (40 rules, with before/after examples) is in
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md). What you can rely on across upgrades (CLI flags, exit
 codes, JSON keys, rule IDs) is in the [stability contract](docs/stability.md).
+Supported Python and Odoo versions and the release support policy are in
+[`docs/support.md`](docs/support.md); scan times on Odoo 19 community are in
+[`docs/performance.md`](docs/performance.md).
 
 ---
 
@@ -169,7 +172,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.8.2
+  uses: minhhq-a1/odoo-doctor@v0.9.0
   with:
     fail-on: warning
     min-score: 75

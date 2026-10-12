@@ -16,7 +16,7 @@ import typer.main
 from typer.testing import CliRunner
 
 import odoo_doctor.cli.app  # noqa: F401  (registers every rule)
-from odoo_doctor import plugin_api
+from odoo_doctor import __version__, plugin_api
 from odoo_doctor.cli.app import app
 from odoo_doctor.core.config import load_config
 from odoo_doctor.core.history import HISTORY_SCHEMA_VERSION
@@ -230,6 +230,37 @@ def test_exit_codes(argv: list[str], expected: int):
     assert runner.invoke(app, argv).exit_code == expected
 
 
+def test_version_flag_prints_the_package_version():
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert result.stdout.strip() == f"odoo-doctor {__version__}"
+    assert "--version" in _flags(_click_command())
+
+
+def test_exit_codes_of_the_other_commands(tmp_path: Path):
+    """`docs/stability.md` promises these; scripts depend on them."""
+    stale = tmp_path / "rules.md"
+    stale.write_text("old\n", encoding="utf-8")
+    empty_report = tmp_path / "report.json"
+    empty_report.write_text("{}", encoding="utf-8")
+    cases = [
+        (["fix", str(FIXTURES / "bad_addon")], 3),  # neither --fix nor --fix-dry-run
+        (["rules", "docs", "--out", str(stale), "--check"], 1),  # page out of date
+        (["rules", "disable", "no-such-rule", "--path", str(tmp_path)], 3),
+        (["rules", "docs", "--format", "pdf"], 3),
+        (["rules", "bogus-action"], 3),
+        (
+            ["history", "import", str(tmp_path / "h.jsonl"), str(empty_report)],
+            3,
+        ),  # nothing importable
+        (["scan", "--no-such-flag"], 2),  # Click usage error, not odoo-doctor's own
+    ]
+    for argv, expected in cases:
+        result = runner.invoke(app, argv)
+        assert result.exit_code == expected, (argv, result.output)
+    assert runner.invoke(app, ["rules", "list"]).exit_code == 0
+
+
 def test_json_report_keys_are_stable():
     report = _scan_report()
     assert FROZEN_REPORT_KEYS <= set(report)
@@ -384,6 +415,13 @@ def test_doc_names_every_frozen_command(stability_doc: str):
         assert (
             f"`{command}`" in stability_doc or f"odoo-doctor {command}" in stability_doc
         )
+
+
+def test_doc_covers_every_rules_action_and_experimental_commands(stability_doc: str):
+    for action in ("list", "explain", "disable", "enable", "docs", "stats", "new"):
+        assert f"`{action}`" in stability_doc, action
+    assert "`lsp`" in stability_doc
+    assert "`--version`" in stability_doc
 
 
 def test_doc_states_exit_codes_and_policy(stability_doc: str):
