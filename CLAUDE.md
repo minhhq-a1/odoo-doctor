@@ -13,9 +13,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pip install -e ".[dev]" && pip install "ruff>=0.16,<0.17"   # setup (ruff is not in the dev extra but CI needs it)
 
-pytest                                          # all tests
-pytest tests/rules/test_eval_usage.py -xvs      # one file, stop on first failure, no capture
-pytest tests/path.py::TestClass::test_method    # one test
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest         # what CI runs
 
 ruff check src tests && ruff format --check src tests   # both must pass in CI (ruff format to fix)
@@ -24,23 +21,6 @@ ruff check src tests && ruff format --check src tests   # both must pass in CI (
 **Golden corpus** (`tests/corpus/`, run by `tests/test_golden_corpus.py`): each directory is a tiny sample addon scanned end to end through the CLI and compared with its `expected.json` (`[rule, file, confidence]` per finding). It guards true positives *and* known false positives. When a rule change is intentional, review the diff then refresh with `UPDATE_GOLDEN=1 pytest tests/test_golden_corpus.py`. When a real scan shows a false positive, reduce it to a corpus case first. The corpus is excluded from pytest collection (`tests/conftest.py`) and from ruff (`pyproject.toml`) because it holds scan inputs, not tests.
 
 CI (`.github/workflows/ci.yml`) runs pytest + ruff on Python 3.10–3.12; the package supports 3.10–3.13. Ruff runs its 0.16 default rule set; CI pins `ruff>=0.16,<0.17` so a new minor cannot change what is enforced (bump it together with fixing the findings), and the few deliberate ignores live in `pyproject.toml`. The side-effect imports that register rules (`cli/app.py`, `reporters/json_report.py`) sit in `isort: off` blocks: registration order is import order and decides the order of `rules list` and of findings at the same location (`tests/test_registration_order.py`).
-
-Useful CLI invocations while developing (entry point `odoo-doctor = odoo_doctor.cli.app:app`, Typer):
-
-```bash
-odoo-doctor scan tests/fixtures/bad_addon --json       # fixtures: sample_addon (clean), bad_addon
-odoo-doctor scan . --diff HEAD --fail-on error         # only changed files
-odoo-doctor scan . --cache | --baseline F | --write-baseline F | --history h.jsonl --badge b.svg
-odoo-doctor fix . [--fix-dry-run]                      # deterministic auto-fixes
-odoo-doctor rules list | explain <rule> | disable <rule> | enable <rule>
-odoo-doctor rules docs --out docs/rules.md [--check]   # regenerate rules reference
-odoo-doctor rules stats [--path DIR] [--cache] [--json]   # which rules users suppress most
-odoo-doctor rules new <rule-name> [--out DIR]          # scaffold a third-party rule pack (core/scaffold.py)
-odoo-doctor lsp                                        # language server on stdio (needs the `lsp` extra, included in `dev`)
-odoo-doctor history show h.jsonl --max-drop 3          # regression gate (exit 2)
-```
-
-Exit codes: `0` clean, `1` findings at/above `--fail-on`, `2` score below `--min-score` (or history regression), `3` invalid args / git failure.
 
 ## Architecture
 
@@ -91,16 +71,9 @@ Key concepts that span files:
 
 ## Releasing
 
-1. Bump the version in `pyproject.toml`, `src/odoo_doctor/__init__.py` (read by the JSON report), `README.md` (including the `minhhq-a1/odoo-doctor@vX.Y.Z` action example), `CLAUDE.md` and `AGENTS.md`, plus both `version` fields of `editors/vscode/package.json` and `package-lock.json`. `tests/test_version.py` enforces pyproject == `__version__` and that `CHANGELOG.md` has a `## [X.Y.Z]` entry; `tests/test_vscode_extension.py` enforces the extension version; the README/CLAUDE/AGENTS bumps are not tested.
-2. Update `CHANGELOG.md`; regenerate `docs/rules.md` if rules changed.
-3. Merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z` and create a GitHub Release — `.github/workflows/publish.yml` publishes to PyPI via Trusted Publishing.
-4. VS Code extension (not automated, needs the publisher's token): after the PyPI release, publish the same version from `main` with `cd editors/vscode && npm ci && npx vsce publish`, or upload the `.vsix` that `npm run package` builds at https://marketplace.visualstudio.com/manage/publishers/MinhHong. Never put the token in the repo or in chat.
+Follow the `release` skill (`.claude/skills/release/SKILL.md`). Never put the VS Code Marketplace publisher token in the repo or in chat.
 
 Current version: `0.9.3`.
-
-## Configuration
-
-`odoo-doctor.toml` (generate with `odoo-doctor init`). Sections: `[odoo-doctor]` (`odoo_version` or `"auto"`, `addons_paths`, `odoo_source_path`, `capabilities`), `[plugins]` (`enabled`, `allow`), `[adapters]` (`ruff`, `pylint_odoo`), `[severity]` (per-rule override, `"off"` disables), `[ignore]` (`rules`, `files` globs, `modules`), `[category_weights]`, `[surfaces.pr_comment]` / `[surfaces.ci_failure]`. `rules disable/enable` edit `[ignore] rules` in place, preserving comments (`core/config_edit.py`). Config validation is in `core/config.py`.
 
 ## Further Reading
 
