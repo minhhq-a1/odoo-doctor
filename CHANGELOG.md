@@ -8,6 +8,61 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.9.2] — 2026-10-13
+
+Theme: the rest of the backlog from scanning real Odoo 19 repositories: five rules for code that
+is deprecated, unsafe or fragile rather than broken. Native rules are now 49. Rule IDs, CLI flags
+and JSON keys of existing rules are unchanged (see `docs/stability.md`); a project can see its
+score drop where it uses these patterns.
+
+### Added
+
+- New rule `deprecated-orm-api-usage` (Upgrade Safety, P2, Odoo 18+): calls of ORM methods the
+  running version still defines but deprecates: `read_group`, `toggle_active` and
+  `check_field_access_rights` (19), `check_access_rights`, `check_access_rule`,
+  `_filter_access_rules` and `_check_recursion` (18). An override of `read_group` is reported too:
+  on Odoo 19 the web client goes through `web_read_group` / `formatted_read_group` and `_read_group`,
+  so the override is never called by grouped views. A call on `self`/`env` is high confidence, any
+  other receiver medium.
+- New rule `tls-verification-disabled` (Security, P1): `verify=False`, `session.verify = False`,
+  `check_hostname = False`, `verify_mode = ssl.CERT_NONE` and `ssl._create_unverified_context()`.
+- New rule `http-request-without-timeout` (Performance, P2): `requests.get/post/...`, calls on a
+  `requests.Session`, and `urlopen()` without `timeout`. A call that passes `**options` is skipped.
+- New rule `csrf-disabled-authenticated-route` (Security, P1): `csrf=False` on a `type='http'`
+  route that authenticates by session (`auth='user'`) and accepts POST/PUT/PATCH/DELETE. Webhooks
+  (`auth='public'`/`'none'`), JSON routes and GET-only routes are not reported, because Odoo does
+  not check the token there.
+- New rule `manual-cr-commit` (Data Integrity, P1): `cr.commit()` on the request's own
+  transaction. High confidence inside ORM methods Odoo calls mid-operation (`create`, `write`,
+  `unlink`, computes, constraints, onchanges); medium elsewhere, where a commit after an external
+  call is often deliberate. Not reported: a cursor the code opened itself, crons, install hooks,
+  commits under an `auto_commit` / `_can_commit()` / test-mode guard, and
+  `# pylint: disable=invalid-commit`.
+
+### Changed
+
+- Shared helpers `odoo_major`, `receiver_kind` and `pylint_disabled_ranges` moved to
+  `rules/_ast_helpers.py`; `raw-sql-string-interpolation` and `removed-orm-api-usage` use them.
+  No behaviour change.
+
+The deprecations were checked against the ORM source of Odoo 18.0 and 19.0 (`@api.deprecated`);
+CSRF behaviour against `odoo/http.py` of 17.0 and 19.0. On the community addons of Odoo 19.0 the
+new rules report 8 `http-request-without-timeout` (core really calls `requests` without a
+timeout), 1 `deprecated-orm-api-usage` (`read_group` in `l10n_dk`) and 23 medium `manual-cr-commit`
+(no score effect), nothing else; 17.0 and 18.0 are similar. On a real Odoo 19 workspace of four
+repositories: `tls-verification-disabled` 3 (all `verify=False` in two addons),
+`http-request-without-timeout` 81, `deprecated-orm-api-usage` 69 (7 `read_group` overrides that
+never run, `check_access_rights` / `check_access_rule`, `toggle_active`, `_check_recursion`),
+`manual-cr-commit` 7 (all medium, queue-job style commits) and `csrf-disabled-authenticated-route`
+0: every webhook there is `auth='public'` or `'none'`. The rule is covered by tests and the golden
+corpus case `tests/corpus/backlog_rules`.
+
+Not added on purpose: bare `except:` and mutable default arguments (Ruff reports them with its
+default rules), and `self._cr` / `self._uid` / `self._context`, deprecated in 19 but still used by
+Odoo core and too frequent to be useful.
+
+---
+
 ## [0.9.1] — 2026-10-12
 
 Theme: four Upgrade Safety rules found by scanning real Odoo 19 repositories. Each one catches

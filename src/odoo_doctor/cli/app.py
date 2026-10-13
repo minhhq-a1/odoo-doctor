@@ -70,6 +70,11 @@ import odoo_doctor.rules.upgrade_safety.sql_constraints_unsupported
 import odoo_doctor.rules.upgrade_safety.removed_orm_api_usage
 import odoo_doctor.rules.upgrade_safety.cron_removed_fields
 import odoo_doctor.rules.upgrade_safety.view_attrs_states_removed
+import odoo_doctor.rules.upgrade_safety.deprecated_orm_api_usage
+import odoo_doctor.rules.security.tls_verification_disabled
+import odoo_doctor.rules.performance.http_request_without_timeout
+import odoo_doctor.rules.security.csrf_disabled_authenticated_route
+import odoo_doctor.rules.data_integrity.manual_cr_commit
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers

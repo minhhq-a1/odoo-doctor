@@ -73,6 +73,11 @@ EFFORT_BY_RULE: dict[str, int] = {
     "removed-orm-api-usage": 2,
     "cron-removed-fields": 1,
     "view-attrs-states-removed": 3,
+    "deprecated-orm-api-usage": 1,
+    "tls-verification-disabled": 2,
+    "http-request-without-timeout": 1,
+    "csrf-disabled-authenticated-route": 2,
+    "manual-cr-commit": 3,
     # 3: restructuring
     "public-controller-sudo-risk": 3,
     "search-in-loop": 3,

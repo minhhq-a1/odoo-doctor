@@ -4,14 +4,11 @@
 from __future__ import annotations
 
 import ast
-import io
-import re
-import tokenize
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python, read_source
-from odoo_doctor.rules._ast_helpers import is_test_file
+from odoo_doctor.rules._ast_helpers import is_test_file, pylint_disabled_ranges
 from odoo_doctor.rules._taint import Taint, TaintVisitor
 from odoo_doctor.rules.registry import rule
 
@@ -57,17 +54,11 @@ def check_raw_sql_interpolation(
         file_path,
         module_name,
         odoo_version,
-        _pylint_disabled_ranges(read_source(file_path) or "", tree)
+        pylint_disabled_ranges(read_source(file_path) or "", tree, ("sql-injection",))
         + _input_free_hook_ranges(tree),
     )
     visitor.visit(tree)
     return visitor.diagnostics
-
-
-# pylint-odoo's own check for this pattern. A developer who writes this marker is
-# explicitly asserting the dynamic part is not user data (e.g. a WHERE fragment
-# whose values are bound through parameters), so we honour it like pylint does.
-_PYLINT_DISABLE_RE = re.compile(r"pylint:\s*disable\s*=\s*([\w\-,\s]+)")
 
 
 # ORM hooks that run at install/upgrade time (SQL views are created in `init`).
@@ -92,41 +83,6 @@ def _input_free_hook_ranges(tree: ast.AST) -> list[tuple[int, int]]:
             )
             if node.name in _INSTALL_HOOKS and takes_only_self:
                 ranges.append((node.lineno, node.end_lineno or node.lineno))
-    return ranges
-
-
-def _pylint_disabled_ranges(source: str, tree: ast.AST) -> list[tuple[int, int]]:
-    """Line ranges where `# pylint: disable=sql-injection` is in effect.
-
-    A trailing comment covers its own line; a comment on its own line covers the
-    rest of the enclosing function (or module), as in pylint.
-    """
-    scopes = [
-        (n.lineno, n.end_lineno or n.lineno)
-        for n in ast.walk(tree)
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
-    ranges: list[tuple[int, int]] = []
-    if "pylint" not in source:  # tokenizing every file only to find nothing is slow
-        return ranges
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
-    except (tokenize.TokenError, IndentationError):
-        return ranges
-    for tok in tokens:
-        if tok.type != tokenize.COMMENT:
-            continue
-        match = _PYLINT_DISABLE_RE.search(tok.string)
-        if not match or "sql-injection" not in {
-            name.strip() for name in match.group(1).split(",")
-        }:
-            continue
-        line = tok.start[0]
-        if tok.line[: tok.start[1]].strip():  # trailing comment
-            ranges.append((line, line))
-            continue
-        enclosing = [end for start, end in scopes if start <= line <= end]
-        ranges.append((line, min(enclosing) if enclosing else 10**9))
     return ranges
 
 
