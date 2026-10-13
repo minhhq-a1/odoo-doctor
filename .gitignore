@@ -40,7 +40,8 @@ env/
 
 # Temp directories
 .tmp/
-.claude/
+.claude/*
+!.claude/skills/
 
 # VS Code extension build output
 editors/vscode/node_modules/
