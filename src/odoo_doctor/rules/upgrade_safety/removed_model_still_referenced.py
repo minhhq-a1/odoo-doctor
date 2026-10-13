@@ -30,6 +30,11 @@ _REMOVED_MODELS: dict[str, tuple[int, str]] = {
     "stock.production.lot": (16, "stock.lot"),
     "mail.channel": (17, "discuss.channel"),
     "mail.channel.partner": (17, "discuss.channel.member"),
+    "ir.property": (18, "company_dependent fields"),
+    "stock.valuation.layer": (19, "the valuation fields of stock.move and product"),
+    "stock.quant.package": (19, "stock.package"),
+    "hr.employee.base": (19, "hr.employee (hr.employee.public is standalone)"),
+    "res.partner.title": (19, "no successor: the title field was removed too"),
 }
 
 

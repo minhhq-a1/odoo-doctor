@@ -78,6 +78,12 @@ EFFORT_BY_RULE: dict[str, int] = {
     "http-request-without-timeout": 1,
     "csrf-disabled-authenticated-route": 2,
     "manual-cr-commit": 3,
+    "view-tree-removed": 1,
+    "removed-core-field-usage": 2,
+    "search-view-group-attributes": 1,
+    "act-window-target-inline": 1,
+    "chatter-div-removed": 1,
+    "kanban-legacy-templates": 3,
     # 3: restructuring
     "public-controller-sudo-risk": 3,
     "search-in-loop": 3,

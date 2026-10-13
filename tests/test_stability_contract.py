@@ -78,6 +78,12 @@ FROZEN_RULE_IDS = [
     "http-request-without-timeout",
     "csrf-disabled-authenticated-route",
     "manual-cr-commit",
+    "view-tree-removed",
+    "removed-core-field-usage",
+    "search-view-group-attributes",
+    "act-window-target-inline",
+    "chatter-div-removed",
+    "kanban-legacy-templates",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------

@@ -75,6 +75,12 @@ import odoo_doctor.rules.security.tls_verification_disabled
 import odoo_doctor.rules.performance.http_request_without_timeout
 import odoo_doctor.rules.security.csrf_disabled_authenticated_route
 import odoo_doctor.rules.data_integrity.manual_cr_commit
+import odoo_doctor.rules.upgrade_safety.view_tree_removed
+import odoo_doctor.rules.upgrade_safety.removed_core_field_usage
+import odoo_doctor.rules.upgrade_safety.search_view_group_attributes
+import odoo_doctor.rules.upgrade_safety.act_window_target_inline
+import odoo_doctor.rules.upgrade_safety.chatter_div_removed
+import odoo_doctor.rules.upgrade_safety.kanban_legacy_templates
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers

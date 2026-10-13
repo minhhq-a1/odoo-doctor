@@ -477,7 +477,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "removed-model-still-referenced": RuleDoc(
         detects="`_inherit` of a core model that Odoo removed or renamed at or before "
         "the target version (for example `account.invoice`, `stock.production.lot`, "
-        "`mail.channel`) and that the project does not define itself.",
+        "`mail.channel`, `ir.property`, `stock.valuation.layer`, `stock.quant.package`) "
+        "and that the project does not define itself.",
         why="Models are removed or renamed between versions; inheriting a "
         "missing model breaks the registry load.",
         fix="Port the code to the replacement model named in the finding.",
@@ -725,5 +726,119 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "`test_enable` / `testing`, and a line marked "
         "`# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` "
         "are skipped.",
+    ),
+    # ------------------------------------------ Odoo 18 / 19 migration (0.9.3)
+    "view-tree-removed": RuleDoc(
+        detects="The `tree` view type on Odoo 18 and later: a `<tree>` element in a view "
+        'architecture (also nested in an x2many field), `<field name="type">tree`, a '
+        "`tree` step in an XPath, `tree` in the `view_mode` of an action or an "
+        "`ir.actions.act_window.view`, and Python action dicts with `'view_mode': "
+        "'tree,form'` or a `(False, 'tree')` pair in `'views'`.",
+        why="Odoo 18 renamed the tree view type to `list` and kept no alias, so the view "
+        "is rejected on install or update and the action cannot open.",
+        fix="Rename: `<tree>` to `<list>`, `tree,form` to `list,form`, and the XPath "
+        "step `tree` to `list`.",
+        bad='<record id="view_x_tree" model="ir.ui.view">\n'
+        '    <field name="model">x.model</field>\n'
+        '    <field name="arch" type="xml">\n'
+        '        <tree><field name="name"/></tree>\n'
+        "    </field>\n"
+        "</record>",
+        good='<record id="view_x_list" model="ir.ui.view">\n'
+        '    <field name="model">x.model</field>\n'
+        '    <field name="arch" type="xml">\n'
+        '        <list><field name="name"/></list>\n'
+        "    </field>\n"
+        "</record>",
+        lang="xml",
+        notes="Reported once per view or action record. A Python dict that does not look "
+        "like an action (no `res_model`, no `type`) is medium confidence. Only files the "
+        "manifest loads are read, and QWeb templates are skipped.",
+    ),
+    "removed-core-field-usage": RuleDoc(
+        detects="Fields that core models no longer have, set by a data record or shown by "
+        "a view: `groups_id` of `res.users`, `ir.ui.view`, `ir.ui.menu` and the actions "
+        "(renamed `group_ids`, Odoo 19), `category_id` and `users` of `res.groups`, "
+        "`mobile` of `res.partner` and `crm.lead`, `deprecated` of `account.account`, "
+        "`user_id` of `ir.filters` (Odoo 19), and `detailed_type` of the product models "
+        "(Odoo 18). In Python, the names `groups_id` and `detailed_type` as attribute, "
+        "dict key, domain term or `selection_add` target.",
+        why="A record that sets a missing field fails to load (`Invalid field ... in "
+        "...`), and the module cannot be installed or updated.",
+        fix="Use the replacement named in the finding, for example `group_ids`, "
+        "`user_ids`, `privilege_id` (with a `res.groups.privilege` record), `phone`, "
+        "`active`, or `type` plus `is_storable`.",
+        bad='<record id="group_x" model="res.groups">\n'
+        '    <field name="name">X</field>\n'
+        '    <field name="users" eval="[(4, ref(\'base.user_admin\'))]"/>\n'
+        "</record>",
+        good='<record id="group_x" model="res.groups">\n'
+        '    <field name="name">X</field>\n'
+        '    <field name="user_ids" eval="[(4, ref(\'base.user_admin\'))]"/>\n'
+        "</record>",
+        lang="xml",
+        notes="The table lists only fields that the ORM source of that release no longer "
+        "defines. In XML the model comes from the record, so the finding is high "
+        "confidence. The Python names are unique to the removed fields, so a hit is "
+        "medium confidence (no score effect); a model the module creates itself "
+        "(`_name`), `'groups_id' in rec._fields` and `hasattr()` probes are skipped.",
+    ),
+    "search-view-group-attributes": RuleDoc(
+        detects="`string` or `expand` on a `<group>` inside a search view (Odoo 19).",
+        why="The Odoo 19 search view schema no longer allows those attributes on "
+        "`<group>`, so the view is rejected on install or update. In Odoo 18 they are "
+        "still valid.",
+        fix='Use a bare `<group>` around the "Group By" filters.',
+        bad='<group expand="0" string="Group By">\n'
+        '    <filter name="by_user" string="User" context="{\'group_by\': \'user_id\'}"/>\n'
+        "</group>",
+        good="<group>\n"
+        '    <filter name="by_user" string="User" context="{\'group_by\': \'user_id\'}"/>\n'
+        "</group>",
+        lang="xml",
+        notes="An inherited view is checked only for a `<group>` that holds `<filter>` "
+        "children, which only a search view has. `<group string>` in a form view is "
+        "valid and not reported.",
+    ),
+    "act-window-target-inline": RuleDoc(
+        detects="An `ir.actions.act_window` record or Python action dict with "
+        "`target` set to `inline` (Odoo 19).",
+        why="Odoo 19 removed `inline` from the `target` selection, so the record is "
+        "rejected on install or update.",
+        fix="Use `current` (the settings actions of Odoo 19 do), or `new` for a dialog.",
+        bad='<field name="target">inline</field>',
+        good='<field name="target">current</field>',
+        lang="xml",
+    ),
+    "chatter-div-removed": RuleDoc(
+        detects='A `<div class="oe_chatter">` in a view architecture (Odoo 18 and later).',
+        why="The form compiler of Odoo 17 selected `div.oe_chatter`. Odoo 18 and 19 "
+        "select only the `<chatter/>` tag, so the div is a plain block and the form "
+        "shows no followers, messages or activities. The view still loads, so nothing "
+        "fails at install time.",
+        fix='Replace the whole `<div class="oe_chatter">...</div>` block with '
+        "`<chatter/>`.",
+        bad='<div class="oe_chatter">\n'
+        '    <field name="message_follower_ids"/>\n'
+        '    <field name="message_ids"/>\n'
+        "</div>",
+        good="<chatter/>",
+        lang="xml",
+        notes="Checked against the form compilers of Odoo 18.0 and 19.0; no Odoo 18/19 "
+        "code reads `oe_chatter` any more.",
+    ),
+    "kanban-legacy-templates": RuleDoc(
+        detects='The `t-name="kanban-box"` and `t-name="kanban-menu"` templates of a '
+        "kanban view, and an XPath that targets them (Odoo 19).",
+        why="Odoo 18 renamed them `card` and `menu` and still read the old names with a "
+        "deprecation note. Odoo 19 reads only the new names: the view fails with "
+        "\"Missing 'card' template\", and an XPath on the old name finds no anchor in "
+        "the core kanban view.",
+        fix="Rename `kanban-box` to `card` and `kanban-menu` to `menu`, port the card "
+        "markup to the Odoo 18 layout (`main` / `aside` / `footer`) and re-anchor "
+        "inherited XPaths.",
+        bad='<t t-name="kanban-box">...</t>',
+        good='<t t-name="card">...</t>',
+        lang="xml",
     ),
 }

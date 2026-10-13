@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 49 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 55 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -19,7 +19,7 @@ odoo-doctor/
 │   │   ├── xml/              # 5 rules (broken refs, duplicate IDs, orphan views)
 │   │   ├── manifest/         # 3 rules + fixers (dependencies, data order, required fields)
 │   │   ├── data_integrity/  # 3 rules (missing ondelete, noupdate risk, manual commit)
-│   │   ├── upgrade_safety/  # 7 rules (deprecated API, deprecated/removed ORM API, removed model, sql-constraints, cron fields, view attrs/states)
+│   │   ├── upgrade_safety/  # 13 rules (deprecated API, deprecated/removed ORM API, removed model/field, sql-constraints, cron fields, view attrs/states/tree/search-group/kanban/chatter, act-window target)
 │   │   └── frontend/        # 1 rule (asset bundle missing)
 │   ├── parsers/              # Python AST, XML record, manifest, CSV parsing
 │   ├── graph/                # Symbol resolution engine + version stubs (17.0, 18.0, 19.0)
@@ -184,7 +184,7 @@ chore(release): bump version to 0.3.0
 1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`, plus `editors/vscode/package.json` and `package-lock.json` (`tests/test_version.py` and `tests/test_vscode_extension.py` check consistency).
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag v0.9.2 && git push origin v0.9.2`).
+4. Create and push a new Git tag (e.g., `git tag v0.9.3 && git push origin v0.9.3`).
 5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
 6. Publish the VS Code extension (`MinhHong.odoo-doctor`, same version) from `main`: `cd editors/vscode && npm ci && npx vsce publish` with the publisher's token, or upload the `.vsix` from `npm run package` at https://marketplace.visualstudio.com/manage/publishers/MinhHong. This step is manual.
 
