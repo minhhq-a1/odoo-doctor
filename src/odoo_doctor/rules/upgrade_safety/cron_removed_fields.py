@@ -8,27 +8,13 @@ from typing import TYPE_CHECKING
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.rules._module_files import data_files
 from odoo_doctor.rules.registry import rule
 
 if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
 
 _REMOVED_FIELDS = ("numbercall", "doall")
-
-
-def data_files(ctx: ModuleContext) -> list:
-    """Existing XML files the manifest loads (data and demo), in manifest order."""
-    names = list(ctx.manifest.data)
-    demo = ctx.manifest.raw.get("demo", [])
-    if isinstance(demo, list):
-        names += [n for n in demo if isinstance(n, str)]
-    seen, files = set(), []
-    for name in names:
-        path = ctx.path / name
-        if path.suffix == ".xml" and path.exists() and path not in seen:
-            seen.add(path)
-            files.append(path)
-    return files
 
 
 @rule(

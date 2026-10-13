@@ -1,0 +1,5 @@
+[odoo-doctor]
+odoo_version = "19.0"
+
+[ignore]
+rules = ["orphan-view"]

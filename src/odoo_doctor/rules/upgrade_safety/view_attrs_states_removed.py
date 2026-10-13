@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.rules._module_files import data_files
 from odoo_doctor.rules.registry import rule
-from odoo_doctor.rules.upgrade_safety.cron_removed_fields import data_files
 
 if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext

@@ -1,0 +1,77 @@
+<odoo>
+    <!-- true positive: tree view type -->
+    <record id="mg_thing_view_tree" model="ir.ui.view">
+        <field name="name">mg.thing.tree</field>
+        <field name="model">mg.thing</field>
+        <field name="arch" type="xml">
+            <tree><field name="name"/></tree>
+        </field>
+    </record>
+    <!-- fine -->
+    <record id="mg_thing_view_list" model="ir.ui.view">
+        <field name="name">mg.thing.list</field>
+        <field name="model">mg.thing</field>
+        <field name="arch" type="xml">
+            <list><field name="name"/></list>
+        </field>
+    </record>
+    <!-- true positive: oe_chatter div -->
+    <record id="mg_thing_view_form" model="ir.ui.view">
+        <field name="name">mg.thing.form</field>
+        <field name="model">mg.thing</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet><field name="name"/></sheet>
+                <div class="oe_chatter">
+                    <field name="name"/>
+                </div>
+            </form>
+        </field>
+    </record>
+    <!-- true positive: legacy kanban template -->
+    <record id="mg_thing_view_kanban" model="ir.ui.view">
+        <field name="name">mg.thing.kanban</field>
+        <field name="model">mg.thing</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <templates>
+                    <t t-name="kanban-box"><div><field name="name"/></div></t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+    <!-- fine: the new template name -->
+    <record id="mg_thing_view_kanban_new" model="ir.ui.view">
+        <field name="name">mg.thing.kanban.new</field>
+        <field name="model">mg.thing</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <templates>
+                    <t t-name="card"><field name="name"/></t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+    <!-- true positive: string and expand on a search group; fine: a form group with string -->
+    <record id="mg_thing_view_search" model="ir.ui.view">
+        <field name="name">mg.thing.search</field>
+        <field name="model">mg.thing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <group expand="0" string="Group By">
+                    <filter name="by_name" string="Name" context="{'group_by': 'name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="mg_thing_view_form_groups" model="ir.ui.view">
+        <field name="name">mg.thing.form.groups</field>
+        <field name="model">mg.thing</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <form><group string="Details"><field name="name"/></group></form>
+        </field>
+    </record>
+</odoo>

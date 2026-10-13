@@ -71,11 +71,17 @@ odoo-doctor scan . --diff main --json
 | `manual-cr-commit` | P1 | Data Integrity |
 | `deprecated-orm-api-usage` | P2 | Upgrade Safety |
 | `http-request-without-timeout` | P2 | Performance |
+| `view-tree-removed` | P1 | Upgrade Safety |
+| `removed-core-field-usage` | P1 | Upgrade Safety |
+| `search-view-group-attributes` | P1 | Upgrade Safety |
+| `act-window-target-inline` | P1 | Upgrade Safety |
+| `chatter-div-removed` | P1 | Upgrade Safety |
+| `kanban-legacy-templates` | P1 | Upgrade Safety |
 | `hardcoded-company-or-currency` | P2 | Correctness |
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed.
 
-The full, generated reference (49 rules, with before/after examples) is in
+The full, generated reference (55 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md). What you can rely on across upgrades (CLI flags, exit
@@ -181,7 +187,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.9.2
+  uses: minhhq-a1/odoo-doctor@v0.9.3
   with:
     fail-on: warning
     min-score: 75

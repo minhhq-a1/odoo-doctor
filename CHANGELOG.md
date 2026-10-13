@@ -8,6 +8,61 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.9.3] — 2026-10-13
+
+Theme: the Odoo 18 / 19 migration set. Six rules for view and data constructs that Odoo 18 or
+19 rejects or silently ignores, taken from a real 17 → 19 migration log and checked against the
+source of Odoo 17.0, 18.0 and 19.0. Native rules are now 55. Rule IDs, CLI flags and JSON keys of
+existing rules are unchanged (see `docs/stability.md`); a project on Odoo 18 or 19 can see its
+score drop where it still uses these constructs.
+
+### Added
+
+- New rule `view-tree-removed` (Upgrade Safety, P1, Odoo 18+): the `tree` view type, renamed
+  `list` in Odoo 18 with no alias. Reports `<tree>` in a view (also nested in an x2many),
+  `<field name="type">tree`, a `tree` XPath step, `tree` in the `view_mode` of an action or of
+  an `ir.actions.act_window.view` (also inside an `eval`), and Python action dicts with
+  `'view_mode': 'tree,form'` or a `(False, 'tree')` pair in `'views'`.
+- New rule `removed-core-field-usage` (Upgrade Safety, P1, Odoo 18+): fields that core models
+  lost: `groups_id` of `res.users`, `ir.ui.view`, `ir.ui.menu` and the actions (renamed
+  `group_ids`), `category_id` and `users` of `res.groups`, `mobile` of `res.partner` and
+  `crm.lead`, `deprecated` of `account.account`, `user_id` of `ir.filters` (Odoo 19) and
+  `detailed_type` of the product models (Odoo 18). In data files and views the model is known,
+  so the finding is high confidence; in Python only `groups_id` and `detailed_type` are looked
+  for, at medium confidence, and a model the module creates itself or an
+  `if 'groups_id' in rec._fields` branch is skipped.
+- New rule `search-view-group-attributes` (Upgrade Safety, P1, Odoo 19+): `string` or `expand`
+  on a `<group>` of a search view, which the Odoo 19 schema rejects.
+- New rule `act-window-target-inline` (Upgrade Safety, P1, Odoo 19+): `target` `inline` on an
+  `ir.actions.act_window`, a value Odoo 19 removed (record or Python action dict).
+- New rule `chatter-div-removed` (Upgrade Safety, P1, Odoo 18+): `<div class="oe_chatter">`.
+  Odoo 18 and 19 only compile the `<chatter/>` tag, so the form loads but shows no chatter.
+- New rule `kanban-legacy-templates` (Upgrade Safety, P1, Odoo 19+): the `kanban-box` and
+  `kanban-menu` templates (named `card` and `menu`) and XPaths that target them. Odoo 18 still
+  read the old names; Odoo 19 fails with "Missing 'card' template".
+
+### Changed
+
+- `removed-model-still-referenced` also knows `ir.property` (18), `stock.valuation.layer`,
+  `stock.quant.package` (now `stock.package`), `hr.employee.base` and `res.partner.title` (19).
+- Shared helpers for rules that read a whole module (`data_files`, `python_files`, XML record
+  and view helpers, `make_diag`) moved to `rules/_module_files.py`. No behaviour change.
+
+On the community addons of Odoo 19.0 and 17.0 the new rules report nothing, and the Odoo 19 score
+is unchanged; Odoo 18.0 gives 1 true finding (a `div.oe_chatter` left in `l10n_id_efaktur_coretax`).
+Scanned as 19.0, Odoo 17.0 core now yields 1,392 `view-tree-removed`, 447
+`removed-core-field-usage`, 169 `search-view-group-attributes`, 160 `kanban-legacy-templates`,
+75 `chatter-div-removed` and 24 `act-window-target-inline` findings where the rules of 0.9.2
+reported none of these; Odoo 18.0 core scanned as 19.0 gives the renamed fields, search groups and
+`inline` targets. On a real Odoo 19 workspace of four repositories the migration had already
+fixed most of this, and the rules still find: 94 `div.oe_chatter` in 43 modules (not in the
+team's migration log), 9 `kanban-box`, and 3 `tree` references the mechanical rename missed (a
+`views` pair in two Python action dicts and one action with `tree,form,search`). A false positive
+found there, an `if 'groups_id' in user._fields:` branch, is now skipped and covered by a test; the
+golden corpus case `tests/corpus/migration_19` freezes the rest.
+
+---
+
 ## [0.9.2] — 2026-10-13
 
 Theme: the rest of the backlog from scanning real Odoo 19 repositories: five rules for code that
