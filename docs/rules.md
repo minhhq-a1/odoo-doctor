@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 44 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 49 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -10,12 +10,14 @@ Odoo Doctor ships 44 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [missing-access-csv](#missing-access-csv) | P0 | Security | error | high |  |
 | [raw-sql-string-interpolation](#raw-sql-string-interpolation) | P0 | Security | error | high |  |
 | [access-write-without-group](#access-write-without-group) | P1 | Security | error | high |  |
+| [csrf-disabled-authenticated-route](#csrf-disabled-authenticated-route) | P1 | Security | warning | high |  |
 | [dynamic-method-dispatch](#dynamic-method-dispatch) | P1 | Security | error | high |  |
 | [missing-multicompany-rule](#missing-multicompany-rule) | P1 | Security | warning | medium |  |
 | [public-controller-sudo-risk](#public-controller-sudo-risk) | P1 | Security | error | high |  |
 | [record-rule-without-domain](#record-rule-without-domain) | P1 | Security | warning | medium |  |
 | [rpc-sudo-without-access-check](#rpc-sudo-without-access-check) | P1 | Security | error | high |  |
 | [sudo-without-comment](#sudo-without-comment) | P1 | Security | warning | low |  |
+| [tls-verification-disabled](#tls-verification-disabled) | P1 | Security | warning | high |  |
 | [unsafe-template-render](#unsafe-template-render) | P1 | Security | warning | medium |  |
 | [button-method-not-found](#button-method-not-found) | P1 | Correctness | error | high |  |
 | [duplicate-xml-id](#duplicate-xml-id) | P1 | Correctness | error | high |  |
@@ -31,7 +33,9 @@ Odoo Doctor ships 44 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [search-in-loop](#search-in-loop) | P1 | Performance | error | high |  |
 | [write-in-loop](#write-in-loop) | P1 | Performance | error | high |  |
 | [expensive-nonstored-compute](#expensive-nonstored-compute) | P2 | Performance | warning | medium |  |
+| [http-request-without-timeout](#http-request-without-timeout) | P2 | Performance | warning | high |  |
 | [unbounded-search](#unbounded-search) | P2 | Performance | warning | high |  |
+| [manual-cr-commit](#manual-cr-commit) | P1 | Data Integrity | warning | high |  |
 | [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | low |  |
 | [data-noupdate-risk](#data-noupdate-risk) | P2 | Data Integrity | warning | high |  |
 | [cron-removed-fields](#cron-removed-fields) | P1 | Upgrade Safety | error | high |  |
@@ -40,6 +44,7 @@ Odoo Doctor ships 44 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [removed-orm-api-usage](#removed-orm-api-usage) | P1 | Upgrade Safety | error | high |  |
 | [sql-constraints-unsupported](#sql-constraints-unsupported) | P1 | Upgrade Safety | error | high |  |
 | [view-attrs-states-removed](#view-attrs-states-removed) | P1 | Upgrade Safety | error | high |  |
+| [deprecated-orm-api-usage](#deprecated-orm-api-usage) | P2 | Upgrade Safety | warning | high |  |
 | [manifest-missing-dependency](#manifest-missing-dependency) | P1 | Module Hygiene | error | high |  |
 | [manifest-data-order-risk](#manifest-data-order-risk) | P2 | Module Hygiene | error | high | Yes |
 | [manifest-license-incompatible](#manifest-license-incompatible) | P2 | Module Hygiene | warning | high |  |
@@ -147,6 +152,30 @@ Good:
 
 ```csv
 access_x,x,model_x,base.group_user,1,1,1,1
+```
+
+### csrf-disabled-authenticated-route
+
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: Routes declared with `csrf=False` that run as the logged-in user (`auth='user'`, the default), have `type='http'` and accept POST, PUT, PATCH or DELETE (or leave `methods` unset, at medium confidence).
+
+**Why**: A browser sends the session cookie on a cross-site request, so any page the user visits can trigger the route. Odoo only checks the CSRF token on these routes.
+
+**Fix**: Remove `csrf=False` and send the token with the request (`request.csrf_token()`). A trusted third party that calls the route should use `auth='public'` and a verified signature or secret instead of the session.
+
+**Note**: Webhooks (`auth='public'` / `'none'`), JSON routes and GET-only routes are not reported: they carry no session identity of their own, or Odoo never checks the token for them.
+
+Bad:
+
+```python
+@http.route('/my/save', type='http', auth='user', methods=['POST'], csrf=False)
+```
+
+Good:
+
+```python
+@http.route('/my/save', type='http', auth='user', methods=['POST'])
 ```
 
 ### dynamic-method-dispatch
@@ -314,6 +343,30 @@ Good:
 ```python
 # sudo: portal users cannot read partners but need the display name
 partner = self.env['res.partner'].sudo().browse(pid)
+```
+
+### tls-verification-disabled
+
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: Code that turns off TLS verification: `verify=False` on a call, `session.verify = False`, `ctx.check_hostname = False`, `ctx.verify_mode = ssl.CERT_NONE` and `ssl._create_unverified_context()`.
+
+**Why**: Without certificate verification anyone on the network path can pose as the server and read or change the traffic, including credentials and API tokens.
+
+**Fix**: Remove the override. For a private or self-signed certificate, point `verify` at the CA bundle, or install the CA on the host.
+
+**Note**: `verify=False` in a file that imports no network library is reported at medium confidence, because the keyword may belong to an unrelated function. Scripts under `tests/` and `migrations/` are skipped.
+
+Bad:
+
+```python
+requests.get(url, verify=False)
+```
+
+Good:
+
+```python
+requests.get(url, verify='/etc/ssl/certs/company-ca.pem', timeout=10)
 ```
 
 ### unsafe-template-render
@@ -647,6 +700,30 @@ def _compute_total_orders(self):
         rec.total_orders = len(rec.order_ids)
 ```
 
+### http-request-without-timeout
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: `requests.get/post/put/patch/delete/head/options/request()`, the same calls on a `requests.Session`, and `urllib.request.urlopen()` without a `timeout`.
+
+**Why**: Neither library gives up on its own. One unresponsive server holds an Odoo worker until the server-wide time limit kills it, and with it every request that worker was serving.
+
+**Fix**: Pass an explicit `timeout` in seconds, or a `(connect, read)` pair.
+
+**Note**: A call that passes `**options` is not reported, because `timeout` may be in it. Scripts under `tests/` and `migrations/` are skipped.
+
+Bad:
+
+```python
+response = requests.post(url, json=payload)
+```
+
+Good:
+
+```python
+response = requests.post(url, json=payload, timeout=10)
+```
+
 ### unbounded-search
 
 **Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
@@ -672,6 +749,34 @@ records = self.env['res.partner'].search(
 ```
 
 ## Data Integrity
+
+### manual-cr-commit
+
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 14.0
+
+**Detects**: `cr.commit()` on the transaction Odoo opened for the request: `self.env.cr`, `self._cr`, `request.cr`. A commit on another name (`env.cr`, `cr`) is medium confidence and does not affect the score.
+
+**Why**: A commit ends the request's transaction. Work done before it can no longer be rolled back, so a later error leaves the database half updated.
+
+**Fix**: Remove the commit and let Odoo commit when the request succeeds. Run batch work from a cron or a queue job, or in its own cursor (`with self.pool.cursor() as cr:`).
+
+**Note**: Not reported: a cursor or environment the code opened itself (`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`), cron methods (a function with `cron` in its name), install hooks (`init`, `_auto_init`, `post_init_hook`...), a commit under an `if` that tests `test_enable` / `testing`, and a line marked `# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` are skipped.
+
+Bad:
+
+```python
+def action_import(self):
+    for row in rows:
+        self.create(row)
+        self.env.cr.commit()
+```
+
+Good:
+
+```python
+def action_import(self):
+    self.create(rows)
+```
 
 ### missing-ondelete
 
@@ -864,6 +969,32 @@ Good:
 
 ```xml
 <field name="note" invisible="state == 'draft'"/>
+```
+
+### deprecated-orm-api-usage
+
+**Tier**: P2 (moderate) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 18.0
+
+**Detects**: Calls of ORM methods the running Odoo version still defines but deprecates: `read_group`, `toggle_active` and `check_field_access_rights` (Odoo 19), `check_access_rights`, `check_access_rule`, `_filter_access_rules`, `_check_recursion` and `_check_m2m_recursion` (Odoo 18). An override of `read_group` is reported on Odoo 19 as well. A call on `self` or `env` is high confidence; a call on an unrelated object is medium and does not affect the score.
+
+**Why**: A deprecated method keeps working and logs a warning until a later release removes it. On Odoo 19 nothing in core calls `read_group` any more: grouped views use `web_read_group` and `formatted_read_group`, which go through `_read_group`, so an override of `read_group` is not applied to them.
+
+**Fix**: Use `_read_group()` in backend code or `formatted_read_group()` for a formatted result, `check_access()` / `has_access()` for the access checks, `_has_cycle()` (it returns True when there is a cycle) for the recursion checks, and `action_archive()` / `action_unarchive()` for `toggle_active`.
+
+**Note**: Each method is reported only from the Odoo version whose ORM source deprecates it. `self._cr`, `self._uid` and `self._context` are deprecated in Odoo 19 too but are not reported: core still uses them and they would bury every other finding. `super().read_group()` inside an override is not reported twice.
+
+Bad:
+
+```python
+groups = self.env['sale.order'].read_group(
+    domain, ['amount_total:sum'], ['partner_id'])
+```
+
+Good:
+
+```python
+groups = self.env['sale.order']._read_group(
+    domain, ['partner_id'], ['amount_total:sum'])
 ```
 
 ## Module Hygiene

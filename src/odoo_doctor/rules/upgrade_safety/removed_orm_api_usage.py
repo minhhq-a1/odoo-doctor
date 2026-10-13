@@ -12,6 +12,8 @@ from odoo_doctor.rules._ast_helpers import (
     is_migration_file,
     is_model_class,
     is_test_file,
+    odoo_major,
+    receiver_kind,
 )
 from odoo_doctor.rules.registry import rule
 
@@ -24,31 +26,6 @@ _REMOVED: dict[str, tuple[int, str]] = {
 }
 
 _RECORD_ROOTS = {"self", "cls", "env", "request"}
-
-
-def _major(version: str) -> int | None:
-    head = version.split(".", 1)[0]
-    return int(head) if head.isdigit() else None
-
-
-def _receiver_kind(node: ast.expr) -> str:
-    """``record`` (self / env rooted), ``super`` or ``other`` for a call's receiver."""
-    while True:
-        if isinstance(node, ast.Attribute):
-            if node.attr == "env":
-                return "record"
-            node = node.value
-        elif isinstance(node, ast.Subscript):
-            node = node.value
-        elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id == "super":
-                return "super"
-            node = node.func
-        else:
-            break
-    if isinstance(node, ast.Name) and node.id in _RECORD_ROOTS:
-        return "record"
-    return "other"
 
 
 @rule(
@@ -69,7 +46,7 @@ def check_removed_orm_api_usage(
     raises AttributeError. A call whose receiver is not obviously a record is reported at
     medium confidence, because the object may be unrelated to the ORM.
     """
-    major = _major(odoo_version)
+    major = odoo_major(odoo_version)
     if major is None or (
         is_test_file(file_path, module_name)
         or is_migration_file(file_path, module_name)
@@ -128,7 +105,7 @@ def check_removed_orm_api_usage(
             and node.func.attr in removed
         ):
             continue
-        kind = _receiver_kind(node.func.value)
+        kind = receiver_kind(node.func.value)
         if kind == "super":
             continue  # the override that calls super() is already reported
         emit(

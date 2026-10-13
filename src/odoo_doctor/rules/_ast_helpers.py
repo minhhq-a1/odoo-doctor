@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import ast
+import io
+import re
+import tokenize
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 
@@ -152,3 +155,75 @@ def is_model_class(cls: ast.ClassDef) -> bool:
         ):
             return True
     return False
+
+
+def odoo_major(version: str) -> int | None:
+    """Major number of an Odoo version string (``"19.0"`` -> 19), None if unparsable."""
+    head = version.split(".", 1)[0]
+    return int(head) if head.isdigit() else None
+
+
+_RECORD_ROOTS = {"self", "cls", "env", "request"}
+
+
+def receiver_kind(node: ast.expr) -> str:
+    """``record`` (self / env / request rooted), ``super`` or ``other`` for a call receiver."""
+    while True:
+        if isinstance(node, ast.Attribute):
+            if node.attr == "env":
+                return "record"
+            node = node.value
+        elif isinstance(node, ast.Subscript):
+            node = node.value
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "super":
+                return "super"
+            node = node.func
+        else:
+            break
+    if isinstance(node, ast.Name) and node.id in _RECORD_ROOTS:
+        return "record"
+    return "other"
+
+
+# pylint-odoo's own marker. A developer who writes it is explicitly asserting that the
+# flagged pattern is intended, so rules covering the same check honour it like pylint.
+_PYLINT_DISABLE_RE = re.compile(r"pylint:\s*disable\s*=\s*([\w\-,\s]+)")
+
+
+def pylint_disabled_ranges(
+    source: str, tree: ast.AST, names: Iterable[str]
+) -> list[tuple[int, int]]:
+    """Line ranges where ``# pylint: disable=<one of names>`` is in effect.
+
+    A trailing comment covers its own line; a comment on its own line covers the
+    rest of the enclosing function (or module), as in pylint.
+    """
+    wanted = set(names)
+    ranges: list[tuple[int, int]] = []
+    if "pylint" not in source:  # tokenizing every file only to find nothing is slow
+        return ranges
+    scopes = [
+        (n.lineno, n.end_lineno or n.lineno)
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError):
+        return ranges
+    for tok in tokens:
+        if tok.type != tokenize.COMMENT:
+            continue
+        match = _PYLINT_DISABLE_RE.search(tok.string)
+        if not match or not wanted & {
+            name.strip() for name in match.group(1).split(",")
+        }:
+            continue
+        line = tok.start[0]
+        if tok.line[: tok.start[1]].strip():  # trailing comment
+            ranges.append((line, line))
+            continue
+        enclosing = [end for start, end in scopes if start <= line <= end]
+        ranges.append((line, min(enclosing) if enclosing else 10**9))
+    return ranges

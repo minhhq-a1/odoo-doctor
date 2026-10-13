@@ -634,4 +634,96 @@ RULE_DOCS: dict[str, RuleDoc] = {
         notes='`states="draft,sent"` on a button becomes '
         "`invisible=\"state not in ('draft', 'sent')\"`.",
     ),
+    # ---------------------------------------------------- Real-repo backlog (0.9.2)
+    "deprecated-orm-api-usage": RuleDoc(
+        detects="Calls of ORM methods the running Odoo version still defines but "
+        "deprecates: `read_group`, `toggle_active` and `check_field_access_rights` "
+        "(Odoo 19), `check_access_rights`, `check_access_rule`, `_filter_access_rules`, "
+        "`_check_recursion` and `_check_m2m_recursion` (Odoo 18). An override of "
+        "`read_group` is reported on Odoo 19 as well. A call on `self` or `env` is high "
+        "confidence; a call on an unrelated object is medium and does not affect the "
+        "score.",
+        why="A deprecated method keeps working and logs a warning until a later release "
+        "removes it. On Odoo 19 nothing in core calls `read_group` any more: grouped "
+        "views use `web_read_group` and `formatted_read_group`, which go through "
+        "`_read_group`, so an override of `read_group` is not applied to them.",
+        fix="Use `_read_group()` in backend code or `formatted_read_group()` for a "
+        "formatted result, `check_access()` / `has_access()` for the access checks, "
+        "`_has_cycle()` (it returns True when there is a cycle) for the recursion "
+        "checks, and `action_archive()` / `action_unarchive()` for `toggle_active`.",
+        bad="groups = self.env['sale.order'].read_group(\n"
+        "    domain, ['amount_total:sum'], ['partner_id'])",
+        good="groups = self.env['sale.order']._read_group(\n"
+        "    domain, ['partner_id'], ['amount_total:sum'])",
+        notes="Each method is reported only from the Odoo version whose ORM source "
+        "deprecates it. `self._cr`, `self._uid` and `self._context` are deprecated in "
+        "Odoo 19 too but are not reported: core still uses them and they would bury "
+        "every other finding. `super().read_group()` inside an override is not reported "
+        "twice.",
+    ),
+    "tls-verification-disabled": RuleDoc(
+        detects="Code that turns off TLS verification: `verify=False` on a call, "
+        "`session.verify = False`, `ctx.check_hostname = False`, "
+        "`ctx.verify_mode = ssl.CERT_NONE` and `ssl._create_unverified_context()`.",
+        why="Without certificate verification anyone on the network path can pose as the "
+        "server and read or change the traffic, including credentials and API tokens.",
+        fix="Remove the override. For a private or self-signed certificate, point "
+        "`verify` at the CA bundle, or install the CA on the host.",
+        bad="requests.get(url, verify=False)",
+        good="requests.get(url, verify='/etc/ssl/certs/company-ca.pem', timeout=10)",
+        notes="`verify=False` in a file that imports no network library is reported at "
+        "medium confidence, because the keyword may belong to an unrelated function. "
+        "Scripts under `tests/` and `migrations/` are skipped.",
+    ),
+    "http-request-without-timeout": RuleDoc(
+        detects="`requests.get/post/put/patch/delete/head/options/request()`, the same "
+        "calls on a `requests.Session`, and `urllib.request.urlopen()` without a "
+        "`timeout`.",
+        why="Neither library gives up on its own. One unresponsive server holds an Odoo "
+        "worker until the server-wide time limit kills it, and with it every request "
+        "that worker was serving.",
+        fix="Pass an explicit `timeout` in seconds, or a `(connect, read)` pair.",
+        bad="response = requests.post(url, json=payload)",
+        good="response = requests.post(url, json=payload, timeout=10)",
+        notes="A call that passes `**options` is not reported, because `timeout` may be "
+        "in it. Scripts under `tests/` and `migrations/` are skipped.",
+    ),
+    "csrf-disabled-authenticated-route": RuleDoc(
+        detects="Routes declared with `csrf=False` that run as the logged-in user "
+        "(`auth='user'`, the default), have `type='http'` and accept POST, PUT, PATCH or "
+        "DELETE (or leave `methods` unset, at medium confidence).",
+        why="A browser sends the session cookie on a cross-site request, so any page the "
+        "user visits can trigger the route. Odoo only checks the CSRF token on these "
+        "routes.",
+        fix="Remove `csrf=False` and send the token with the request "
+        "(`request.csrf_token()`). A trusted third party that calls the route should "
+        "use `auth='public'` and a verified signature or secret instead of the session.",
+        bad="@http.route('/my/save', type='http', auth='user', methods=['POST'], csrf=False)",
+        good="@http.route('/my/save', type='http', auth='user', methods=['POST'])",
+        notes="Webhooks (`auth='public'` / `'none'`), JSON routes and GET-only routes are "
+        "not reported: they carry no session identity of their own, or Odoo never checks "
+        "the token for them.",
+    ),
+    "manual-cr-commit": RuleDoc(
+        detects="`cr.commit()` on the transaction Odoo opened for the request: "
+        "`self.env.cr`, `self._cr`, `request.cr`. A commit on another name (`env.cr`, "
+        "`cr`) is medium confidence and does not affect the score.",
+        why="A commit ends the request's transaction. Work done before it can no longer "
+        "be rolled back, so a later error leaves the database half updated.",
+        fix="Remove the commit and let Odoo commit when the request succeeds. Run batch "
+        "work from a cron or a queue job, or in its own cursor "
+        "(`with self.pool.cursor() as cr:`).",
+        bad="def action_import(self):\n"
+        "    for row in rows:\n"
+        "        self.create(row)\n"
+        "        self.env.cr.commit()",
+        good="def action_import(self):\n    self.create(rows)",
+        notes="Not reported: a cursor or environment the code opened itself "
+        "(`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`), cron "
+        "methods (a function with `cron` in its name), install hooks (`init`, "
+        "`_auto_init`, `post_init_hook`...), a commit under an `if` that tests "
+        "`test_enable` / `testing`, and a line marked "
+        "`# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` "
+        "are skipped.",
+    ),
 }

@@ -12,7 +12,7 @@ from odoo_doctor.core import source as source_mod
 from odoo_doctor.core.config import load_config
 from odoo_doctor.core.scanner import collect_scores
 from odoo_doctor.core.source import clear_source_cache, parse_python, read_source
-from odoo_doctor.rules import suppression
+from odoo_doctor.rules import _ast_helpers, suppression
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.security import raw_sql_interpolation
 
@@ -156,13 +156,13 @@ def test_raw_sql_does_not_tokenize_files_without_a_pylint_marker(
     tmp_path: Path, monkeypatch
 ):
     calls = {"n": 0}
-    real = raw_sql_interpolation.tokenize.generate_tokens
+    real = _ast_helpers.tokenize.generate_tokens
 
     def counting(*a, **k):
         calls["n"] += 1
         return real(*a, **k)
 
-    monkeypatch.setattr(raw_sql_interpolation.tokenize, "generate_tokens", counting)
+    monkeypatch.setattr(_ast_helpers.tokenize, "generate_tokens", counting)
     f = tmp_path / "m.py"
     f.write_text('def run(self, w):\n    self.env.cr.execute(f"SELECT {w}")\n')
     assert len(raw_sql_interpolation.check_raw_sql_interpolation(f, "m", "17.0")) == 1

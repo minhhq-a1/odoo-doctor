@@ -73,6 +73,11 @@ FROZEN_RULE_IDS = [
     "removed-orm-api-usage",
     "cron-removed-fields",
     "view-attrs-states-removed",
+    "deprecated-orm-api-usage",
+    "tls-verification-disabled",
+    "http-request-without-timeout",
+    "csrf-disabled-authenticated-route",
+    "manual-cr-commit",
 ]
 
 # --- CLI: command path -> flags that must keep existing ---------------------
