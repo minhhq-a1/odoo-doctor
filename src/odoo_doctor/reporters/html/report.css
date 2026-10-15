@@ -1,2 +1,106 @@
-:root { color-scheme: light dark; }
-body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 960px; padding: 16px; }
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --text: #1f2328;
+  --muted: #59636e;
+  --border: #d1d9e0;
+  --accent: #0969da;
+  --excellent: #1a7f37;
+  --excellent-bg: #dafbe1;
+  --good: #3f6212;
+  --good-bg: #ecf8d4;
+  --needs-work: #7d4e00;
+  --needs-work-bg: #fff3c4;
+  --critical: #cf222e;
+  --critical-bg: #ffebe9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --text: #e6edf3;
+    --muted: #9198a1;
+    --border: #3d444d;
+    --accent: #58a6ff;
+    --excellent: #56d364;
+    --excellent-bg: #12361f;
+    --good: #a3d65c;
+    --good-bg: #25320f;
+    --needs-work: #e3b341;
+    --needs-work-bg: #3a2d0a;
+    --critical: #ff7b72;
+    --critical-bg: #411b1d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --text: #e6edf3;
+  --muted: #9198a1;
+  --border: #3d444d;
+  --accent: #58a6ff;
+  --excellent: #56d364;
+  --excellent-bg: #12361f;
+  --good: #a3d65c;
+  --good-bg: #25320f;
+  --needs-work: #e3b341;
+  --needs-work-bg: #3a2d0a;
+  --critical: #ff7b72;
+  --critical-bg: #411b1d;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+#app { max-width: 1200px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 28px 0 8px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.score { display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); }
+.score-num { font-size: 32px; font-weight: 700; }
+.score-label { font-weight: 600; }
+.band-excellent { color: var(--excellent); background: var(--excellent-bg); }
+.band-good { color: var(--good); background: var(--good-bg); }
+.band-needs-work { color: var(--needs-work); background: var(--needs-work-bg); }
+.band-critical { color: var(--critical); background: var(--critical-bg); }
+.banner { margin: 8px 0; padding: 8px 12px; border: 1px solid var(--border); border-left-width: 4px; border-radius: 6px; background: var(--surface); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+td.cell { text-align: right; font-variant-numeric: tabular-nums; }
+button, select, input[type="search"] {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+}
+button { cursor: pointer; }
+button.link { border: 0; background: none; color: var(--accent); padding: 0; text-decoration: underline; }
+th button.link { color: var(--text); text-decoration: none; font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; align-items: center; }
+.controls label { display: inline-flex; gap: 4px; align-items: center; }
+.finding { border-bottom: 1px solid var(--border); padding: 4px 0; }
+.finding summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.finding .loc { word-break: break-all; }
+.finding .detail { padding: 4px 0 8px 16px; }
+.finding .detail p { margin: 4px 0; overflow-wrap: anywhere; }
+.pill { display: inline-block; padding: 0 6px; border-radius: 10px; font-size: 12px; border: 1px solid var(--border); background: var(--surface); }
+.tier-P0, .tier-P1 { color: var(--critical); border-color: var(--critical); }
+.tier-P2 { color: var(--needs-work); border-color: var(--needs-work); }
+.conf-low { color: var(--muted); }
+.chart { overflow-x: auto; }
+svg.trend { width: 100%; max-width: 720px; height: auto; }
+svg.trend .grid { stroke: var(--border); stroke-width: 1; }
+svg.trend .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+svg.trend .dot { fill: var(--accent); }
+svg.trend .tick { fill: var(--muted); font-size: 11px; }
+footer { margin-top: 32px; color: var(--muted); font-size: 12px; }
+@media (max-width: 600px) {
+  .score-num { font-size: 26px; }
+  th, td { padding: 6px; }
+}
