@@ -164,6 +164,19 @@ def test_unreadable_assets_raise_a_dedicated_error(monkeypatch):
         render_html_report(make_payload([make_diag()]), meta=META)
 
 
+def test_undecodable_assets_raise_the_dedicated_error(monkeypatch):
+    class _Folder:
+        def joinpath(self, _name):
+            return self
+
+        def read_text(self, encoding="utf-8"):
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(html_report_module.resources, "files", lambda _p: _Folder())
+    with pytest.raises(HtmlAssetsError):
+        render_html_report(make_payload([make_diag()]), meta=META)
+
+
 # --- size cut --------------------------------------------------------------
 
 
@@ -230,6 +243,20 @@ def test_history_keeps_only_the_current_score_schema_and_trims():
     assert env["history_dropped_schema"] == 1
 
 
+def test_a_history_record_whose_modules_is_not_a_dict_counts_as_empty():
+    bad = history_record(75.0)
+    bad["modules"] = ["m"]
+    none = history_record(76.0)
+    none["modules"] = None
+    env = envelope_of(
+        render_html_report(
+            make_payload([make_diag()]), meta=META, history=[bad, none]
+        ).html
+    )
+    assert [h["project"] for h in env["history"]] == [75.0, 76.0]
+    assert [h["modules"] for h in env["history"]] == [{}, {}]
+
+
 def test_history_is_capped_at_200_newest_records():
     records = [history_record(float(i % 100)) for i in range(250)]
     env = envelope_of(
@@ -262,7 +289,7 @@ class _Collect(HTMLParser):
 def test_hostile_values_cannot_break_out_of_the_data_block():
     diags = [
         make_diag(
-            module="m",
+            module="m<b>",
             file_path='a"><svg onload=alert(1)>.py',
             message=EVIL,
             title=f"t{LS}t",
@@ -278,7 +305,9 @@ def test_hostile_values_cannot_break_out_of_the_data_block():
     parser.feed(html)
     assert not [t for t, _ in parser.tags if t in {"img", "svg", "iframe"}]
     env = envelope_of(html)
-    d = env["report"]["modules"]["m"]["diagnostics"][0]
+    assert "m<b>" in env["report"]["modules"]
+    d = env["report"]["modules"]["m<b>"]["diagnostics"][0]
+    assert d["module"] == "m<b>"
     assert d["message"] == EVIL and d["file_path"] == 'a"><svg onload=alert(1)>.py'
     assert d["title"] == f"t{LS}t"
     assert env["meta"]["branch"] == EVIL

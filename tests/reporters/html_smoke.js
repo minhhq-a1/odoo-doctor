@@ -70,6 +70,14 @@ const rows = () => root.count(isFinding);
 // text is captured before any interaction, so filters below cannot hide rows from it
 const out = { rowsDefault: rows(), text: root.textContent, renderMs };
 
+// rule elements are collected before any filter below can hide rows
+out.ruleNodes = [];
+root.walk((n) => {
+  if (n.classList.contains("rule") && (n.tagName === "a" || n.tagName === "span")) {
+    out.ruleNodes.push({ tag: n.tagName, text: n.textContent, href: n.getAttribute("href"), rel: n.getAttribute("rel") });
+  }
+});
+
 const more = root.find((n) => n.attrs.id === "show-more");
 out.moreHiddenDefault = more ? more.hidden : null;
 if (more && !more.hidden) { more.fire("click"); out.rowsAfterMore = rows(); out.moreHiddenAfter = more.hidden; }

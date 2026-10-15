@@ -60,7 +60,7 @@ def _asset(name: str) -> str:
     try:
         folder = resources.files("odoo_doctor.reporters.html")
         return folder.joinpath(name).read_text(encoding="utf-8")
-    except (OSError, ModuleNotFoundError) as exc:
+    except (OSError, ValueError, ModuleNotFoundError) as exc:
         raise HtmlAssetsError(f"cannot read report asset {name}: {exc}") from exc
 
 
@@ -103,6 +103,11 @@ def _rule_urls(payload: dict) -> dict[str, str]:
     return urls
 
 
+def _modules_of(record: dict) -> dict:
+    modules = record.get("modules")
+    return modules if isinstance(modules, dict) else {}
+
+
 def _trend(
     history: list[dict] | None, schema_version: object
 ) -> tuple[list[dict] | None, int]:
@@ -118,7 +123,7 @@ def _trend(
             "project": r["project"]["overall"],
             "modules": {
                 name: m["overall"]
-                for name, m in (r.get("modules") or {}).items()
+                for name, m in _modules_of(r).items()
                 if isinstance(m, dict) and "overall" in m
             },
         }

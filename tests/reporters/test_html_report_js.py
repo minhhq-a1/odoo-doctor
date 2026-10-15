@@ -39,6 +39,11 @@ FORBIDDEN_JS = [
     "cssText",
     ".style",
     'setAttribute("style"',
+    "DOMParser",
+    "createContextualFragment",
+    "srcdoc",
+    ".src =",
+    ".src=",
 ]
 
 
@@ -163,3 +168,22 @@ def test_smoke_notes_truncation_and_partial_scope(tmp_path: Path):
     out = _smoke(tmp_path, cut.html)
     assert "40 low-confidence findings were not embedded" in out["text"]
     assert "Partial scan" in out["text"] and "origin/main" in out["text"]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_smoke_only_https_rule_urls_become_links(tmp_path: Path):
+    diags = [
+        make_diag(line=1, rule="rule-js", url="javascript:alert(1)"),
+        make_diag(line=2, rule="rule-http", url="http://x"),
+        make_diag(line=3, rule="rule-ok", url="https://ok"),
+    ]
+    html = render_html_report(make_payload(diags), meta=META).html
+    out = _smoke(tmp_path, html)
+    nodes = out["ruleNodes"]
+    links = [n for n in nodes if n["tag"] == "a"]
+    assert len(nodes) == 3 and len(links) == 1
+    assert links[0]["href"] == "https://ok" and links[0]["text"] == "rule-ok"
+    assert "noopener" in links[0]["rel"] and "noreferrer" in links[0]["rel"]
+    plain = sorted(n["text"] for n in nodes if n["tag"] == "span")
+    assert plain == ["rule-http", "rule-js"]
+    assert all(n["href"] is None for n in nodes if n["tag"] == "span")
