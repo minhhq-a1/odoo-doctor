@@ -77,7 +77,7 @@ th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: 
 td.cell { text-align: right; font-variant-numeric: tabular-nums; }
 button, select, input[type="search"] {
   font: inherit; color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; max-width: 100%;
 }
 button { cursor: pointer; }
 button.link { border: 0; background: none; color: var(--accent); padding: 0; text-decoration: underline; }
