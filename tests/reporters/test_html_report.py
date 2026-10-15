@@ -348,13 +348,21 @@ def _css_rule_body(css: str, selector: str) -> str:
 def test_long_unbroken_text_wraps_instead_of_widening_the_page(selector):
     # Found in a real browser at 360 px: long absolute paths (fix-first list) and a long
     # project name widened the layout viewport, so the page scrolled sideways.
-    css = resources.files("odoo_doctor.reporters.html").joinpath("report.css").read_text(encoding="utf-8")
+    css = (
+        resources.files("odoo_doctor.reporters.html")
+        .joinpath("report.css")
+        .read_text(encoding="utf-8")
+    )
     body = _css_rule_body(css, selector)
     assert "overflow-wrap: anywhere" in body or "word-break: break-all" in body
 
 
 def test_select_never_exceeds_its_container():
     # A module filter listing 271 long names was 383 px wide at a 360 px viewport.
-    css = resources.files("odoo_doctor.reporters.html").joinpath("report.css").read_text(encoding="utf-8")
-    body = _css_rule_body(css, "button, select, input[type=\"search\"]")
+    css = (
+        resources.files("odoo_doctor.reporters.html")
+        .joinpath("report.css")
+        .read_text(encoding="utf-8")
+    )
+    body = _css_rule_body(css, 'button, select, input[type="search"]')
     assert "max-width: 100%" in body
