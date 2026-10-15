@@ -78,6 +78,7 @@ odoo-doctor rules new <rule-name> [--out DIR]   # Scaffold a third-party rule pa
 odoo-doctor lsp                # Language server on stdio (needs the lsp extra)
 odoo-doctor scan . --history h.jsonl --badge badge.svg
 odoo-doctor history show h.jsonl --max-drop 3
+odoo-doctor scan . --html report.html   # Self-contained HTML report
 ```
 
 ---
@@ -213,6 +214,8 @@ The tool uses a **two-phase architecture**:
 
 **Key Design**: Rules emit `Diagnostic` objects with confidence levels (HIGH/MEDIUM/LOW). Only HIGH confidence findings count toward scoring to minimize false positives. Tier impacts: P0=25, P1=10, P2=4, P3=1 point deductions.
 
+- **HTML report** (`reporters/html_report.py`, assets in `reporters/html/`): `scan --html` embeds the `build_payload()` dict (the `--json` content) plus a small envelope into one self-contained file. Everything from the scanned repo is untrusted: JSON is escaped for a `<script>` element (`embed_json`), `report.js` only uses `textContent`/`createElement` (a test forbids `innerHTML` and friends), and a CSP meta pins the inline script and style by hash. Over 10 MiB it drops `low` findings from a copy. Tests: `tests/reporters/test_html_report*.py` (the Node smoke test skips without `node`).
+
 ---
 
 ## Inline Suppression
@@ -237,6 +240,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
 | `src/odoo_doctor/core/scaffold.py` | Starter project for a third-party rule pack (`rules new`); generated rules import only `plugin_api` |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
+| `src/odoo_doctor/reporters/html_report.py` | HTML report (`scan --html`), assets in `reporters/html/`; `docs/html-report.md` |
 | `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
 | `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
 | `ci-templates/` | GitLab CI and Bitbucket Pipelines templates (same script in both); `tests/test_ci_templates.py` runs it in a temp git repo |

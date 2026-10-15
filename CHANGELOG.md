@@ -6,6 +6,19 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `scan --html <file>`: a self-contained HTML report (score, module × category table, fixes
+  ranked by score gain, a filterable findings list with low-confidence findings hidden by
+  default, suppression counts and, with `--history`, a score trend). No server, no network
+  request; works with `--diff`, `--module`, `--cache` and `--baseline`. Exit code 3 when the file
+  cannot be written. See `docs/html-report.md`.
+
+### Changed
+
+- `scan --score-delta` prints its `Score Delta:` line after the file artifacts (`--history`,
+  `--badge`, `--html`) are written instead of before; the order relative to the report is the same.
+
 ---
 
 ## [0.9.3] — 2026-10-13

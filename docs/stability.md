@@ -38,6 +38,9 @@ are `list`, `explain`, `disable`, `enable`, `docs`, `stats` and `new`. Their fla
 public; the exact set is frozen in `tests/test_stability_contract.py`. The text printed
 for humans (terminal tables, colours, wording) is **not** public; use `--json` or
 `--format` for anything a script reads.
+`scan --html <file>` writes a self-contained HTML report next to the normal output. The flag,
+and the exit code 3 below, are public; the content and layout of the file are not (like the
+terminal text), and neither are the keys of the data embedded in it. Read `--json` for data.
 
 `odoo-doctor lsp` (the language server) is experimental and not covered by this contract
 until it is listed here; it exits 3 when the optional `lsp` extra is not installed.
@@ -58,6 +61,7 @@ other commands follow the same convention where it applies:
 | `history show --max-drop N` | `2` | the newest score dropped by more than `N` points |
 | `history import` | `3` | invalid `--timestamp`, or no report could be imported |
 | `install` | `1` | the packaged skills are missing (reinstall the package) |
+| `scan --html` | `3` | the report file cannot be written, or the packaged report assets are missing (reinstall the package) |
 
 Do not rely on the exit code of anything not listed here.
 
