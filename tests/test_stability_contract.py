@@ -102,6 +102,7 @@ FROZEN_CLI = {
         "--diff",
         "--fail-on",
         "--format",
+        "--html",
         "--history",
         "--json",
         "--min-score",

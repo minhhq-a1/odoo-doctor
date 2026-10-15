@@ -49,3 +49,22 @@ def test_json_includes_score_schema_version():
     output = json.loads(render_json([], scores))
     assert output["score_schema_version"] == 2
     assert output["version"] == __version__
+
+
+def test_render_json_is_the_serialized_build_payload():
+    from odoo_doctor.core.scoring import ScoreResult
+    from odoo_doctor.reporters.json_report import build_payload
+
+    scores = {
+        "mod": ScoreResult(
+            overall=100.0,
+            label="Excellent",
+            categories=[],
+            in_scope_categories=[],
+            diagnostics_counted=0,
+        )
+    }
+    payload = build_payload([], scores)
+    assert isinstance(payload, dict)
+    assert payload["project_score"]["overall"] == 100.0
+    assert render_json([], scores) == json.dumps(payload, indent=2)

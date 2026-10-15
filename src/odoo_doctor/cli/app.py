@@ -159,6 +159,11 @@ def scan(
         "--badge",
         help="Write a score badge: *.svg (image) or *.json (shields.io endpoint)",
     ),
+    html_path: str | None = typer.Option(
+        None,
+        "--html",
+        help="Write a self-contained HTML report to this file (also with --diff/--module)",
+    ),
 ) -> None:
     """Scan Odoo addons and report health score."""
     if (history_path or badge_path) and diff:
@@ -254,6 +259,8 @@ def scan(
         scores = _score_per_module(diags, cfg, version, stats=stats)
 
     if not scores:
+        if html_path:
+            typer.echo("No addons found; HTML report not written.", err=True)
         if output_format == "json":
             typer.echo(render_json([], {}))
         elif output_format == "github":
@@ -267,6 +274,7 @@ def scan(
         return
 
     delta_str = None
+    delta_line = None
     if score_delta:
         _base_diags, base_scores = _scan_base_ref(
             config_root=config_root,
@@ -277,12 +285,29 @@ def scan(
         )
         delta_str = _compute_aggregate_delta(scores, base_scores)
         if output_format == "terminal":
-            typer.echo(f"Score Delta: {delta_str} (vs base {score_delta})")
+            delta_line = f"Score Delta: {delta_str} (vs base {score_delta})"
 
     if history_path or badge_path:
         _write_score_artifacts(
             scores, config_root, history_path=history_path, badge_path=badge_path
         )
+
+    if html_path:
+        _write_html_report(
+            diags,
+            scores,
+            html_path=html_path,
+            config_root=config_root,
+            history_path=history_path,
+            baseline=baseline,
+            diff=diff,
+            target_modules=cfg.target_modules,
+        )
+
+    # Printed here, after every file artifact, so a failed --html exits 3 before
+    # anything reaches stdout.
+    if delta_line:
+        typer.echo(delta_line)
 
     # Output
     if output_format == "json":
@@ -681,6 +706,81 @@ def _write_score_artifacts(
         else:
             target.write_text(render_badge_svg(overall), encoding="utf-8")
         typer.echo(f"Wrote badge to {badge_path}", err=True)
+
+
+def _write_html_report(
+    diags: list[Diagnostic],
+    scores: dict[str, object],
+    *,
+    html_path: str,
+    config_root: Path,
+    history_path: str | None,
+    baseline: str | None,
+    diff: str | None,
+    target_modules: list[str],
+) -> None:
+    """Write the --html report. Messages go to stderr; a failure exits 3."""
+    from odoo_doctor import __version__
+    from odoo_doctor.core.history import git_info, load_history, utc_now_iso
+    from odoo_doctor.reporters import html_report
+    from odoo_doctor.reporters.json_report import build_payload
+
+    info = git_info(config_root)
+    commit = info["commit"]
+    meta = {
+        "project": config_root.name,
+        "tool_version": __version__,
+        "generated_at": utc_now_iso(),
+        "scope": {
+            "partial": bool(diff or target_modules),
+            "diff": diff,
+            "modules": list(target_modules),
+        },
+        "baseline": baseline,
+        "commit": commit[:7] if commit else None,
+        "branch": info["branch"],
+    }
+    history = None
+    skipped = 0
+    if history_path:
+        history, skipped = load_history(Path(history_path))
+    target = Path(html_path)
+    try:
+        report = html_report.render_html_report(
+            build_payload(diags, scores),
+            meta=meta,
+            history=history,
+            history_skipped=skipped,
+            max_bytes=html_report.MAX_HTML_BYTES,
+        )
+    except html_report.HtmlAssetsError as exc:
+        typer.echo(
+            "[ERROR] the HTML report templates are missing from this installation "
+            f"(reinstall odoo-doctor): {exc}",
+            err=True,
+        )
+        raise typer.Exit(code=3) from exc
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # Bytes, not write_text: newline translation would change the hashed inline
+        # script and style and break the page's CSP on Windows.
+        target.write_bytes(report.html.encode("utf-8"))
+    except OSError as exc:
+        typer.echo(f"[ERROR] cannot write HTML report to {html_path}: {exc}", err=True)
+        raise typer.Exit(code=3) from exc
+    typer.echo(f"Wrote HTML report to {html_path}", err=True)
+    if report.truncated["low_findings"]:
+        typer.echo(
+            f"[INFO] HTML report: {report.truncated['low_findings']} low-confidence "
+            f"finding(s) left out to keep the file under {html_report.MAX_HTML_BYTES} bytes.",
+            err=True,
+        )
+    if report.over_limit:
+        typer.echo(
+            f"[WARN] HTML report is {report.size} bytes, above "
+            f"{html_report.MAX_HTML_BYTES}; all high/medium findings are kept.",
+            err=True,
+        )
 
 
 history_app = typer.Typer(help="Score history: trend, regressions, legacy import.")

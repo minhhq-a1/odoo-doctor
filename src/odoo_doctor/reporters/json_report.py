@@ -28,11 +28,11 @@ if TYPE_CHECKING:
 _MAX_FIX_PRIORITIES = 10
 
 
-def render_json(
+def build_payload(
     diagnostics: list[Diagnostic],
     scores: dict[str, ScoreResult],
-) -> str:
-    """Render scan results as JSON."""
+) -> dict:
+    """Build the scan result as a plain dict (the content of ``scan --json``)."""
     by_module: dict[str, list[Diagnostic]] = {}
     for d in diagnostics:
         by_module.setdefault(d.module, []).append(d)
@@ -66,31 +66,36 @@ def render_json(
     top = sorted(diagnostics, key=lambda d: (d.tier, d.file_path, d.line))[:5]
 
     # Using version tracking for tooling compatibility
-    return json.dumps(
-        {
-            "version": __version__,
-            "schema_version": "1.0",
-            "score_schema_version": SCORE_SCHEMA_VERSION,
-            "project_score": project_score(scores),
-            "top_findings": [
-                {
-                    "module": d.module,
-                    "file_path": d.file_path,
-                    "line": d.line,
-                    "rule": d.rule,
-                    "tier": d.tier,
-                    "title": d.title,
-                    "category": d.category,
-                    "severity": d.severity,
-                    "confidence": d.confidence,
-                    "fixable": _is_fixable(d.rule),
-                }
-                for d in top
-            ],
-            "modules": modules,
-        },
-        indent=2,
-    )
+    return {
+        "version": __version__,
+        "schema_version": "1.0",
+        "score_schema_version": SCORE_SCHEMA_VERSION,
+        "project_score": project_score(scores),
+        "top_findings": [
+            {
+                "module": d.module,
+                "file_path": d.file_path,
+                "line": d.line,
+                "rule": d.rule,
+                "tier": d.tier,
+                "title": d.title,
+                "category": d.category,
+                "severity": d.severity,
+                "confidence": d.confidence,
+                "fixable": _is_fixable(d.rule),
+            }
+            for d in top
+        ],
+        "modules": modules,
+    }
+
+
+def render_json(
+    diagnostics: list[Diagnostic],
+    scores: dict[str, ScoreResult],
+) -> str:
+    """Render scan results as JSON."""
+    return json.dumps(build_payload(diagnostics, scores), indent=2)
 
 
 def _is_fixable(rule_name: str) -> bool:

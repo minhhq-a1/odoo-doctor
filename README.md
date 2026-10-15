@@ -277,6 +277,15 @@ odoo-doctor history show .odoo-doctor/history.jsonl --max-drop 3   # exit 2 on r
 odoo-doctor history import history.jsonl old-report.json           # pre-0.4.0 reports
 ```
 
+### HTML report
+
+Write one self-contained HTML file (no server, no network request) to open in a browser or keep
+as a CI artifact (see [`docs/html-report.md`](docs/html-report.md)):
+
+```bash
+odoo-doctor scan . --html report.html
+```
+
 ### pre-commit
 
 ```yaml
