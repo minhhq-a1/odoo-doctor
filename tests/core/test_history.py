@@ -113,6 +113,20 @@ def test_append_and_load_sorted_and_tolerant(tmp_path: Path):
     assert skipped == 2
 
 
+def test_load_history_skips_undecodable_and_non_finite_lines(tmp_path: Path):
+    path = tmp_path / "h.jsonl"
+    append_record(path, _rec("2026-01-01T00:00:00+00:00", 90))
+    with path.open("ab") as fh:
+        fh.write(b"\xff\n")
+        fh.write(
+            b'{"history_schema_version":1,"timestamp":"2026-02-01T00:00:00+00:00",'
+            b'"project":{"overall":1e309}}\n'
+        )
+    records, skipped = load_history(path)
+    assert [r["project"]["overall"] for r in records] == [90]
+    assert skipped == 2
+
+
 def test_load_missing_file_is_empty(tmp_path: Path):
     assert load_history(tmp_path / "nope.jsonl") == ([], 0)
 

@@ -257,6 +257,20 @@ def test_a_history_record_whose_modules_is_not_a_dict_counts_as_empty():
     assert [h["modules"] for h in env["history"]] == [{}, {}]
 
 
+def test_non_finite_history_scores_are_not_embedded():
+    inf_project = history_record(70.0)
+    inf_project["project"]["overall"] = float("inf")
+    inf_module = history_record(75.0)
+    inf_module["modules"] = {"m": {"overall": float("nan")}, "ok": {"overall": 80.0}}
+    html = render_html_report(
+        make_payload([make_diag()]), meta=META, history=[inf_project, inf_module]
+    ).html
+    env = envelope_of(html)
+    assert [h["project"] for h in env["history"]] == [75.0]
+    assert env["history"][0]["modules"] == {"ok": 80.0}
+    assert "Infinity" not in html and "NaN" not in html
+
+
 def test_history_is_capped_at_200_newest_records():
     records = [history_record(float(i % 100)) for i in range(250)]
     env = envelope_of(

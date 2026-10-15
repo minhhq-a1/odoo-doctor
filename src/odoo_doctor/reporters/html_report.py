@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import re
 from importlib import resources
 from typing import NamedTuple
@@ -103,6 +104,15 @@ def _rule_urls(payload: dict) -> dict[str, str]:
     return urls
 
 
+def _finite(value: object) -> bool:
+    """JSON would embed inf/nan as bare tokens, which ``JSON.parse`` rejects."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
 def _modules_of(record: dict) -> dict:
     modules = record.get("modules")
     return modules if isinstance(modules, dict) else {}
@@ -115,6 +125,7 @@ def _trend(
     if history is None:
         return None, 0
     same = [r for r in history if r.get("score_schema_version") == schema_version]
+    usable = [r for r in same if _finite((r.get("project") or {}).get("overall"))]
     points = [
         {
             "timestamp": r.get("timestamp"),
@@ -124,10 +135,10 @@ def _trend(
             "modules": {
                 name: m["overall"]
                 for name, m in _modules_of(r).items()
-                if isinstance(m, dict) and "overall" in m
+                if isinstance(m, dict) and _finite(m.get("overall"))
             },
         }
-        for r in same[-MAX_TREND_POINTS:]
+        for r in usable[-MAX_TREND_POINTS:]
     ]
     return points, len(history) - len(same)
 
