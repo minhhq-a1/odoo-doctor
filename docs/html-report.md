@@ -31,13 +31,23 @@ Notes:
 - Writing the file fails with exit code 3 when the path is not writable, or when the packaged
   report assets are missing from the installation (reinstall odoo-doctor). The scan's other
   exit codes (`--fail-on`, `--min-score`) are not affected by `--html`.
-- If no addon is found, no file is written (a note goes to stderr).
+- If no addon is found, no file is written (a note goes to stderr). A `--baseline` that hides
+  every finding of the project currently also ends in "No addons found" (the scoring step
+  returns no module), so no report is written in that case either.
+- Finding paths and the `--baseline` argument are embedded exactly as in `scan --json`, so
+  they are absolute when the scan target is absolute. A report shared outside your team may
+  then reveal your local directory layout; scan with a relative target (`scan .`) to keep the
+  paths relative.
 
 ## CI recipes
 
 **GitHub Actions**
 
 ```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.12"
+- run: pip install odoo-doctor
 - run: odoo-doctor scan . --html odoo-doctor-report.html
 - uses: actions/upload-artifact@v4
   if: always()
@@ -50,7 +60,9 @@ Notes:
 
 ```yaml
 odoo-doctor:
+  image: python:3.12
   script:
+    - pip install odoo-doctor
     - odoo-doctor scan . --html odoo-doctor-report.html
   artifacts:
     when: always
@@ -63,6 +75,7 @@ odoo-doctor:
 
 ```yaml
 - step:
+    image: python:3.12
     script:
       - pip install odoo-doctor
       - odoo-doctor scan . --html odoo-doctor-report.html
