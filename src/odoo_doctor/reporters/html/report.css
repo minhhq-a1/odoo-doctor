@@ -57,11 +57,11 @@ body {
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 #app { max-width: 1200px; margin: 0 auto; padding: 16px; }
-h1 { font-size: 22px; margin: 0 0 4px; }
+h1 { font-size: 22px; margin: 0 0 4px; overflow-wrap: anywhere; }
 h2 { font-size: 17px; margin: 28px 0 8px; }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
 a { color: var(--accent); }
-.muted { color: var(--muted); }
+.muted { color: var(--muted); overflow-wrap: anywhere; }
 .top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
 .score { display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); }
 .score-num { font-size: 32px; font-weight: 700; }

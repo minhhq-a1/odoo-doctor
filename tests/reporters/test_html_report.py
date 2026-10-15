@@ -334,3 +334,20 @@ def test_assets_are_readable_through_importlib_resources():
     js = folder.joinpath("report.js").read_text(encoding="utf-8")
     assert "</style" not in css.lower()
     assert "</script" not in js.lower()
+
+
+def _css_rule_body(css: str, selector: str) -> str:
+    """Declarations of the first top-level rule whose selector list is exactly `selector`."""
+    for match in re.finditer(r"(^|\n)([^{}\n@][^{}]*)\{([^{}]*)\}", css):
+        if match.group(2).strip() == selector:
+            return match.group(3)
+    raise AssertionError(f"no CSS rule for {selector!r}")
+
+
+@pytest.mark.parametrize("selector", ["h1", "code", ".muted"])
+def test_long_unbroken_text_wraps_instead_of_widening_the_page(selector):
+    # Found in a real browser at 360 px: long absolute paths (fix-first list) and a long
+    # project name widened the layout viewport, so the page scrolled sideways.
+    css = resources.files("odoo_doctor.reporters.html").joinpath("report.css").read_text(encoding="utf-8")
+    body = _css_rule_body(css, selector)
+    assert "overflow-wrap: anywhere" in body or "word-break: break-all" in body
