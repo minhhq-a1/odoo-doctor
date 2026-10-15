@@ -12,7 +12,8 @@ All notable changes to Odoo Doctor are documented here.
   ranked by score gain, a filterable findings list with low-confidence findings hidden by
   default, suppression counts and, with `--history`, a score trend). No server, no network
   request; works with `--diff`, `--module`, `--cache` and `--baseline`. Exit code 3 when the file
-  cannot be written. See `docs/html-report.md`.
+  cannot be written. See `docs/html-report.md`. Measured on oho-addons (271 modules): 2479
+  findings → 2.2 MiB, loads in 0.06 s; on skw: 171 KiB.
 
 ### Changed
 
