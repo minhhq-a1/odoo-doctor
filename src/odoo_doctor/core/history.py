@@ -103,11 +103,12 @@ def build_record(
 
 def _num(value: object) -> bool:
     """A real, finite number (json.loads also yields inf/nan from 1e309 or Infinity)."""
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-    )
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:  # an int too large for a float, e.g. 10**309
+        return False
 
 
 def normalize_report(

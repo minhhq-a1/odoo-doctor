@@ -122,9 +122,14 @@ def test_load_history_skips_undecodable_and_non_finite_lines(tmp_path: Path):
             b'{"history_schema_version":1,"timestamp":"2026-02-01T00:00:00+00:00",'
             b'"project":{"overall":1e309}}\n'
         )
+        # An int too large for a float: math.isfinite() raises OverflowError on it.
+        fh.write(
+            b'{"history_schema_version":1,"timestamp":"2026-03-01T00:00:00+00:00",'
+            b'"project":{"overall":1' + b"0" * 309 + b"}}\n"
+        )
     records, skipped = load_history(path)
     assert [r["project"]["overall"] for r in records] == [90]
-    assert skipped == 2
+    assert skipped == 3
 
 
 def test_load_missing_file_is_empty(tmp_path: Path):

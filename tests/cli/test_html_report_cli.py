@@ -128,12 +128,14 @@ def test_undecodable_and_non_finite_history_never_break_the_report(tmp_path: Pat
         b"\xff\n"
         b'{"history_schema_version":1,"timestamp":"2026-02-01T00:00:00+00:00",'
         b'"project":{"overall":1e309}}\n'
+        b'{"history_schema_version":1,"timestamp":"2026-03-01T00:00:00+00:00",'
+        b'"project":{"overall":1' + b"0" * 309 + b"}}\n"
     )
     report = tmp_path / "r.html"
     done = _scan(tmp_path, str(addons), "--history", str(hist), "--html", str(report))
     assert done.returncode == 0, done.stderr
     env = _envelope(report)  # json.loads would also accept Infinity, so check the text
-    assert env["history_skipped"] == 2 and len(env["history"]) == 1
+    assert env["history_skipped"] == 3 and len(env["history"]) == 1
     assert "Infinity" not in report.read_text(encoding="utf-8")
 
 

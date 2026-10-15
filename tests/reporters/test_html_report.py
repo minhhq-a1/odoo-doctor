@@ -260,10 +260,18 @@ def test_a_history_record_whose_modules_is_not_a_dict_counts_as_empty():
 def test_non_finite_history_scores_are_not_embedded():
     inf_project = history_record(70.0)
     inf_project["project"]["overall"] = float("inf")
+    huge_project = history_record(71.0)
+    huge_project["project"]["overall"] = 10**309  # float() of it overflows
     inf_module = history_record(75.0)
-    inf_module["modules"] = {"m": {"overall": float("nan")}, "ok": {"overall": 80.0}}
+    inf_module["modules"] = {
+        "m": {"overall": float("nan")},
+        "big": {"overall": 10**309},
+        "ok": {"overall": 80.0},
+    }
     html = render_html_report(
-        make_payload([make_diag()]), meta=META, history=[inf_project, inf_module]
+        make_payload([make_diag()]),
+        meta=META,
+        history=[inf_project, huge_project, inf_module],
     ).html
     env = envelope_of(html)
     assert [h["project"] for h in env["history"]] == [75.0]
