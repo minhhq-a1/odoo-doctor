@@ -286,8 +286,6 @@ as a CI artifact (see [`docs/html-report.md`](docs/html-report.md)):
 odoo-doctor scan . --html report.html
 ```
 
-- `--html report.html` — a self-contained HTML report ([docs/html-report.md](docs/html-report.md)).
-
 ### pre-commit
 
 ```yaml
