@@ -34,10 +34,11 @@ Notes:
 - If no addon is found, no file is written (a note goes to stderr). A `--baseline` that hides
   every finding of the project currently also ends in "No addons found" (the scoring step
   returns no module), so no report is written in that case either.
-- Finding paths and the `--baseline` argument are embedded exactly as in `scan --json`, so
-  they are absolute when the scan target is absolute. A report shared outside your team may
-  then reveal your local directory layout; scan with a relative target (`scan .`) to keep the
-  paths relative.
+- Finding paths are always embedded as resolved absolute paths, exactly as in `scan --json`,
+  whatever form the scan target has, and the `--baseline` argument is embedded as you typed
+  it. A report shared outside your team therefore reveals the directory layout of the machine
+  that scanned (a home directory or a CI runner path). Generate it in CI, where that layout is
+  not sensitive, when the report will be shared.
 
 ## CI recipes
 
