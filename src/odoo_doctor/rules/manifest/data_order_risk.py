@@ -175,15 +175,18 @@ def safe_placement(
     A file moved in front of its first consumer keeps every earlier file before it; what
     could break is something it depends on that sits between the consumer and its old
     position. So: if the file mentions an XML ID that such an intervening file declares,
-    decline (the check is a conservative token match: a false alarm only means "do not fix").
+    decline (the check is a conservative match on whole XML-id-like tokens, hyphens included: a false alarm only means "do not fix").
     """
     placement: dict[str, int] = {}
+    high = set(risky_security_files(module_dir, module_name, data)[0])
     for risk in analyze(module_dir, module_name, data):
+        if risk.file not in high:
+            continue  # only what a reported high finding asks for may move
         try:
             text = (module_dir / risk.file).read_text(encoding="utf-8", errors="ignore")
         except OSError:
             return None
-        mentioned = set(re.findall(r"[A-Za-z_][\w.]*", text))
+        mentioned = set(re.findall(r"[^\s\"'<>=,;()]+", text))
         for between in data[risk.target : risk.index]:
             root = _read_xml(module_dir, between)
             if root is not None and mentioned & _declared_ids(root, module_name):

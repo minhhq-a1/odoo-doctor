@@ -294,3 +294,30 @@ def test_missing_field_fixer_does_not_touch_empty_values_or_a_lone_missing_name(
 def test_missing_field_fixer_keeps_existing_whitespace_before_the_brace():
     out = fix_missing_required_field(_diag(), "{'name': 'M', 'depends': ['base'] }")
     assert out == "{'name': 'M', 'depends': ['base'], 'license': 'LGPL-3' }"
+
+
+def test_order_fixer_moves_only_the_reported_file(tmp_path):
+    mod = tmp_path / "m"
+    for d in ("views", "security", "data"):
+        (mod / d).mkdir(parents=True)
+    (mod / "views" / "v.xml").write_text(
+        '<odoo><menuitem id="menu_x" name="X" groups="m.group_x,m.group_y"/></odoo>'
+    )
+    (mod / "security" / "g.xml").write_text(
+        '<odoo><record id="group_x" model="res.groups"/></odoo>'
+    )
+    (mod / "data" / "other.xml").write_text(
+        '<odoo><record id="group_y" model="res.groups"/></odoo>'
+    )
+    src = (
+        "{\n    'data': [\n        'views/v.xml',\n        'security/g.xml',\n"
+        "        'data/other.xml',\n    ],\n}\n"
+    )
+    diag = _order_diag_at(mod / "__manifest__.py")
+    out = fix_data_order_risk(diag, src)
+    assert ast.literal_eval(out)["data"] == [
+        "security/g.xml",
+        "views/v.xml",
+        "data/other.xml",
+    ]
+    assert fix_data_order_risk(diag, out) == out

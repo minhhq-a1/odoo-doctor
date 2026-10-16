@@ -137,3 +137,27 @@ def test_safe_placement_declines_when_a_dependency_sits_in_between(tmp_path):
     data = list(files)
     assert risky_security_files(mod, "m", data)[0] == ["security/groups.xml"]
     assert safe_placement(mod, "m", data) is None
+
+
+def test_only_reported_high_files_may_move(tmp_path):
+    files = {
+        "views/v.xml": MENU.format(groups="m.group_x,m.group_y"),
+        "security/g.xml": GROUP.format(id="group_x"),
+        "data/other.xml": GROUP.format(id="group_y"),
+    }
+    mod = _module(tmp_path, files)
+    data = list(files)
+    assert risky_security_files(mod, "m", data)[0] == ["security/g.xml"]
+    assert safe_placement(mod, "m", data) == {"security/g.xml": 0}
+
+
+def test_safe_placement_sees_hyphenated_ids(tmp_path):
+    files = {
+        "views/menu.xml": MENU.format(groups="m.group_x"),
+        "data/category.xml": '<odoo><record id="cat-x" model="ir.module.category"/></odoo>',
+        "security/groups.xml": CATEGORISED.replace("cat_x", "cat-x"),
+    }
+    mod = _module(tmp_path, files)
+    data = list(files)
+    assert risky_security_files(mod, "m", data)[0] == ["security/groups.xml"]
+    assert safe_placement(mod, "m", data) is None
