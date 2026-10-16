@@ -379,14 +379,38 @@ def _body_always_raises(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 
 def _body_delegates(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Calls its own name on records the method derives from ``self`` (``self.mapped(..)``,
+    a local assigned from a call), never on an ``env`` lookup or on ``self`` itself.
+
+    shortcut: a local assigned from ``self.env[..].x()`` counts as derived, when a
+    flow analysis could tell a bare model lookup from a record set built from ``self``.
+    """
+    built = {
+        t.id
+        for n in ast.walk(func)
+        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
+        for t in n.targets
+        if isinstance(t, ast.Name)
+    }
     for node in ast.walk(func):
-        if (
+        if not (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == func.name
-            and not (
-                isinstance(node.func.value, ast.Name) and node.func.value.id == "self"
-            )
+        ):
+            continue
+        recv = node.func.value
+        if isinstance(recv, ast.Name) and recv.id in built:
+            return True
+        chain, base = [], recv
+        while isinstance(base, (ast.Attribute, ast.Call, ast.Subscript)):
+            chain.append(base.attr if isinstance(base, ast.Attribute) else None)
+            base = base.func if isinstance(base, ast.Call) else base.value
+        if (
+            chain  # not bare `self`
+            and isinstance(base, ast.Name)
+            and base.id == "self"
+            and "env" not in chain
         ):
             return True
     return False

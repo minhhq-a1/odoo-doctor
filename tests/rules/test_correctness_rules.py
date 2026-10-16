@@ -154,6 +154,44 @@ def test_call_of_same_name_on_self_is_not_a_delegation(tmp_path: Path):
     assert diag.confidence == "high"
 
 
+def test_create_on_an_env_lookup_stays_high(tmp_path: Path):
+    body = """\
+        def create(self, vals):
+            return self.env["res.partner"].create(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_loop_variable_of_same_name_stays_high(tmp_path: Path):
+    body = """\
+        def write(self, vals):
+            for rec in self:
+                rec.write(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_delegation_to_a_local_recordset_is_medium(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            tmpls = self.env["x.tmpl"].concat(*[r.tmpl_id for r in self])
+            return tmpls.copy(default=default)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "medium"
+
+
+def test_copy_on_model_without_own_table_stays_high(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            return self.browse()
+    """
+    (diag,) = _super_diags(tmp_path, body, header="    _auto = False\n")
+    assert diag.confidence == "high"
+
+
 def test_model_without_own_table_is_medium(tmp_path: Path):
     body = """\
         def create(self, vals_list):

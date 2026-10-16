@@ -9,3 +9,6 @@ class Board(models.AbstractModel):
     @api.model_create_multi
     def create(self, vals_list):
         return self
+
+    def copy(self, default=None):
+        return self.browse()

@@ -277,10 +277,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "    return record",
         notes="Not reported: a method whose body raises and never returns "
         "(`def copy(self, default=None): raise UserError(...)`) blocks the "
-        "operation on purpose. Medium confidence, not high: the method delegates "
-        "to the same method of another recordset (`self.tmpl_id.copy(...)`), or "
-        "the model sets `_auto = False` and has no ORM table for `super()` to "
-        "write into.",
+        "operation on purpose. Medium confidence, not high: the method calls its own "
+        "name on records it derives from `self` (`self.mapped('tmpl_id').copy(...)`, "
+        "not on an `env` lookup), or it is `create`/`write` on a model with "
+        "`_auto = False`, which has no ORM table for `super()` to write into.",
     ),
     "compute-missing-depends": RuleDoc(
         detects="Compute methods that read fields not declared in `@api.depends`.",

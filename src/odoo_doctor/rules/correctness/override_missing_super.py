@@ -9,6 +9,7 @@ from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.parsers.python_models import parse_models
 from odoo_doctor.rules.registry import rule
 
+_STORAGE_METHODS = {"create", "write"}
 _TARGET_METHODS = {"create", "write", "unlink", "copy", "default_get"}
 
 
@@ -33,9 +34,10 @@ def check_override_missing_super(
                 continue
             if method.always_raises:  # the operation is deliberately blocked
                 continue
-            # Not provably a broken chain: another recordset's method does the work, or
-            # the model has no ORM table for `super()` to write into.
-            confident = not (method.delegates or not model.auto_table)
+            # Not provably a broken chain: records derived from self do the work, or the
+            # model has no ORM table for `super()` to INSERT/UPDATE into.
+            no_table = not model.auto_table and method_name in _STORAGE_METHODS
+            confident = not (method.delegates or no_table)
             diags.append(
                 Diagnostic(
                     module=module_name,
