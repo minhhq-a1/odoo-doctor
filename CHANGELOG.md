@@ -6,6 +6,12 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `compute-missing-depends` named a different undeclared field from one run to the next (the fields were
+  visited in set order, which follows `PYTHONHASHSEED`, and only one finding per method survives
+  deduplication). It now reports the alphabetically first one, so two scans of the same code agree.
+
 ## [0.10.0] — 2026-10-16
 
 ### Added
