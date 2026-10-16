@@ -183,6 +183,46 @@ def test_delegation_to_a_local_recordset_is_medium(tmp_path: Path):
     assert diag.confidence == "medium"
 
 
+def test_same_model_adapter_chain_stays_high(tmp_path: Path):
+    for expr in (
+        "self.sudo().write(vals)",
+        "self.with_context(a=1).write(vals)",
+        "self.browse(self.ids).write(vals)",
+    ):
+        body = f"def write(self, vals):\n    return {expr}\n"
+        (diag,) = _super_diags(tmp_path, body)
+        assert diag.confidence == "high", expr
+
+
+def test_local_of_same_model_adapter_stays_high(tmp_path: Path):
+    body = """\
+        def write(self, vals):
+            s = self.sudo()
+            return s.write(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_create_on_local_env_lookup_stays_high(tmp_path: Path):
+    body = """\
+        def create(self, vals):
+            p = self.env["m"].browse(1)
+            return p.create(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_delegation_through_field_chain_is_medium(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            return self.line_ids.copy(default)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "medium"
+
+
 def test_copy_on_model_without_own_table_stays_high(tmp_path: Path):
     body = """\
         def copy(self, default=None):

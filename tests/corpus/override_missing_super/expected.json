@@ -11,6 +11,16 @@
   ],
   [
     "override-missing-super",
+    "env_lookup_create/models/thing.py",
+    "high"
+  ],
+  [
+    "override-missing-super",
+    "env_lookup_create/models/thing.py",
+    "high"
+  ],
+  [
+    "override-missing-super",
     "non_table_model/models/thing.py",
     "high"
   ],

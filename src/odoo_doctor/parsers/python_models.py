@@ -378,20 +378,73 @@ def _body_always_raises(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     )
 
 
-def _body_delegates(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """Calls its own name on records the method derives from ``self`` (``self.mapped(..)``,
-    a local assigned from a call), never on an ``env`` lookup or on ``self`` itself.
+# Methods that return records of the same model: a call on them is still a call on self.
+_SAME_MODEL_ADAPTERS = {
+    "sudo",
+    "with_context",
+    "with_user",
+    "with_company",
+    "with_env",
+    "browse",
+    "exists",
+    "filtered",
+    "filtered_domain",
+    "sorted",
+}
 
-    shortcut: a local assigned from ``self.env[..].x()`` counts as derived, when a
-    flow analysis could tell a bare model lookup from a record set built from ``self``.
+
+def _strip_adapters(node: ast.expr) -> ast.expr:
+    while (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in _SAME_MODEL_ADAPTERS
+    ):
+        node = node.func.value
+    return node
+
+
+def _body_delegates(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Calls its own name on records of another model that it maps out of ``self``.
+
+    That is a receiver chain such as ``self.mapped('tmpl_id')`` / ``self.line_ids``, or a
+    local built from ``self`` (``tmpls = self.env['t'].concat(*[r.t for r in self])``).
+    ``self`` itself, its same-model adapters (``self.sudo()``), and anything that only
+    looks a model up in ``env`` (``self.env['m'].browse(1)``) are not delegation.
+
+    shortcut: a local reassigned in a loop is judged by every assignment alike, when a
+    flow analysis could follow one value at a time.
     """
-    built = {
-        t.id
+    assigns = [
+        (t.id, n.value)
         for n in ast.walk(func)
-        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
+        if isinstance(n, ast.Assign)
         for t in n.targets
         if isinstance(t, ast.Name)
-    }
+    ]
+    derived: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, value in assigns:
+            if name in derived:
+                continue
+            value = _strip_adapters(value)
+            if isinstance(value, ast.Name) and value.id == "self":
+                continue
+            env_roots = {
+                id(n.value)
+                for n in ast.walk(value)
+                if isinstance(n, ast.Attribute)
+                and n.attr == "env"
+                and isinstance(n.value, ast.Name)
+            }
+            if any(
+                isinstance(n, ast.Name)
+                and ((n.id == "self" and id(n) not in env_roots) or n.id in derived)
+                for n in ast.walk(value)
+            ):
+                derived.add(name)
+                changed = True
     for node in ast.walk(func):
         if not (
             isinstance(node, ast.Call)
@@ -400,17 +453,19 @@ def _body_delegates(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         ):
             continue
         recv = node.func.value
-        if isinstance(recv, ast.Name) and recv.id in built:
+        if isinstance(recv, ast.Name) and recv.id in derived:
             return True
-        chain, base = [], recv
+        attrs, base = [], recv
         while isinstance(base, (ast.Attribute, ast.Call, ast.Subscript)):
-            chain.append(base.attr if isinstance(base, ast.Attribute) else None)
+            if isinstance(base, ast.Attribute):
+                attrs.append(base.attr)
             base = base.func if isinstance(base, ast.Call) else base.value
         if (
-            chain  # not bare `self`
+            attrs  # not bare `self`
             and isinstance(base, ast.Name)
             and base.id == "self"
-            and "env" not in chain
+            and "env" not in attrs
+            and not set(attrs) <= _SAME_MODEL_ADAPTERS
         ):
             return True
     return False
