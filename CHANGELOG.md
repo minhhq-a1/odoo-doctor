@@ -24,8 +24,8 @@ Rule was wrong, fixed (the finding is no longer reported):
   a helper that refuses ORM methods is not reported. skw: 7 of 8; core 19 is unchanged (4 `medium`).
 - `sudo-without-comment` (`low`): a `.sudo()` named by a comment within 5 lines above or by the function
   docstring, and `.sudo()` on a `self` after a bare `self = self.sudo()` (until `self` is rebound), are
-  not reported. skw: 6 (80 -> 74); core 19: 72 (2735 -> 2663), all of them Odoo's own `# sudo: ...`
-  comments.
+  not reported. skw: 6 (80 -> 74); core 19: 72 (2735 -> 2663; a sample of 12 of them was read: all
+  Odoo's own `# sudo: ...` comments).
 
 Core does not follow the convention, now `medium` (still listed, no longer lowers the score):
 
@@ -52,15 +52,22 @@ True positive, kept:
   `missing-ondelete` and 55 `high` / 32 `medium` `data-noupdate-risk`, unchanged.
 - `dynamic-method-dispatch` keeps the admin-editable `related_action` name (`medium`, skw: 1).
 
+Also:
+
+- Exit codes: `duplicate-xml-id` and `override-missing-super` are P1, and the default `--fail-on` policy
+  (`[surfaces.ci_failure]`: P0/P1 `high`) counts only `high` findings. A scan that failed the build only
+  because of the patterns above now passes: the ones listed as `medium` still appear in `--format json`
+  (at `medium`), the ones listed as no longer reported are gone from every format.
 - Manifest fixers only act on `high` findings and edit the manifest text locally (comments, quoting,
-  key order and the `medium` parts stay byte-identical; a second run changes nothing); they return
-  "not fixable" instead of guessing. `manifest-data-order-risk --fix` moves only the file that is
-  reported `high`, in front of its first consumer, instead of moving every security file to the top.
-- Scores: because findings moved from `high` to `medium` or are no longer reported, 208 modules of core 19 score higher (project
-  score 93.2 -> 93.9; the largest changes are `l10n_ar` 51.1 -> 94.7, `event` 48.4 -> 75.9 and `l10n_fi`
-  85.8 -> 100.0), 184 modules of Odoo 17.0 scanned as 19.0 (88.2 -> 88.6), and none on skw (96.5, 170 ->
-  157 findings, all removed ones `low` or `medium`). No score goes down. The scoring formula and
-  `score_schema_version` are unchanged.
+  key order and the `medium` parts stay identical, line endings are normalised to LF by `fix`; a second
+  run changes nothing); they return "not fixable" instead of guessing. `manifest-data-order-risk --fix`
+  moves only the file that is reported `high`, in front of its first consumer, instead of moving every
+  security file to the top.
+- Scores: because findings moved from `high` to `medium` or are no longer reported, 208 modules of core 19
+  score higher (project score 93.2 -> 93.9; the largest changes are `l10n_ar` 51.1 -> 94.7, `event`
+  48.4 -> 75.9 and `l10n_fi` 85.8 -> 100.0), 184 modules of Odoo 17.0 scanned as 19.0 (88.2 -> 88.6), and
+  none on skw (96.5, 170 -> 157 findings, all removed ones `low` or `medium`). No score goes down. The
+  scoring formula and `score_schema_version` are unchanged.
 
 ### Fixed
 
