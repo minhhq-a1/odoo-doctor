@@ -36,6 +36,9 @@ def _line_has_comment(line: str) -> bool:
 # A comment that names sudo explains it even when a statement or two come between.
 _NOTE_WINDOW = 5
 _BOUNDARY = ("def ", "async def ", "class ", "@")
+# shortcut: any comment or docstring containing the word counts, whatever it says
+# (`# TODO remove sudo`, `# never use sudo here`), upgrade to a `sudo:` marker or a
+# reason check if such notes show up as false negatives.
 _SUDO_WORD = re.compile(r"\bsudo\b", re.IGNORECASE)
 # Calls that keep the environment of their receiver (and so its superuser mode).
 _KEEPS_ENV = {"with_context", "browse", "exists"}
@@ -110,7 +113,31 @@ def _self_rebinds_to_sudo(stmt: ast.stmt) -> bool:
         and stmt.value.func.attr == "sudo"
         and isinstance(stmt.value.func.value, ast.Name)
         and stmt.value.func.value.id == "self"
+        and not stmt.value.args  # `.sudo(False)` / `.sudo(user)` is not a bare elevation
+        and not stmt.value.keywords
     )
+
+
+def _later_rebinding(fn: ast.AST, after: int) -> int | None:
+    """First line past ``after`` where ``self`` is bound again, at any depth."""
+    lines = []
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(
+            node,
+            (ast.AugAssign, ast.AnnAssign, ast.NamedExpr, ast.For, ast.AsyncFor),
+        ):
+            targets = [node.target]
+        else:
+            continue
+        if node.lineno > after and any(
+            isinstance(n, ast.Name) and n.id == "self" and isinstance(n.ctx, ast.Store)
+            for t in targets
+            for n in ast.walk(t)
+        ):
+            lines.append(node.lineno)
+    return min(lines) if lines else None
 
 
 def _sudo_ranges(tree: ast.AST) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
@@ -127,7 +154,10 @@ def _sudo_ranges(tree: ast.AST) -> tuple[list[tuple[int, int]], list[tuple[int, 
             documented.append((fn.lineno, end))
         for stmt in fn.body:
             if _self_rebinds_to_sudo(stmt):
-                elevated.append((stmt.end_lineno or stmt.lineno, end))
+                start = stmt.end_lineno or stmt.lineno
+                # `self = self.with_user(5)` later ends the elevation
+                stop = _later_rebinding(fn, start)
+                elevated.append((start, stop - 1 if stop else end))
                 break
     return documented, elevated
 

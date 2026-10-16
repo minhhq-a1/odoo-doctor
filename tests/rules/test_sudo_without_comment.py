@@ -261,3 +261,30 @@ def test_a_note_naming_sudo_in_the_function_above_does_not_carry_over(tmp_path):
                 return self.sudo().name
         """
     assert _lines(tmp_path, src) == [7]
+
+
+def test_a_sudo_with_an_argument_does_not_elevate_the_rest_of_the_function(tmp_path):
+    src = """\
+        class M:
+            def f(self, user):
+                self = self.sudo(False)
+                return self.env["x"].sudo().search([])
+
+            def g(self, user):
+                self = self.sudo(user)
+                return self.env["x"].sudo().search([])
+        """
+    # 3 is `.sudo(False)` (drops rights); 7 and 8 are both reported
+    assert _lines(tmp_path, src) == [4, 7, 8]
+
+
+def test_rebinding_self_ends_the_elevation(tmp_path: Path):
+    src = """\
+        class M:
+            def f(self):
+                self = self.sudo()
+                a = self.env["x"].sudo().search([])
+                self = self.with_user(5)
+                return a, self.env["x"].sudo().search([])
+        """
+    assert _lines(tmp_path, src) == [3, 6]
