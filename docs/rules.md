@@ -1230,7 +1230,7 @@ Good:
 
 **Fix**: Add the missing key. Run `odoo-doctor fix` to apply it automatically.
 
-**Note**: Fixable via `odoo-doctor fix`. `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
+**Note**: Missing `version` and `data` are `medium` confidence (Odoo defaults both, and Odoo core omits them from many manifests), so they do not lower the score; `name`, `depends` and `license` stay `high`. Fixable via `odoo-doctor fix`, which adds only the absent high-confidence keys with a local edit and leaves everything else byte-identical. `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
 
 ### missing-external-dependency
 

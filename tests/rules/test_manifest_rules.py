@@ -200,3 +200,37 @@ def test_data_order_risk_security_only_silent(tmp_path: Path):
     graph = build_project_graph([tmp_path], odoo_version="17.0")
     ctx = graph.modules["sec_only"]
     assert check_data_order_risk(ctx) == []
+
+
+def test_version_and_data_are_medium_the_rest_high():
+    from odoo_doctor.rules.manifest.missing_required_fields import (
+        ODOO_DEFAULTED_FIELDS,
+        missing_fields_by_confidence,
+    )
+
+    assert ODOO_DEFAULTED_FIELDS == {"version", "data"}
+    high, medium = missing_fields_by_confidence({"depends": ["base"]})
+    assert high == ["name", "license"]
+    assert medium == ["version", "data"]
+
+
+def test_missing_required_fields_confidence_follows_the_field(tmp_path: Path):
+    from odoo_doctor.rules.manifest.missing_required_fields import (
+        check_missing_required_fields,
+    )
+
+    mod = tmp_path / "bare"
+    mod.mkdir()
+    (mod / "__manifest__.py").write_text("{}")
+    ctx = build_project_graph([tmp_path], odoo_version="17.0").modules["bare"]
+    by_field = {
+        d.title.rsplit(": ", 1)[-1].strip("'"): d.confidence
+        for d in check_missing_required_fields(ctx)
+    }
+    assert by_field == {
+        "name": "high",
+        "version": "medium",
+        "depends": "high",
+        "data": "medium",
+        "license": "high",
+    }

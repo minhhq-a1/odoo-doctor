@@ -1,0 +1,5 @@
+[
+  ["manifest-missing-required-fields", "no_data/__manifest__.py", "medium"],
+  ["manifest-missing-required-fields", "no_license/__manifest__.py", "high"],
+  ["manifest-missing-required-fields", "no_version/__manifest__.py", "medium"]
+]
