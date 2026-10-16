@@ -11,6 +11,9 @@ All notable changes to Odoo Doctor are documented here.
 ### Added
 
 - `scan --show-low` and `[surfaces.terminal]`: choose which findings the terminal lists.
+- `scripts/measure.py`: a maintainer tool (not shipped, not run in CI) that prints findings per rule and
+  confidence for named targets, stores snapshots and compares them (`--compare` exits 1 when a rule outside
+  the audit list gets noisier). See `CONTRIBUTING.md`.
 - `scan --html <file>`: a self-contained HTML report (score, module × category table, fixes
   ranked by score gain, a filterable findings list with low-confidence findings hidden by
   default, suppression counts and, with `--history`, a score trend). No server, no network
@@ -37,7 +40,8 @@ All notable changes to Odoo Doctor are documented here.
 ### Fixed
 
 - The confidence marker (`[low]`/`[medium]`) after a finding title in the terminal report was swallowed by
-  rich markup and never printed.
+  rich markup and never printed. Finding titles, messages, help text and URLs are now printed literally too
+  (a message containing `[/x]` made the terminal report raise `MarkupError`).
 
 ---
 
