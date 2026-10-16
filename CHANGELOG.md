@@ -6,6 +6,46 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+Precision audit. A finding is `high` only if its pattern does not fire on Odoo core 19, unless it is a
+true positive with evidence and a corpus case; patterns that core itself uses become `medium` (they are
+still listed, but do not lower the score). Measured on Odoo 19.0 at `20f5882e` (`scripts/measure.py`;
+Odoo 17.0 `02d3a1d8` scanned as 19.0 and the skw project for comparison); none of the 154 + 52 + 49 + 8
+core 19 hits of the four convention rules was a true positive, so their `high` count there is 0.
+
+- `manifest-missing-required-fields`: a missing `version` or `data` is `medium` (Odoo defaults both:
+  `1.0` and `[]`); `name`, `license` and `depends` stay `high`. Core 19: 154 `high` -> 0 `high`, 154
+  `medium`.
+- `manifest-data-order-risk`: `high` only when a security XML creates a group that an earlier data file
+  already resolves while loading (a menu or template `groups=`, a `ref` or `eval="ref(...)"` of the group;
+  Odoo raises for these). Everything else is `medium`, including a CSV after views and a group referenced
+  only from a view `arch` (Odoo only warns). Core 19: 52 `high` -> 0, 52 `medium`.
+- `duplicate-xml-id`: a later declaration that only sets fields the earlier ones did not set (the usual way
+  to patch a record) is no longer reported; setting a field again is `medium`; a different `model` for
+  the same id stays `high`. Core 19: 49 `high` -> 0 `high`, 8 `medium` (41 patches no longer reported).
+- `override-missing-super`: a method that only blocks the operation (`raise` and no `return`) is no longer
+  reported; calling its own name on records derived from `self`, or `create`/`write` on a model with
+  `_auto = False`, is `medium`. Core 19: 8 `high` -> 0 `high`, 3 `medium` (5 raise-only overrides no
+  longer reported).
+- `dynamic-method-dispatch`: no longer reports a name taken from a literal tuple, `fn.__name__`, a
+  `__getattr__` hook, or a helper that refuses ORM methods. skw: 8 -> 1 (the admin-editable
+  `related_action` name). Core 19: 4 `medium`, unchanged.
+- `sudo-without-comment`: no longer reports a `.sudo()` named by a comment within 5 lines above or by the
+  function docstring, nor `.sudo()` on a `self` after a bare `self = self.sudo()` (until `self` is
+  rebound). `low`; core 19: 2735 -> 2663, skw: 80 -> 74.
+- `missing-ondelete` (skw: 42) and `data-noupdate-risk` (skw: 11) were audited and are unchanged: every
+  hit is a true positive.
+- Manifest fixers only act on `high` findings and edit the manifest text locally (comments, quoting,
+  key order and the `medium` parts stay byte-identical; a second run changes nothing); they return
+  "not fixable" instead of guessing. `manifest-data-order-risk --fix` moves only the file that is
+  reported `high`, in front of its first consumer, instead of moving every security file to the top.
+- Scores: because findings moved from `high` to `medium`, 208 modules of core 19 score higher (project
+  score 93.2 -> 93.9; the largest changes are `l10n_ar` 51.1 -> 94.7, `event` 48.4 -> 75.9 and `l10n_fi`
+  85.8 -> 100.0), 184 modules of Odoo 17.0 scanned as 19.0 (88.2 -> 88.6), and none on skw (96.5, 170 ->
+  157 findings, all removed ones `low` or `medium`). No score goes down. The scoring formula and
+  `score_schema_version` are unchanged.
+
 ### Fixed
 
 - `compute-missing-depends` named a different undeclared field from one run to the next (the fields were
