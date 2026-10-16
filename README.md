@@ -190,6 +190,9 @@ categories = []
 [surfaces.ci_failure]
 min_confidence = "high"
 categories = []
+
+[surfaces.terminal]
+min_confidence = "medium"   # "low" shows everything
 ```
 
 ---
@@ -265,6 +268,7 @@ odoo-doctor scan . --baseline .odoo-doctor-baseline.json --fail-on warning
 
 ### CI/PR Surfaces
 
+- **`--show-low`**: The terminal hides low-confidence findings by default (`[surfaces.terminal]`) and prints how many it hid; `--show-low` lists them all. Only the terminal output changes; JSON, SARIF, HTML, `--fail-on` and scores do not.
 - **`--format github`**: Emits GitHub Actions annotations inline.
 - **`--score-delta <base-ref>`**: Opt-in PR score delta. It does a worktree-isolated second scan and needs git history (`fetch-depth: 0` in Actions).
 - **Sticky PR comment**: Posted/updated via `gh` when `--format github` runs in a PR with a valid `GH_TOKEN`. Idempotent via a hidden marker. Only `--format github` posts it; `--no-pr-comment` (or `pr-comment: false` on the Action) turns it off.

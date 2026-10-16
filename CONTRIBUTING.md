@@ -57,6 +57,25 @@ Please ensure your code passes both `ruff format --check src tests` and `ruff ch
 6. Add an effort (1 mechanical, 2 local code change, 3 restructuring) for the rule to `EFFORT_BY_RULE` in `src/odoo_doctor/core/roi.py`; a test fails otherwise.
 7. Import the rule module in `src/odoo_doctor/cli/app.py`; rules register by import, so a file that is not imported never runs.
 
+## Measuring precision
+
+`scripts/measure.py` is a maintainer tool: it runs `odoo-doctor scan --json` on named
+targets and prints findings per `source/rule` and confidence. It is run by hand, not in CI,
+because the scanned repositories live on the maintainer's machine (they are only read).
+
+```bash
+.venv/bin/python scripts/measure.py \
+    core19=/path/to/odoo-core/19.0/addons@19.0 \
+    core17as19=/path/to/odoo-core/17.0/addons@19.0 \
+    mine=/path/to/my/addons@19.0 --snapshot before.json
+```
+
+Targets are `LABEL=PATH[@ODOO_VERSION]`, or set `ODOO_DOCTOR_MEASURE_TARGETS`
+(space separated). `--rules a,b` only filters the printed tables; the snapshot always holds
+every rule. `--compare before.json` exits 1 on a regression (a noisier non-audit rule),
+prints `INCOMPARABLE` when commit, config or Odoo version differ, and prints
+`SCORE <target> <module>: old -> new` for every module whose score changed.
+
 ## Changing the Public Surface
 
 CLI flags, exit codes, JSON keys, rule IDs, config keys and `odoo_doctor.plugin_api` are

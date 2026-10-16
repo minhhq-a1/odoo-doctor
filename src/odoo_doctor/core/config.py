@@ -23,6 +23,13 @@ class SurfaceConfig:
     tiers: list[str] = field(default_factory=list)  # empty = every tier
 
 
+# The terminal lists medium/high findings by default; `scan --show-low` or
+# `[surfaces.terminal] min_confidence = "low"` brings the rest back. `load_config()`
+# returns a bare OdooDoctorConfig (empty `surfaces`) when no file exists, so callers
+# must use `cfg.surfaces.get("terminal", DEFAULT_TERMINAL_SURFACE)`.
+DEFAULT_TERMINAL_SURFACE = SurfaceConfig(min_confidence="medium")
+
+
 @dataclass
 class OdooDoctorConfig:
     """Parsed configuration from odoo-doctor.toml + CLI overrides."""
@@ -117,6 +124,7 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
         adapters[key] = bool(val)
 
     surfaces = {
+        "terminal": DEFAULT_TERMINAL_SURFACE,
         "pr_comment": SurfaceConfig(),
         # Default CI policy: only serious (P0/P1), high-confidence findings can
         # fail a build; style/advisory and low-confidence findings never do.

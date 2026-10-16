@@ -41,6 +41,8 @@ for humans (terminal tables, colours, wording) is **not** public; use `--json` o
 `scan --html <file>` writes a self-contained HTML report next to the normal output. The flag,
 and the exit code 3 below, are public; the content and layout of the file are not (like the
 terminal text), and neither are the keys of the data embedded in it. Read `--json` for data.
+`scan --show-low` lists the findings the terminal hides by default (`[surfaces.terminal]`) and
+changes nothing else: JSON, SARIF, HTML, `--fail-on` and scores are the same with or without it.
 
 `odoo-doctor lsp` (the language server) is experimental and not covered by this contract
 until it is listed here; it exits 3 when the optional `lsp` extra is not installed.
@@ -54,10 +56,9 @@ other commands follow the same convention where it applies:
 | any | `0` | success |
 | any | `2` | usage error raised by the argument parser itself (unknown flag, missing argument) |
 | `fix` | `3` | neither or both of `--fix` and `--fix-dry-run` |
-| `rules disable` / `enable` | `3` | unknown rule |
 | `rules docs` | `3` | `--format` is neither `markdown` nor `html` |
 | `rules docs --check` | `1` | the page on disk is out of date |
-| `rules` | `3` | unknown action, or `explain`/`disable`/`enable`/`new` without a rule name |
+| `rules` | `3` | unknown action, an unknown rule name for `explain`/`disable`/`enable`, or `explain`/`disable`/`enable`/`new` without a rule name |
 | `history show --max-drop N` | `2` | the newest score dropped by more than `N` points |
 | `history import` | `3` | invalid `--timestamp`, or no report could be imported |
 | `install` | `1` | the packaged skills are missing (reinstall the package) |
@@ -93,8 +94,9 @@ the XML equivalent) is public.
 `odoo-doctor.toml` sections and keys: `[odoo-doctor]` (`odoo_version`, `addons_paths`,
 `target_modules`, `odoo_source_path`, `min_score`, `capabilities`), `[plugins]`
 (`enabled`, `allow`), `[adapters]`, `[severity]`, `[ignore]` (`rules`, `files`,
-`modules`), `[category_weights]`, `[surfaces.pr_comment]` and `[surfaces.ci_failure]`
-(`min_confidence`, `categories`, `tiers`). Keys the tool does not know are currently
+`modules`), `[category_weights]`, `[surfaces.pr_comment]`, `[surfaces.ci_failure]` and
+`[surfaces.terminal]` (`min_confidence`, `categories`, `tiers`; the terminal hides
+`low` findings by default). Keys the tool does not know are currently
 ignored without a warning.
 
 ### Python

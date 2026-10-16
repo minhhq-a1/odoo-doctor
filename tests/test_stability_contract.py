@@ -109,6 +109,7 @@ FROZEN_CLI = {
         "--module",
         "--odoo-version",
         "--score-delta",
+        "--show-low",
         "--write-baseline",
     },
 }
@@ -265,6 +266,7 @@ def test_exit_codes_of_the_other_commands(tmp_path: Path):
         (["rules", "disable", "no-such-rule", "--path", str(tmp_path)], 3),
         (["rules", "docs", "--format", "pdf"], 3),
         (["rules", "bogus-action"], 3),
+        (["rules", "explain", "no-such-rule"], 3),
         (
             ["history", "import", str(tmp_path / "h.jsonl"), str(empty_report)],
             3,
@@ -386,6 +388,9 @@ Security = 2.0
 min_confidence = "medium"
 categories = ["Security"]
 tiers = ["P0"]
+
+[surfaces.terminal]
+min_confidence = "high"
 """
     )
     cfg = load_config(tmp_path)
@@ -408,6 +413,15 @@ tiers = ["P0"]
         ["Security"],
         ["P0"],
     )
+    assert cfg.surfaces["terminal"].min_confidence == "high"
+
+
+def test_terminal_surface_default_is_medium(tmp_path):
+    from odoo_doctor.core.config import DEFAULT_TERMINAL_SURFACE, _build_config
+
+    assert load_config(tmp_path).surfaces.get("terminal") is None
+    assert DEFAULT_TERMINAL_SURFACE.min_confidence == "medium"
+    assert _build_config({}).surfaces["terminal"].min_confidence == "medium"
 
 
 def test_plugin_api_surface_is_stable():
