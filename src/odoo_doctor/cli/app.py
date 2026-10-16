@@ -8,7 +8,12 @@ from pathlib import Path
 
 import typer
 
-from odoo_doctor.core.config import OdooDoctorConfig, SurfaceConfig, load_config
+from odoo_doctor.core.config import (
+    DEFAULT_TERMINAL_SURFACE,
+    OdooDoctorConfig,
+    SurfaceConfig,
+    load_config,
+)
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
@@ -163,6 +168,11 @@ def scan(
         None,
         "--html",
         help="Write a self-contained HTML report to this file (also with --diff/--module)",
+    ),
+    show_low: bool = typer.Option(
+        False,
+        "--show-low",
+        help="Terminal output: also list findings hidden by [surfaces.terminal] (low confidence by default)",
     ),
 ) -> None:
     """Scan Odoo addons and report health score."""
@@ -333,7 +343,9 @@ def scan(
 
         typer.echo(render_sarif(diags, config_root))
     else:
-        typer.echo(render_terminal(diags, scores))
+        terminal_cfg = cfg.surfaces.get("terminal", DEFAULT_TERMINAL_SURFACE)
+        shown = diags if show_low else filter_for_surface(diags, terminal_cfg)
+        typer.echo(render_terminal(shown, scores, hidden=len(diags) - len(shown)))
 
     # Fail on severity
     if fail_on:

@@ -109,6 +109,7 @@ FROZEN_CLI = {
         "--module",
         "--odoo-version",
         "--score-delta",
+        "--show-low",
         "--write-baseline",
     },
 }
@@ -386,6 +387,9 @@ Security = 2.0
 min_confidence = "medium"
 categories = ["Security"]
 tiers = ["P0"]
+
+[surfaces.terminal]
+min_confidence = "high"
 """
     )
     cfg = load_config(tmp_path)
@@ -408,6 +412,15 @@ tiers = ["P0"]
         ["Security"],
         ["P0"],
     )
+    assert cfg.surfaces["terminal"].min_confidence == "high"
+
+
+def test_terminal_surface_default_is_medium(tmp_path):
+    from odoo_doctor.core.config import DEFAULT_TERMINAL_SURFACE, _build_config
+
+    assert load_config(tmp_path).surfaces.get("terminal") is None
+    assert DEFAULT_TERMINAL_SURFACE.min_confidence == "medium"
+    assert _build_config({}).surfaces["terminal"].min_confidence == "medium"
 
 
 def test_plugin_api_surface_is_stable():

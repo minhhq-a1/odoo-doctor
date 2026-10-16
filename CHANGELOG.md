@@ -8,6 +8,7 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Added
 
+- `scan --show-low` and `[surfaces.terminal]`: choose which findings the terminal lists.
 - `scan --html <file>`: a self-contained HTML report (score, module × category table, fixes
   ranked by score gain, a filterable findings list with low-confidence findings hidden by
   default, suppression counts and, with `--history`, a score trend). No server, no network
@@ -18,12 +19,19 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Changed
 
+- Terminal output hides low-confidence findings by default and prints how many were hidden (JSON, SARIF,
+  HTML, `--fail-on` and scores are unchanged); `--show-low` lists them all.
 - `scan --score-delta` prints its `Score Delta:` line after the file artifacts (`--history`,
   `--badge`, `--html`) are written instead of before; the order relative to the report is the same.
 - Documentation brought up to date: the README rule table lists all 55 rules, `docs/performance.md`
   is re-measured for 0.9.3 on Odoo 19.0 (55 rules; the old run used 40), the contributor guides
   (`AGENTS.md`, `CONTRIBUTING.md`) describe the golden corpus, the `EFFORT_BY_RULE` entry and the
   current layout, and `docs/lsp.md` no longer says there is no `--version` flag.
+
+### Fixed
+
+- The confidence marker (`[low]`/`[medium]`) after a finding title in the terminal report was swallowed by
+  rich markup and never printed.
 
 ---
 

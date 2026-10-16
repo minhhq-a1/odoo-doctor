@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import re
+
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.scoring import CategoryScore, ScoreResult
 from odoo_doctor.reporters.terminal import render_terminal
@@ -110,3 +112,49 @@ def test_render_terminal_shows_one_decimal_score():
     score = ScoreResult(99.5, "Excellent", [], [], 0)
     output = render_terminal([], {"m": score})
     assert "99.5" in output
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI and collapse whitespace so rich's line wrapping does not matter."""
+    return " ".join(re.sub(r"\x1b\[[0-9;]*m", "", text).split())
+
+
+def _single_score() -> dict:
+    return {
+        "sale_custom": ScoreResult(
+            overall=75.0,
+            label="Good",
+            categories=[CategoryScore("Security", 75, 1, 25.0)],
+            in_scope_categories=["Security"],
+            diagnostics_counted=1,
+        )
+    }
+
+
+def test_confidence_marker_is_printed_literally():
+    out = _plain(render_terminal([_diag(confidence="low")], _single_score()))
+    assert "SQL injection [low]" in out
+    out = _plain(render_terminal([_diag(confidence="medium")], _single_score()))
+    assert "SQL injection [medium]" in out
+
+
+def test_footer_appears_only_when_something_is_hidden():
+    out = _plain(render_terminal([_diag()], _single_score()))
+    assert "hidden by" not in out
+    out = _plain(render_terminal([_diag()], _single_score(), hidden=3))
+    assert (
+        "3 finding(s) hidden by [surfaces.terminal] (low confidence by default). "
+        "Show all with --show-low." in out
+    )
+
+
+def test_everything_hidden_still_shows_scores_and_the_footer():
+    out = _plain(render_terminal([], _single_score(), hidden=2))
+    assert "sale_custom Score: 75.0/100" in out
+    assert "Security" in out and "Findings for" not in out
+    assert "2 finding(s) hidden by [surfaces.terminal]" in out
+
+
+def test_all_clean_only_when_there_is_truly_nothing():
+    assert "All clean" in render_terminal([], {})
+    assert "All clean" not in render_terminal([], {}, hidden=1)

@@ -12,7 +12,8 @@ odoo-doctor scan . --history history.jsonl --html report.html   # adds the score
 The file holds the score, a module × category table, the fixes ranked by score gain, a
 filterable list of findings (low-confidence findings are hidden until you switch them on),
 suppression counts and, with `--history`, a score trend. A partial scan (`--diff`, `--module`)
-or a baseline is announced at the top of the page.
+or a baseline is announced at the top of the page. The page does not read `[surfaces.terminal]`;
+that setting only affects the terminal output.
 
 Notes:
 

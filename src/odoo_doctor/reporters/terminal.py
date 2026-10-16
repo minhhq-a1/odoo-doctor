@@ -7,6 +7,7 @@ from io import StringIO
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from odoo_doctor.core.scoring import score_label
@@ -44,12 +45,13 @@ def _noise_hint(scores: dict[str, ScoreResult]) -> str:
 def render_terminal(
     diagnostics: list[Diagnostic],
     scores: dict[str, ScoreResult],
+    hidden: int = 0,
 ) -> str:
     """Render diagnostics and scores to a string for terminal output."""
     buf = StringIO()
     console = Console(file=buf, force_terminal=True, width=120)
 
-    if not diagnostics and not scores:
+    if not diagnostics and not scores and not hidden:
         console.print("[green]No diagnostics found. All clean![/green]")
         return buf.getvalue()
 
@@ -93,7 +95,7 @@ def render_terminal(
         sorted_diags = sorted(diags, key=lambda d: (d.tier, d.file_path, d.line))
         for d in sorted_diags:
             sev_color = "red" if d.severity == "error" else "yellow"
-            conf_mark = "" if d.confidence == "high" else f" [{d.confidence}]"
+            conf_mark = "" if d.confidence == "high" else escape(f" [{d.confidence}]")
             console.print(
                 f"  [{sev_color}]{d.tier}[/{sev_color}] "
                 f"{d.file_path}:{d.line} "
@@ -127,5 +129,13 @@ def render_terminal(
     hint = _noise_hint(scores)
     if hint:
         console.print(hint, highlight=False)  # keep rich from styling the digits
+
+    if hidden:
+        console.print(
+            f"\n{hidden} finding(s) hidden by [surfaces.terminal] "
+            "(low confidence by default). Show all with --show-low.",
+            markup=False,
+            highlight=False,
+        )
 
     return buf.getvalue()
