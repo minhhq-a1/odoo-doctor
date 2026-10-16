@@ -108,20 +108,6 @@ def fix_missing_required_field(diag: Diagnostic, text: str) -> str | None:
     return _insert_entries(text, [(k, _FIELD_DEFAULTS[k]) for k in addable])
 
 
-def _format_manifest(data: dict) -> str:
-    """Emit a dict as a readable manifest literal, one key per line.
-
-    Note: this normalizes the dict body (quotes/spacing). The leading comment
-    block (coding header, license banner) is preserved by the caller via
-    _leading_comment_block; inline comments inside the dict are not preserved.
-    """
-    lines = ["{"]
-    for key, value in data.items():
-        lines.append(f"    {key!r}: {value!r},")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
-
-
 default_fixers.register("manifest-missing-required-fields", fix_missing_required_field)
 
 

@@ -82,10 +82,14 @@ def _load_time_group_refs(root: ET.Element, module_name: str) -> set[str]:
 
     Sources, odoo/tools/convert.py (17.0 / 19.0): `<menuitem groups=...>` goes through
     `id_get` (325-334 / 318-327); `<field ref=...>` through `id_get` (432 / 426) and
-    `ref('...')` in `eval` through the same `id_get` (234 / 229), both raising unless
-    `forcecreate="False"`; `<template groups=...>` becomes `ref('...')` in an eval
+    `ref('...')` in `eval` through the same `id_get` (`ref` is bound to `self.id_get` in
+    `_get_eval_context`, 66 / 52); `<template groups=...>` becomes `ref('...')` in an eval
     (532-535 / 528-530). A group named in a view arch `groups=` is NOT here: Odoo only
     logs a warning (ir_ui_view.py 2923-2926 / 3463-3466).
+
+    Not handled: a `<field ref=...>` under a record with `forcecreate="False"` does not
+    raise in Odoo (convert.py 19.0:426), but is still collected here, so such a record
+    would be reported `high` (rare).
     """
     refs: set[str] = set()
     for tag in ("menuitem", "template"):

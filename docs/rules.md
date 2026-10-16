@@ -1194,7 +1194,7 @@ groups = self.env['sale.order']._read_group(
 
 **Fix**: List the security file that creates the group before the first file that uses it.
 
-**Note**: Every other case is advisory (medium confidence, no score impact, not auto-fixed): `ir.model.access.csv` and security files that only update a group which already exists, or that define groups no earlier file needs. Fixable via `odoo-doctor fix` for the high case: the file is moved in front of the first file that needs it, with a local edit of the `data` lines. The fixer declines when the list is not one element per line or when it cannot show the new position keeps what the file depends on loaded before it.
+**Note**: Every other case is advisory (medium confidence, no score impact, not auto-fixed): `ir.model.access.csv` and security files that only update a group which already exists, or that define groups no earlier file needs. Fixable via `odoo-doctor fix` for the high case: the file is moved in front of the first file that needs it, with a local edit of the `data` lines (line endings are normalised to LF by `fix`). The fixer declines when the list is not one element per line or when it cannot show the new position keeps what the file depends on loaded before it.
 
 Bad:
 
@@ -1234,7 +1234,7 @@ Good:
 
 **Fix**: Add the missing key. Run `odoo-doctor fix` to apply it automatically.
 
-**Note**: Missing `version` and `data` are `medium` confidence (Odoo defaults both, and Odoo core omits them from many manifests), so they do not lower the score; `name`, `depends` and `license` stay `high`. Fixable via `odoo-doctor fix`, which adds only the absent high-confidence keys with a local edit and leaves everything else byte-identical. `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
+**Note**: Missing `version` and `data` are `medium` confidence (Odoo defaults both, and Odoo core omits them from many manifests), so they do not lower the score; `name`, `depends` and `license` stay `high`. Fixable via `odoo-doctor fix`, which adds only the absent high-confidence keys with a local edit and leaves every other line identical (line endings are normalised to LF by `fix`). `installable` is not required (Odoo defaults it to `True`), and `data` is not required when the manifest declares `assets` or `demo`.
 
 ### missing-external-dependency
 

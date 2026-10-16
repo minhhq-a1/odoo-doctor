@@ -395,7 +395,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "defaults both, and Odoo core omits them from many manifests), so they "
         "do not lower the score; `name`, `depends` and `license` stay `high`. "
         "Fixable via `odoo-doctor fix`, which adds only the absent high-confidence "
-        "keys with a local edit and leaves everything else byte-identical. "
+        "keys with a local edit and leaves every other line identical (line endings "
+        "are normalised to LF by `fix`). "
         "`installable` is not required (Odoo defaults it to `True`), and `data` "
         "is not required when the manifest declares `assets` or `demo`.",
     ),
@@ -420,9 +421,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "auto-fixed): `ir.model.access.csv` and security files that only update a group "
         "which already exists, or that define groups no earlier file needs. Fixable via "
         "`odoo-doctor fix` for the high case: the file is moved in front of the first "
-        "file that needs it, with a local edit of the `data` lines. The fixer declines "
-        "when the list is not one element per line or when it cannot show the new "
-        "position keeps what the file depends on loaded before it.",
+        "file that needs it, with a local edit of the `data` lines (line endings are "
+        "normalised to LF by `fix`). The fixer declines when the list is not one "
+        "element per line or when it cannot show the new position keeps what the "
+        "file depends on loaded before it.",
     ),
     "manifest-missing-dependency": RuleDoc(
         detects="Modules required by Python `_inherit` models, XML external ID "
