@@ -1,0 +1,3 @@
+<odoo>
+    <menuitem id="menu_x" name="X" groups="base.group_user"/>
+</odoo>

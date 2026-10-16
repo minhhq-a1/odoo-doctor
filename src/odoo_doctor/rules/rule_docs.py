@@ -374,19 +374,29 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "is not required when the manifest declares `assets` or `demo`.",
     ),
     "manifest-data-order-risk": RuleDoc(
-        detects="`data` files in the manifest listed in an unsafe load order "
-        "(for example a security file after views/actions).",
-        why="Wrong order causes missing references or access rights at load time.",
-        fix="Order data files by dependency: security first, then views, then data.",
+        detects="A security file listed in `data` after a view/action file. It is "
+        "reported with high confidence only when that security XML creates a group "
+        "which an earlier file already needs when it loads (a `<menuitem groups=...>`, "
+        "a `<template groups=...>`, or a `groups_id` / `group_ids` / `groups` field "
+        'with `ref` or `eval="ref(...)"`).',
+        why="Odoo resolves those references while the earlier file loads and raises "
+        "if the group does not exist yet, so the module cannot be installed. A group "
+        "named only in a view arch (`groups=` on a field or button) just logs a "
+        "warning.",
+        fix="List the security file that creates the group before the first file that "
+        "uses it.",
         bad="'data': [\n"
-        "    'views/my_views.xml',\n"
-        "    'security/ir.model.access.csv',\n"
+        "    'views/menus.xml',      # <menuitem groups=\"my_mod.group_x\"/>\n"
+        "    'security/groups.xml',  # creates group_x\n"
         "]",
-        good="'data': [\n"
-        "    'security/ir.model.access.csv',\n"
-        "    'views/my_views.xml',\n"
-        "]",
-        notes="Fixable via `odoo-doctor fix`.",
+        good="'data': [\n    'security/groups.xml',\n    'views/menus.xml',\n]",
+        notes="Every other case is advisory (medium confidence, no score impact, not "
+        "auto-fixed): `ir.model.access.csv` and security files that only update a group "
+        "which already exists, or that define groups no earlier file needs. Fixable via "
+        "`odoo-doctor fix` for the high case: the file is moved in front of the first "
+        "file that needs it, with a local edit of the `data` lines. The fixer declines "
+        "when the list is not one element per line or when it cannot show the new "
+        "position keeps what the file depends on loaded before it.",
     ),
     "manifest-missing-dependency": RuleDoc(
         detects="Modules required by Python `_inherit` models, XML external ID "

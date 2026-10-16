@@ -1184,20 +1184,20 @@ groups = self.env['sale.order']._read_group(
 
 **Tier**: P2 (moderate) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0 · **Fixable**: yes
 
-**Detects**: `data` files in the manifest listed in an unsafe load order (for example a security file after views/actions).
+**Detects**: A security file listed in `data` after a view/action file. It is reported with high confidence only when that security XML creates a group which an earlier file already needs when it loads (a `<menuitem groups=...>`, a `<template groups=...>`, or a `groups_id` / `group_ids` / `groups` field with `ref` or `eval="ref(...)"`).
 
-**Why**: Wrong order causes missing references or access rights at load time.
+**Why**: Odoo resolves those references while the earlier file loads and raises if the group does not exist yet, so the module cannot be installed. A group named only in a view arch (`groups=` on a field or button) just logs a warning.
 
-**Fix**: Order data files by dependency: security first, then views, then data.
+**Fix**: List the security file that creates the group before the first file that uses it.
 
-**Note**: Fixable via `odoo-doctor fix`.
+**Note**: Every other case is advisory (medium confidence, no score impact, not auto-fixed): `ir.model.access.csv` and security files that only update a group which already exists, or that define groups no earlier file needs. Fixable via `odoo-doctor fix` for the high case: the file is moved in front of the first file that needs it, with a local edit of the `data` lines. The fixer declines when the list is not one element per line or when it cannot show the new position keeps what the file depends on loaded before it.
 
 Bad:
 
 ```python
 'data': [
-    'views/my_views.xml',
-    'security/ir.model.access.csv',
+    'views/menus.xml',      # <menuitem groups="my_mod.group_x"/>
+    'security/groups.xml',  # creates group_x
 ]
 ```
 
@@ -1205,8 +1205,8 @@ Good:
 
 ```python
 'data': [
-    'security/ir.model.access.csv',
-    'views/my_views.xml',
+    'security/groups.xml',
+    'views/menus.xml',
 ]
 ```
 

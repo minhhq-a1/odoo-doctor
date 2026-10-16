@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import ast
+import re
 import tokenize
 from io import StringIO
+from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.fixer import default_fixers
-from odoo_doctor.rules.manifest.data_order_risk import _is_security_file
+from odoo_doctor.rules.manifest.data_order_risk import safe_placement
 from odoo_doctor.rules.manifest.missing_required_fields import (
     missing_fields_by_confidence,
 )
@@ -123,30 +125,78 @@ def _format_manifest(data: dict) -> str:
 default_fixers.register("manifest-missing-required-fields", fix_missing_required_field)
 
 
-def fix_data_order_risk(diag: Diagnostic, text: str) -> str | None:
+def _data_list_blocks(text: str) -> tuple[list[str], list[str], int] | None:
+    """(file names, one text block per element, index of the first element's line).
+
+    None unless the `data` list has exactly one element per line, with nothing between
+    the elements but each element's own trailing comma and `#` comment.
+    """
     try:
-        data = ast.literal_eval(text)
-    except (ValueError, SyntaxError):
+        node = ast.parse(text, mode="eval").body
+    except SyntaxError:
         return None
-    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+    if not isinstance(node, ast.Dict):
         return None
-
-    files = data["data"]
-    if not all(isinstance(f, str) for f in files):
+    value = next(
+        (
+            v
+            for k, v in zip(node.keys, node.values)
+            if isinstance(k, ast.Constant) and k.value == "data"
+        ),
+        None,
+    )
+    if not isinstance(value, ast.List) or not value.elts:
         return None
+    elts = value.elts
+    if not all(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in elts):
+        return None
+    lines = text.splitlines(keepends=True)
+    blocks: list[str] = []
+    for i, e in enumerate(elts):
+        if e.end_lineno != e.lineno or (i and e.lineno != elts[i - 1].lineno + 1):
+            return None
+        raw = lines[e.lineno - 1].encode("utf-8")
+        before = raw[: e.col_offset].decode("utf-8")
+        after = raw[e.end_col_offset :].decode("utf-8")  # type: ignore[index]
+        if before.strip() or not re.fullmatch(r"\s*,\s*(#.*)?", after, re.DOTALL):
+            return None
+        blocks.append(lines[e.lineno - 1])
+    return [e.value for e in elts], blocks, elts[0].lineno - 1  # type: ignore[attr-defined]
 
-    # Stable partition: security files first (original order), then everything
-    # else (original order). Non-security/non-view files keep their slot in the
-    # 'rest' bucket.
-    security = [f for f in files if _is_security_file(f)]
-    rest = [f for f in files if not _is_security_file(f)]
-    reordered = security + rest
 
-    if reordered == files:
-        return text  # already correct -> idempotent no-op
+def fix_data_order_risk(diag: Diagnostic, text: str) -> str | None:
+    """Move each `high` security file in front of the first file that needs its group.
 
-    data["data"] = reordered
-    return _format_manifest(data)
+    A local edit of the `data` lines (comments and every other byte stay); `None` when
+    the list is not one element per line or the new position cannot be shown safe.
+    """
+    module_dir = Path(diag.file_path).parent
+    parsed = _data_list_blocks(text)
+    if parsed is None:
+        return None
+    files, blocks, first_line = parsed
+    if len(set(files)) != len(files):
+        return None
+    placement = safe_placement(module_dir, module_dir.name, files)
+    if placement is None:
+        return None
+    if not placement:
+        return text  # nothing is high -> idempotent no-op
+    moved = {files.index(f) for f in placement}
+    targets = {files.index(f): t for f, t in placement.items()}
+    if any(t in moved for t in targets.values()):
+        return None  # chained moves: not shown to be safe
+    order: list[int] = []
+    for i in range(len(files)):
+        if i in moved:
+            continue
+        order += [m for m in sorted(moved) if targets[m] == i]
+        order.append(i)
+    if order == list(range(len(files))):
+        return text
+    lines = text.splitlines(keepends=True)
+    lines[first_line : first_line + len(blocks)] = [blocks[i] for i in order]
+    return "".join(lines)
 
 
 default_fixers.register("manifest-data-order-risk", fix_data_order_risk)

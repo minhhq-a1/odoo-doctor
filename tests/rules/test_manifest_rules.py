@@ -159,6 +159,9 @@ def test_data_order_risk_catches(tmp_path: Path):
     assert len(diags) == 1
     assert diags[0].rule == "manifest-data-order-risk"
     assert diags[0].severity == "error"
+    assert (
+        diags[0].confidence == "medium"
+    )  # no earlier file is shown to need a later group
     assert "security/ir.model.access.csv" in diags[0].message
     assert "views/v.xml" in diags[0].message
 

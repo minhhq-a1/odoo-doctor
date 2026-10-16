@@ -82,10 +82,10 @@ def test_returns_none_on_unparseable_manifest():
     assert fix_missing_required_field(_diag(), "{'name': ") is None
 
 
-def _order_diag() -> Diagnostic:
+def _order_diag_at(path) -> Diagnostic:
     return Diagnostic(
         module="m",
-        file_path="m/__manifest__.py",
+        file_path=str(path),
         line=1,
         column=0,
         rule="manifest-data-order-risk",
@@ -101,18 +101,126 @@ def _order_diag() -> Diagnostic:
     )
 
 
-def test_reorders_security_before_views():
-    src = "{'name': 'M', 'data': ['views/my_view.xml', 'security/ir.model.access.csv']}"
-    out = fix_data_order_risk(_order_diag(), src)
-    data = ast.literal_eval(out)["data"]
-    assert data.index("security/ir.model.access.csv") < data.index("views/my_view.xml")
+ORDERED = (
+    "# header\n"
+    "{\n"
+    "    'name': 'M',  # keep\n"
+    "    'depends': ['base'],\n"
+    "    'data': [\n"
+    "        'views/v.xml',  # views first\n"
+    "        'security/groups.xml',\n"
+    "        'security/ir.model.access.csv',  # medium: stays where it is\n"
+    "    ],\n"
+    "}\n"
+)
 
 
-def test_data_order_idempotent_when_already_correct():
-    src = "{'name': 'M', 'data': ['security/ir.model.access.csv', 'views/my_view.xml']}"
-    out = fix_data_order_risk(_order_diag(), src)
-    data = ast.literal_eval(out)["data"]
-    assert data == ["security/ir.model.access.csv", "views/my_view.xml"]
+def _make_module(root):
+    (root / "views").mkdir()
+    (root / "security").mkdir()
+    (root / "views" / "v.xml").write_text(
+        '<odoo><menuitem id="menu_x" name="X" groups="m.group_x"/></odoo>'
+    )
+    (root / "security" / "groups.xml").write_text(
+        '<odoo><record id="group_x" model="res.groups"/></odoo>'
+    )
+    (root / "security" / "ir.model.access.csv").write_text("id,name\n")
+
+
+def _make_categorised_module(root):
+    for d in ("data", "views", "security"):
+        (root / d).mkdir()
+    (root / "data" / "category.xml").write_text(
+        '<odoo><record id="cat_x" model="ir.module.category"/></odoo>'
+    )
+    (root / "views" / "menu.xml").write_text(
+        '<odoo><menuitem id="menu_x" name="X" groups="m.group_x"/></odoo>'
+    )
+    (root / "security" / "groups.xml").write_text(
+        '<odoo><record id="group_x" model="res.groups">'
+        '<field name="category_id" ref="cat_x"/></record></odoo>'
+    )
+
+
+def test_order_fixer_moves_only_the_high_file_and_keeps_every_other_byte(tmp_path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    _make_module(mod)
+    diag = _order_diag_at(mod / "__manifest__.py")
+    out = fix_data_order_risk(diag, ORDERED)
+    assert out == (
+        "# header\n"
+        "{\n"
+        "    'name': 'M',  # keep\n"
+        "    'depends': ['base'],\n"
+        "    'data': [\n"
+        "        'security/groups.xml',\n"
+        "        'views/v.xml',  # views first\n"
+        "        'security/ir.model.access.csv',  # medium: stays where it is\n"
+        "    ],\n"
+        "}\n"
+    )
+    assert fix_data_order_risk(diag, out) == out  # idempotent
+
+
+def test_order_fixer_puts_the_file_before_its_consumer_not_at_the_top(tmp_path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    _make_categorised_module(mod)
+    src = (
+        "{\n    'data': [\n        'data/category.xml',\n        'views/menu.xml',\n"
+        "        'security/groups.xml',\n    ],\n}\n"
+    )
+    out = fix_data_order_risk(_order_diag_at(mod / "__manifest__.py"), src)
+    assert ast.literal_eval(out)["data"] == [
+        "data/category.xml",
+        "security/groups.xml",
+        "views/menu.xml",
+    ]
+
+
+def test_order_fixer_declines_when_it_cannot_show_the_new_position_is_safe(tmp_path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    _make_categorised_module(mod)
+    # the category is created AFTER the menu: moving groups.xml in front of the
+    # menu would put it before its own category
+    src = (
+        "{\n    'data': [\n        'views/menu.xml',\n        'data/category.xml',\n"
+        "        'security/groups.xml',\n    ],\n}\n"
+    )
+    assert fix_data_order_risk(_order_diag_at(mod / "__manifest__.py"), src) is None
+
+
+def test_order_fixer_declines_when_the_list_is_not_one_element_per_line(tmp_path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    _make_module(mod)
+    src = "{'name': 'M', 'data': ['views/v.xml', 'security/groups.xml']}"
+    assert fix_data_order_risk(_order_diag_at(mod / "__manifest__.py"), src) is None
+
+
+def test_order_fixer_declines_when_a_comment_line_sits_between_elements(tmp_path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    _make_module(mod)
+    src = (
+        "{\n    'data': [\n        'views/v.xml',\n        # note\n"
+        "        'security/groups.xml',\n    ],\n}\n"
+    )
+    assert fix_data_order_risk(_order_diag_at(mod / "__manifest__.py"), src) is None
+
+
+def test_order_fixer_leaves_a_medium_only_manifest_untouched(tmp_path):
+    mod = tmp_path / "m"
+    mod.mkdir()
+    _make_module(mod)
+    (mod / "views" / "v.xml").write_text(
+        '<odoo><menuitem id="menu_x" name="X"/></odoo>'
+    )
+    assert (
+        fix_data_order_risk(_order_diag_at(mod / "__manifest__.py"), ORDERED) == ORDERED
+    )
 
 
 COMMENTED = (

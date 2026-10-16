@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read
+access_x,x,base.model_res_partner,base.group_user,1

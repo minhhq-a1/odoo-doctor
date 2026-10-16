@@ -1,0 +1,3 @@
+<odoo>
+    <record id="group_x" model="res.groups"/>
+</odoo>
