@@ -143,8 +143,7 @@ def test_footer_appears_only_when_something_is_hidden():
     assert "hidden by" not in out
     out = _plain(render_terminal([_diag()], _single_score(), hidden=3))
     assert (
-        "3 finding(s) hidden by [surfaces.terminal] (low confidence by default). "
-        "Show all with --show-low." in out
+        "3 finding(s) hidden by [surfaces.terminal]. Show all with --show-low." in out
     )
 
 
@@ -158,3 +157,19 @@ def test_everything_hidden_still_shows_scores_and_the_footer():
 def test_all_clean_only_when_there_is_truly_nothing():
     assert "All clean" in render_terminal([], {})
     assert "All clean" not in render_terminal([], {}, hidden=1)
+
+
+def test_text_that_looks_like_rich_markup_is_printed_literally():
+    d = _diag(
+        title="Odd [/x] title",
+        message="closing tag [/bold] and [red]colour[/red] in message",
+        help="see [/dim] here",
+        url="https://example.com/[/x]",
+        file_path="addons/[/m]/a.py",
+    )
+    out = _plain(render_terminal([d], _single_score()))
+    assert "Odd [/x] title" in out
+    assert "closing tag [/bold] and [red]colour[/red] in message" in out
+    assert "see [/dim] here" in out
+    assert "https://example.com/[/x]" in out
+    assert "addons/[/m]/a.py" in out

@@ -98,13 +98,13 @@ def render_terminal(
             conf_mark = "" if d.confidence == "high" else escape(f" [{d.confidence}]")
             console.print(
                 f"  [{sev_color}]{d.tier}[/{sev_color}] "
-                f"{d.file_path}:{d.line} "
-                f"[bold]{d.title}[/bold]{conf_mark}"
+                f"{escape(d.file_path)}:{d.line} "
+                f"[bold]{escape(d.title)}[/bold]{conf_mark}"
             )
-            console.print(f"      {d.message}")
-            console.print(f"      [dim]{d.help}[/dim]")
+            console.print(f"      {escape(d.message)}")
+            console.print(f"      [dim]{escape(d.help)}[/dim]")
             if d.url:
-                console.print(f"      [dim]docs: {d.url}[/dim]")
+                console.print(f"      [dim]docs: {escape(d.url)}[/dim]")
 
     # Top findings across project (multi-module only)
     if len(scores) > 1 and diagnostics:
@@ -114,8 +114,8 @@ def render_terminal(
             sev_color = "red" if d.severity == "error" else "yellow"
             console.print(
                 f"  [{sev_color}]{d.tier}[/{sev_color}] "
-                f"[dim]{d.module}[/dim] {d.file_path}:{d.line} "
-                f"[bold]{d.title}[/bold]"
+                f"[dim]{escape(d.module)}[/dim] {escape(d.file_path)}:{d.line} "
+                f"[bold]{escape(d.title)}[/bold]"
             )
 
     if len(scores) > 1:
@@ -132,8 +132,8 @@ def render_terminal(
 
     if hidden:
         console.print(
-            f"\n{hidden} finding(s) hidden by [surfaces.terminal] "
-            "(low confidence by default). Show all with --show-low.",
+            f"\n{hidden} finding(s) hidden by [surfaces.terminal]. "
+            "Show all with --show-low.",
             markup=False,
             highlight=False,
         )
