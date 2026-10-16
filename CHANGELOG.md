@@ -19,6 +19,10 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Changed
 
+- `rules explain <unknown rule>` now exits 3 with `[ERROR] Unknown rule: <name>` on stderr (it
+  exited 0 and printed to stdout).
+- CI runs the tests on Python 3.13 as well; `docs/support.md` lists the version-gates of the
+  Odoo 18/19 migration rules.
 - Terminal output hides low-confidence findings by default and prints how many were hidden (JSON, SARIF,
   HTML, `--fail-on` and scores are unchanged); `--show-low` lists them all.
 - `scan --score-delta` prints its `Score Delta:` line after the file artifacts (`--history`,

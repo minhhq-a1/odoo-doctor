@@ -266,6 +266,7 @@ def test_exit_codes_of_the_other_commands(tmp_path: Path):
         (["rules", "disable", "no-such-rule", "--path", str(tmp_path)], 3),
         (["rules", "docs", "--format", "pdf"], 3),
         (["rules", "bogus-action"], 3),
+        (["rules", "explain", "no-such-rule"], 3),
         (
             ["history", "import", str(tmp_path / "h.jsonl"), str(empty_report)],
             3,

@@ -564,7 +564,8 @@ def rules_cmd(
             meta, _ = default_registry.get(rule_name)
             typer.echo(render_rule_text(meta))
         else:
-            typer.echo(f"Unknown rule: {rule_name}")
+            typer.echo(f"[ERROR] Unknown rule: {rule_name}", err=True)
+            raise typer.Exit(code=3)
     elif action in ("disable", "enable") and rule_name:
         if rule_name not in default_registry:
             typer.echo(f"[ERROR] Unknown rule: {rule_name}", err=True)

@@ -75,3 +75,26 @@ def test_docs_rejects_bad_format():
 
 def test_unknown_action_exits_3():
     assert runner.invoke(app, ["rules", "frobnicate"]).exit_code == 3
+
+
+def test_explain_unknown_rule_exits_3_with_the_error_on_stderr():
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from odoo_doctor.cli.app import app; app()",
+            "rules",
+            "explain",
+            "no-such-rule",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 3
+    assert done.stdout == ""
+    assert "[ERROR] Unknown rule: no-such-rule" in done.stderr

@@ -26,3 +26,10 @@ def test_language_server_tests_run_on_windows():
     assert job["runs-on"] == "windows-latest"
     commands = "\n".join(s.get("run", "") for s in job["steps"])
     assert "tests/lsp" in commands
+
+
+def test_tests_run_on_every_declared_python():
+    job = _jobs()["test"]
+    assert {"3.10", "3.11", "3.12", "3.13"} <= set(
+        job["strategy"]["matrix"]["python-version"]
+    )

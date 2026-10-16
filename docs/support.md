@@ -7,7 +7,7 @@ The public surface that is kept stable is described in [stability.md](stability.
 
 | | Supported | Tested in CI |
 | --- | --- | --- |
-| Python | 3.10, 3.11, 3.12, 3.13 | 3.10, 3.11, 3.12 (3.13 is declared, not yet in the CI matrix) |
+| Python | 3.10, 3.11, 3.12, 3.13 | 3.10, 3.11, 3.12, 3.13 |
 | Linux | yes | full test suite |
 | macOS | yes | not in CI; used by the maintainer |
 | Windows | yes | language server and VS Code extension tests only |
@@ -25,6 +25,11 @@ Odoo Doctor never imports Odoo, so no Odoo installation is needed to scan.
 Without stubs for the scanned version the symbol resolver reports fewer provable "does not
 exist" findings and lowers the confidence of the ones it keeps; point `odoo_source_path`
 at a source checkout for full accuracy.
+
+The Odoo 18/19 migration rules are version-gated and only fire when the scanned
+`odoo_version` is at or above the gate: `view-tree-removed`, `removed-core-field-usage` and
+`chatter-div-removed` from 18.0; `search-view-group-attributes`, `act-window-target-inline`
+and `kanban-legacy-templates` from 19.0.
 
 The Odoo version is read from the addons or set with `odoo_version` in `odoo-doctor.toml`
 or `--odoo-version`. A new Odoo major version is added by generating its stubs

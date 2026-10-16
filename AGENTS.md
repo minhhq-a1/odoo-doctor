@@ -255,6 +255,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/cli/app.py` | CLI entry point |
 | `tests/` | Test suite; `tests/corpus/` + `tests/test_golden_corpus.py` is the golden corpus (`UPDATE_GOLDEN=1` refreshes it after an intentional rule change) |
+| `scripts/measure.py` | Maintainer per-rule precision tool (manual, not shipped, not in CI) |
 | `CLAUDE.md` | Detailed development guide |
 
 ---
@@ -265,7 +266,8 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 - **Build System**: Hatchling
 - **Key Dependencies**: typer, rich, lxml, tomli
 - **Exit Codes**: 0 (clean), 1 (findings triggered), 2 (score below threshold), 3 (invalid args/git error)
-- **CI/CD**: GitHub Actions on push/PR — runs tests (Python 3.10–3.12), linting, formatting
+- **Terminal surface**: `[surfaces.terminal]` (default `min_confidence = "medium"` hides `low` findings); `scan --show-low` shows everything and changes nothing else (JSON/SARIF/HTML, `--fail-on` and scores are unchanged)
+- **CI/CD**: GitHub Actions on push/PR — runs tests (Python 3.10–3.13), linting, formatting
 - **pre-commit Hook**: Runs `odoo-doctor scan --diff HEAD --fail-on error` on Python/XML files
 
 See `CLAUDE.md` for advanced topics (stubs generation, adapter development, fixer implementation, baseline mode, caching).

@@ -56,10 +56,9 @@ other commands follow the same convention where it applies:
 | any | `0` | success |
 | any | `2` | usage error raised by the argument parser itself (unknown flag, missing argument) |
 | `fix` | `3` | neither or both of `--fix` and `--fix-dry-run` |
-| `rules disable` / `enable` | `3` | unknown rule |
 | `rules docs` | `3` | `--format` is neither `markdown` nor `html` |
 | `rules docs --check` | `1` | the page on disk is out of date |
-| `rules` | `3` | unknown action, or `explain`/`disable`/`enable`/`new` without a rule name |
+| `rules` | `3` | unknown action, an unknown rule name for `explain`/`disable`/`enable`, or `explain`/`disable`/`enable`/`new` without a rule name |
 | `history show --max-drop N` | `2` | the newest score dropped by more than `N` points |
 | `history import` | `3` | invalid `--timestamp`, or no report could be imported |
 | `install` | `1` | the packaged skills are missing (reinstall the package) |
