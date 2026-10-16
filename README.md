@@ -27,6 +27,9 @@ odoo-doctor scan . --min-score 80
 
 # 5. Chỉ scan file đã thay đổi (PR review)
 odoo-doctor scan . --diff main --json
+
+# 6. Báo cáo HTML một file (mở bằng trình duyệt, đính kèm CI)
+odoo-doctor scan . --html report.html
 ```
 
 ---
@@ -36,20 +39,32 @@ odoo-doctor scan . --diff main --json
 | Rule | Tier | Category |
 |------|------|----------|
 | `raw-sql-string-interpolation` | P0 | Security |
+| `eval-usage` | P0 | Security |
 | `missing-access-csv` | P0 | Security |
 | `unknown-model-in-access-csv` | P1 | Correctness |
 | `duplicate-xml-id` | P1 | Correctness |
 | `view-field-not-in-model` | P1 | Correctness |
 | `button-method-not-found` | P1 | Correctness |
+| `orphan-view` | P2 | Maintainability |
 | `missing-xml-ref` | P1 | Correctness |
 | `manifest-missing-dependency` | P1 | Module Hygiene |
+| `manifest-license-incompatible` | P2 | Module Hygiene |
+| `missing-external-dependency` | P2 | Module Hygiene |
 | `manifest-missing-required-fields` | P2 | Module Hygiene |
 | `search-in-loop` | P1 | Performance |
+| `create-in-loop` | P1 | Performance |
+| `write-in-loop` | P1 | Performance |
+| `n-plus-one-read` | P1 | Performance |
 | `public-controller-sudo-risk` | P1 | Security |
+| `sudo-without-comment` | P1 | Security |
+| `record-rule-without-domain` | P1 | Security |
 | `unbounded-search` | P2 | Performance |
 | `manifest-data-order-risk` | P2 | Module Hygiene |
 | `override-missing-super` | P1 | Correctness |
 | `compute-missing-depends` | P2 | Correctness |
+| `field-no-string-on-required` | P2 | Maintainability |
+| `missing-translation` | P2 | Maintainability |
+| `vendored-python-code` | P3 | Maintainability |
 | `missing-ondelete` | P1 | Data Integrity |
 | `data-noupdate-risk` | P2 | Data Integrity |
 | `deprecated-api-usage` | P1 | Upgrade Safety |
@@ -385,6 +400,6 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 git clone https://github.com/minhhq-a1/odoo-doctor
 cd odoo-doctor
 pip install -e ".[dev]"
-pytest                    # 492 test cases
+pytest                    # the full suite
 pytest --cov=odoo_doctor  # with coverage
 ```

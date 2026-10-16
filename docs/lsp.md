@@ -17,7 +17,7 @@ Needs Python 3.10 or newer. On macOS the system `python3` / `pip3` from Xcode is
 plain `pip3 install` fails with `No matching distribution found`; `uv tool install
 --python 3.12 'odoo-doctor[lsp]'` fetches a suitable Python for you. Inside a virtualenv,
 `pip install 'odoo-doctor[lsp]'` works too. Upgrade with `uv tool upgrade odoo-doctor`.
-Check the install with `odoo-doctor --help` (there is no `--version` flag).
+Check the install with `odoo-doctor --version`.
 
 Without the extra, `odoo-doctor lsp` exits with code 3 and tells you what to install.
 
