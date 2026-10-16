@@ -188,7 +188,7 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `getattr(obj, name)(...)` (called directly or through a variable) where `name` is not a constant. A name built on a constant prefix (`'_get_%s' % kind`), looked up in a module-level table, checked in the same function (`in` / `==`, `startswith`) or taken from a logger is ignored.
+**Detects**: `getattr(obj, name)(...)` (called directly or through a variable) where `name` is not a constant. A name built on a constant prefix (`'_get_%s' % kind`), looked up in a module-level table, checked in the same function (`in` / `==`, `startswith`), taken from a logger, taken from a literal tuple or `fn.__name__`, the name of a `__getattr__` hook, or passed to a helper of the file that refuses ORM methods (`hasattr(models.BaseModel, name)`) is ignored.
 
 **Why**: Whoever controls the name can run any method of the object, ORM methods such as `unlink()` or `sudo()` included. Refusing names that start with `_` is not enough.
 
