@@ -228,9 +228,22 @@ RULE_DOCS: dict[str, RuleDoc] = {
         lang="csv",
     ),
     "duplicate-xml-id": RuleDoc(
-        detects="The same XML ID declared more than once in a module.",
-        why="The later record silently overwrites the earlier one.",
-        fix="Remove or rename the duplicate.",
+        detects="The same XML ID declared more than once in a module, where the "
+        "later declaration is not just a patch of the record. It is reported with "
+        "high confidence when it gives the id another model, and with medium "
+        "confidence when it sets a field the earlier declarations already set.",
+        why="Odoo loads a repeated id as an update of the same record. Another "
+        "model makes the install fail (`found record of different model`). A "
+        "field set twice is allowed, the later value wins and the first is dead "
+        "code, so it is usually a copy-paste leftover.",
+        fix="Rename one of the IDs, or merge the declarations into one.",
+        notes="A later declaration that only sets fields the earlier ones did not "
+        "set is the normal way to adjust a record (for example "
+        '`<record id="menu_x" model="ir.ui.menu">` adding `group_ids`) and is '
+        "not reported. A `<menuitem>` counts as setting `name`, `parent_id` and "
+        "`active`, and a `<template>` as setting `name`, `key`, `type` and `arch`, "
+        "because Odoo always writes them. A tag the rule cannot read the fields of "
+        "(for example `<asset>`) keeps the plain duplicate finding at high.",
     ),
     "missing-xml-ref": RuleDoc(
         detects='`ref="..."`, `eval="ref(...)"` and `inherit_id` references '

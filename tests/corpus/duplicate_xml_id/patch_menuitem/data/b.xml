@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="menu_a" model="ir.ui.menu">
+        <field name="web_icon">base,static/description/icon.png</field>
+    </record>
+</odoo>

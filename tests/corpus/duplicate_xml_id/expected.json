@@ -1,0 +1,27 @@
+[
+  [
+    "duplicate-xml-id",
+    "model_conflict/data/b.xml",
+    "high"
+  ],
+  [
+    "duplicate-xml-id",
+    "update_identical/data/b.xml",
+    "medium"
+  ],
+  [
+    "duplicate-xml-id",
+    "update_menuitem_field/data/b.xml",
+    "medium"
+  ],
+  [
+    "duplicate-xml-id",
+    "update_same_field/data/b.xml",
+    "medium"
+  ],
+  [
+    "duplicate-xml-id",
+    "update_template/data/b.xml",
+    "medium"
+  ]
+]
