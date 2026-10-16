@@ -350,3 +350,27 @@ def test_a_helper_that_does_not_refuse_orm_methods_guards_nothing(tmp_path: Path
         """,
     )
     assert [d.confidence for d in diags] == ["medium"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        (
+            "names = ['_a', '_b']\n        names.append(name)\n"
+            "        for n in names:\n            getattr(self, n)()"
+        ),
+        (
+            "names = ('_a',)\n        names += (name,)\n"
+            "        for n in names:\n            getattr(self, n)()"
+        ),
+        "m = fn.__name__\n        m += name\n        getattr(self, m)()",
+        "m = fn.__name__\n        if (m := name):\n            getattr(self, m)()",
+        "m = name.__name__\n        getattr(self, m)()",
+        "m = name.x.__name__\n        getattr(self, m)()",
+    ],
+)
+def test_a_fixed_looking_name_that_is_extended_or_caller_supplied_is_reported(
+    tmp_path: Path, body: str
+):
+    src = f"def fn():\n    pass\n\nclass M:\n    def run(self, name):\n        {body}\n"
+    assert len(_diags(tmp_path, src)) == 1

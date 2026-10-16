@@ -277,15 +277,50 @@ def _is_fixed_text(node: ast.expr) -> bool:
     )
 
 
-def _fixed_names(own: list[ast.AST]) -> set[str]:
+_GROWS = {"append", "extend", "insert", "add", "update", "setdefault"}
+
+
+def _root_name(node: ast.AST) -> str | None:
+    while isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
+        node = node.func if isinstance(node, ast.Call) else node.value
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def _reshaped_names(own: list[ast.AST]) -> set[str]:
+    """Names changed after their first binding, or bound where we do not look:
+    ``x += y``, ``(x := y)``, ``with .. as x``, ``except .. as x``, comprehension
+    targets and ``x.append(y)`` style calls."""
+    out: set[str] = set()
+    for node in own:
+        if isinstance(node, (ast.AugAssign, ast.NamedExpr, ast.comprehension)):
+            out |= _names(node.target)
+        elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+            out |= _names(node.optional_vars)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            out.add(node.name)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _GROWS
+            and isinstance(node.func.value, ast.Name)
+        ):
+            out.add(node.func.value.id)
+    return out
+
+
+def _fixed_names(own: list[ast.AST], params: set[str]) -> set[str]:
     """Locals only ever bound to something the code fixes.
 
-    That is a function's own name (``origin.__name__``) or an item of a literal tuple
-    / list of constant or constant-prefixed texts, directly or through a variable.
-    shortcut: only plain assignments and ``for`` targets count as bindings.
+    That is the ``__name__`` of an object that is not a parameter (a decorated or inner
+    function), or an item of a literal tuple / list of constant or constant-prefixed
+    texts, directly or through a variable. A name that is later extended or rebound in
+    another way is not fixed.
+    shortcut: only plain assignments and ``for`` targets count as bindings, anything
+    else un-fixes the name; extend when a real false positive needs it.
     """
     values: dict[str, list[ast.AST | None]] = {}
     loops: list[tuple[str, ast.AST]] = []
+    reshaped = _reshaped_names(own)
     for node in own:
         if isinstance(node, ast.Assign):
             for target in node.targets:
@@ -304,18 +339,25 @@ def _fixed_names(own: list[ast.AST]) -> set[str]:
     def literal_texts(node: ast.AST | None) -> bool:
         if isinstance(node, ast.Name):
             seen = values.get(node.id, [])
-            return len(seen) == 1 and literal_texts(seen[0])
+            return node.id not in reshaped and len(seen) == 1 and literal_texts(seen[0])
         return isinstance(node, (ast.Tuple, ast.List, ast.Set)) and all(
             _is_fixed_text(e) for e in node.elts
+        )
+
+    def own_name(v: ast.AST | None) -> bool:
+        return (
+            isinstance(v, ast.Attribute)
+            and v.attr == "__name__"
+            and _root_name(v.value) not in params
         )
 
     fixed = {
         name
         for name, seen in values.items()
-        if all(isinstance(v, ast.Attribute) and v.attr == "__name__" for v in seen)
+        if name not in reshaped and all(own_name(v) for v in seen)
     }
     for name, iterable in loops:
-        if name not in values and literal_texts(iterable):
+        if name not in values and name not in reshaped and literal_texts(iterable):
             fixed.add(name)
     return fixed
 
@@ -382,7 +424,9 @@ def _check_function(
     }
     tainted = _tainted_names(fn, own, consts)
     guarded = _guarded_names(own, validators)
-    fixed = _fixed_names(own)
+    params = {a.arg for a in (*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs)}
+    params |= {a.arg for a in (fn.args.vararg, fn.args.kwarg) if a}
+    fixed = _fixed_names(own, params)
     entry = not nested and not fn.name.startswith("_")
 
     diags: list[Diagnostic] = []
