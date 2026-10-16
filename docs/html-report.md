@@ -23,8 +23,7 @@ Notes:
   anyway, a warning goes to stderr and the exit code is unchanged. Only a very large
   codebase is expected to reach this size: a scan of 271 modules and 2479 findings wrote a
   2.2 MiB file.
-- Low-confidence findings are hidden by default and a checkbox on the page shows them. The
-  page does not read `[surfaces.terminal]`; that setting only affects the terminal output.
+- Low-confidence findings are hidden by default and a checkbox on the page shows them.
 - The page text is in English, whatever the language of your repository.
 - The page is protected by a Content-Security-Policy that allows only its own inline script
   and style (pinned by sha256 hash), and it renders every value from your repository as text.

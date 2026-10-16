@@ -40,7 +40,7 @@ exactly as for the command line.
 - Analysis reads files from disk, so findings refresh when the workspace opens and when
   you **save** a file, not while typing.
 - Each refresh scans the whole workspace folder (cross-module rules need every addon).
-- This is the first, experimental release of the language server. See
+- The language server and this extension are experimental (preview on the Marketplace). See
   [docs/lsp.md](https://github.com/minhhq-a1/odoo-doctor/blob/main/docs/lsp.md).
 
 ## Build from source
