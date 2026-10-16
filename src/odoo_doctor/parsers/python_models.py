@@ -33,6 +33,10 @@ class MethodInfo:
     depends: list[str] = field(default_factory=list)
     is_override: bool = False
     calls_super: bool = False
+    # The body raises on every path that returns nothing: the operation is blocked.
+    always_raises: bool = False
+    # Calls the method of the same name on another receiver (`tmpl.copy(...)`, not `self`).
+    delegates: bool = False
     line: int = 0
 
 
@@ -51,6 +55,9 @@ class ModelInfo:
     # True when a class defines the model: it has a `_name` that its own `_inherit` does not
     # list. `_name = 'x'` with `_inherit = ['x', mixin]` (and `_inherit = 'x'` alone) extends.
     defines: bool = False
+    # False when the class sets `_auto = False`: no table is created by the ORM, so the
+    # default `create`/`write` behind `super()` has nothing to store into.
+    auto_table: bool = True
 
 
 @dataclass
@@ -194,6 +201,8 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                 if isinstance(target, ast.Name):
                     if target.id == "_name" and isinstance(item.value, ast.Constant):
                         model.name = item.value.value
+                    elif target.id == "_auto" and isinstance(item.value, ast.Constant):
+                        model.auto_table = bool(item.value.value)
                     elif target.id == "_inherit":
                         model.inherit = _extract_inherit(item.value)
                     elif target.id == "_inherits" and isinstance(item.value, ast.Dict):
@@ -339,6 +348,8 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
         depends=depends,
         is_override=is_override,
         calls_super=calls_super,
+        always_raises=_body_always_raises(func),
+        delegates=_body_delegates(func),
         line=func.lineno,
     )
 
@@ -355,6 +366,27 @@ def _body_calls_super(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "super"
+        ):
+            return True
+    return False
+
+
+def _body_always_raises(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """A top-level ``raise`` and no ``return`` anywhere: the method never completes."""
+    return any(isinstance(n, ast.Raise) for n in func.body) and not any(
+        isinstance(n, ast.Return) for n in ast.walk(func)
+    )
+
+
+def _body_delegates(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for node in ast.walk(func):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == func.name
+            and not (
+                isinstance(node.func.value, ast.Name) and node.func.value.id == "self"
+            )
         ):
             return True
     return False

@@ -275,6 +275,12 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="def create(self, vals):\n"
         "    record = super().create(vals)\n"
         "    return record",
+        notes="Not reported: a method whose body raises and never returns "
+        "(`def copy(self, default=None): raise UserError(...)`) blocks the "
+        "operation on purpose. Medium confidence, not high: the method delegates "
+        "to the same method of another recordset (`self.tmpl_id.copy(...)`), or "
+        "the model sets `_auto = False` and has no ORM table for `super()` to "
+        "write into.",
     ),
     "compute-missing-depends": RuleDoc(
         detects="Compute methods that read fields not declared in `@api.depends`.",

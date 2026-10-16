@@ -1,0 +1,22 @@
+[
+  [
+    "override-missing-super",
+    "delegates_other_model/models/thing.py",
+    "medium"
+  ],
+  [
+    "override-missing-super",
+    "non_table_model/models/thing.py",
+    "medium"
+  ],
+  [
+    "override-missing-super",
+    "real_missing_super/models/thing.py",
+    "high"
+  ],
+  [
+    "override-missing-super",
+    "real_missing_super/models/thing.py",
+    "high"
+  ]
+]
