@@ -6,6 +6,8 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-16
+
 ### Added
 
 - `scan --show-low` and `[surfaces.terminal]`: choose which findings the terminal lists.

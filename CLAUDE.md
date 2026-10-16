@@ -75,7 +75,7 @@ Key concepts that span files:
 
 Follow the `release` skill (`.claude/skills/release/SKILL.md`). Never put the VS Code Marketplace publisher token in the repo or in chat.
 
-Current version: `0.9.3`.
+Current version: `0.10.0`.
 
 ## Further Reading
 
