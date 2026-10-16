@@ -330,7 +330,7 @@ def close(self, rid):
 
 **Tier**: P1 (serious) · **Severity**: warning · **Confidence**: low · **Min Odoo version**: 14.0
 
-**Detects**: `.sudo()` calls with no justifying comment on any line of the statement or directly above it (a compound statement counts only its header line(s)).
+**Detects**: `.sudo()` calls with no justifying comment on any line of the statement or directly above it (a compound statement counts only its header line(s)). A comment naming sudo within five lines above, or a function docstring naming it, also counts; so does a `.sudo()` on an environment that `self = self.sudo()` already elevated.
 
 **Why**: Every privilege elevation should be reviewable; an undocumented `sudo()` is hard to audit.
 

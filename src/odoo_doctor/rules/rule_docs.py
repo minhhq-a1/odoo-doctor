@@ -192,7 +192,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "sudo-without-comment": RuleDoc(
         detects="`.sudo()` calls with no justifying comment on any line of the "
         "statement or directly above it (a compound statement counts only its "
-        "header line(s)).",
+        "header line(s)). A comment naming sudo within five lines above, or a "
+        "function docstring naming it, also counts; so does a `.sudo()` on an "
+        "environment that `self = self.sudo()` already elevated.",
         why="Every privilege elevation should be reviewable; an undocumented "
         "`sudo()` is hard to audit.",
         fix="Add a short comment explaining why elevated privileges are needed.",
