@@ -11,13 +11,13 @@
 ```
 odoo-doctor/
 ├── src/odoo_doctor/          # Main source code
-│   ├── core/                 # Scanner, pipeline (7-stage), config, scoring, fixer, baseline, cache
+│   ├── core/                 # Scanner, pipeline (7-stage), config, scoring, fixer, baseline, cache, history, fix ROI, surfaces
 │   ├── rules/                # Rule implementations (P0–P3 tiers, organized by category)
 │   │   ├── security/         # 14 rules (eval, SQL injection, sudo, access control, multi-company rules, CSRF, TLS)
 │   │   ├── correctness/      # 6 rules (missing depends, super, translations, monetary currency, hardcoded company/currency)
-│   │   ├── performance/      # 6 rules (loops, N+1, unbounded search, HTTP timeouts)
+│   │   ├── performance/      # 7 rules (loops, N+1, unbounded search, non-stored computes, HTTP timeouts)
 │   │   ├── xml/              # 5 rules (broken refs, duplicate IDs, orphan views)
-│   │   ├── manifest/         # 3 rules + fixers (dependencies, data order, required fields)
+│   │   ├── manifest/         # 6 rules + fixers (dependencies, data order, required fields, license, external dependencies, vendored code)
 │   │   ├── data_integrity/  # 3 rules (missing ondelete, noupdate risk, manual commit)
 │   │   ├── upgrade_safety/  # 13 rules (deprecated API, deprecated/removed ORM API, removed model/field, sql-constraints, cron fields, view attrs/states/tree/search-group/kanban/chatter, act-window target)
 │   │   └── frontend/        # 1 rule (asset bundle missing)
@@ -25,11 +25,15 @@ odoo-doctor/
 │   ├── graph/                # Symbol resolution engine + version stubs (17.0, 18.0, 19.0)
 │   ├── discovery/            # Addon discovery & Odoo version detection
 │   ├── adapters/             # External linter integration (Ruff, Pylint-Odoo)
-│   ├── reporters/            # Output formatting (terminal, JSON, GitHub, SARIF, PR comment)
+│   ├── reporters/            # Output formatting (terminal, JSON, GitHub, SARIF, PR comment, badge, HTML report)
 │   ├── cli/                  # CLI entry point (Typer)
+│   ├── lsp/                  # Language server (experimental, optional `lsp` extra)
+│   ├── plugin_api.py         # The only stable import surface for third-party rules
 │   └── skills/               # Agent-friendly SKILL.md documentation
-├── tests/                    # 492 test cases (~81 test files)
-├── docs/                     # Rule, custom-rules, and stubs documentation
+├── editors/vscode/          # VS Code extension (TypeScript)
+├── ci-templates/             # GitLab CI and Bitbucket Pipelines templates
+├── tests/                    # pytest suite; `tests/corpus/` is the golden corpus of sample addons
+├── docs/                     # Rules (generated), stability contract, support policy, custom rules, stubs, LSP, HTML report, score history, performance
 ├── pyproject.toml            # Build & dependency config
 ├── action.yml                # GitHub Actions marketplace action
 ├── CLAUDE.md                 # Detailed developer guide
@@ -47,7 +51,7 @@ pip install -e ".[dev]"        # Install in editable mode with dev dependencies
 
 ### Testing
 ```bash
-pytest                         # Run all tests (~384 cases)
+pytest                         # Run all tests
 pytest tests/test_file.py      # Run a specific test file
 pytest -xvs                    # Stop on first failure, verbose, no capture
 pytest --cov=odoo_doctor       # Coverage report
@@ -145,7 +149,8 @@ pytest tests/test_my_rule.py -xvs
    ```
 
 2. Create tests in `tests/rules/test_my_rule.py`.
-3. Import the module in `cli/app.py` (registers the rule) and add its `RuleDoc` entry to `rules/rule_docs.py`, then run `odoo-doctor rules docs --out docs/rules.md`.
+3. Import the module in `cli/app.py` (registers the rule), add its `RuleDoc` entry to `rules/rule_docs.py` and an effort (1-3) to `core/roi.py::EFFORT_BY_RULE`, then run `odoo-doctor rules docs --out docs/rules.md`.
+4. When a real scan shows a false positive, reduce it to a golden-corpus case under `tests/corpus/` before changing the rule.
 
 ---
 
@@ -246,10 +251,10 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `ci-templates/` | GitLab CI and Bitbucket Pipelines templates (same script in both); `tests/test_ci_templates.py` runs it in a temp git repo |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
-| `src/odoo_doctor/rules/` | Rule implementations (24 rules in 5 category dirs) |
+| `src/odoo_doctor/rules/` | Rule implementations (55 rules in 8 category dirs) |
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/cli/app.py` | CLI entry point |
-| `tests/` | Test suite (69 files, 384 cases) |
+| `tests/` | Test suite; `tests/corpus/` + `tests/test_golden_corpus.py` is the golden corpus (`UPDATE_GOLDEN=1` refreshes it after an intentional rule change) |
 | `CLAUDE.md` | Detailed development guide |
 
 ---

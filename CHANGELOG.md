@@ -20,6 +20,10 @@ All notable changes to Odoo Doctor are documented here.
 
 - `scan --score-delta` prints its `Score Delta:` line after the file artifacts (`--history`,
   `--badge`, `--html`) are written instead of before; the order relative to the report is the same.
+- Documentation brought up to date: the README rule table lists all 55 rules, `docs/performance.md`
+  is re-measured for 0.9.3 on Odoo 19.0 (55 rules; the old run used 40), the contributor guides
+  (`AGENTS.md`, `CONTRIBUTING.md`) describe the golden corpus, the `EFFORT_BY_RULE` entry and the
+  current layout, and `docs/lsp.md` no longer says there is no `--version` flag.
 
 ---
 
