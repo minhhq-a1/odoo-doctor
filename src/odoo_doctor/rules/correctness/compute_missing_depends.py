@@ -69,7 +69,9 @@ def check_compute_missing_depends(ctx: ModuleContext) -> list[Diagnostic]:
             reads = _find_self_attribute_reads(func_node)
             outputs = _find_self_attribute_writes(func_node)
 
-            for attr in reads:
+            # Sorted: the pipeline keeps one finding per method and line, and set order
+            # follows the hash seed, so the reported field would change between runs.
+            for attr in sorted(reads):
                 if attr in cover_set or attr in _MAGIC_FIELDS or attr in outputs:
                     continue
 
