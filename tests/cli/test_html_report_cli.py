@@ -368,6 +368,9 @@ def test_absolute_baseline_path_never_reaches_the_page(tmp_path: Path):
     for base, expected in ((inside, "baseline.json"), (outside, "base.json")):
         (addons / "m" / "y.py").unlink(missing_ok=True)
         _scan(tmp_path, str(addons), "--write-baseline", str(base))
+        (addons / "m" / "y.py").write_text(  # unknown to the baseline, else no report
+            'def g(self, name):\n    self.env.cr.execute(f"SELECT {name}")\n'
+        )
         report = tmp_path / "r.html"
         done = _scan(
             tmp_path, str(addons), "--baseline", str(base), "--html", str(report)
