@@ -152,6 +152,8 @@ pytest tests/test_my_rule.py -xvs
 3. Import the module in `cli/app.py` (registers the rule), add its `RuleDoc` entry to `rules/rule_docs.py` and an effort (1-3) to `core/roi.py::EFFORT_BY_RULE`, then run `odoo-doctor rules docs --out docs/rules.md`.
 4. When a real scan shows a false positive, reduce it to a golden-corpus case under `tests/corpus/` before changing the rule.
 
+A rule's confidence is decided by whether its pattern fires on Odoo core 19: a pattern that Odoo's own addons use is at most `medium`, and `high` needs a true positive with evidence and a positive golden-corpus case (see the Changed notes of the CHANGELOG).
+
 ---
 
 ## Commit & Pull Request Guidelines

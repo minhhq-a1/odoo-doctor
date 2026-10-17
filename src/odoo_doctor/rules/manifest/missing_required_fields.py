@@ -31,6 +31,21 @@ def missing_required_fields(raw: dict) -> list[str]:
     return missing
 
 
+# Odoo fills these in itself (`odoo/modules/module.py`: 'version': '1.0', 'data': []) and
+# Odoo core leaves them out of hundreds of its own manifests, so omitting them is a
+# convention gap (`medium`, no score impact), not something that breaks an install.
+ODOO_DEFAULTED_FIELDS = frozenset({"version", "data"})
+
+
+def missing_fields_by_confidence(raw: dict) -> tuple[list[str], list[str]]:
+    """(high-confidence missing fields, medium-confidence missing fields)."""
+    missing = missing_required_fields(raw)
+    return (
+        [f for f in missing if f not in ODOO_DEFAULTED_FIELDS],
+        [f for f in missing if f in ODOO_DEFAULTED_FIELDS],
+    )
+
+
 @rule(
     name="manifest-missing-required-fields",
     category="Module Hygiene",
@@ -54,7 +69,7 @@ def check_missing_required_fields(ctx: ModuleContext) -> list[Diagnostic]:
             severity="warning",
             tier="P2",
             source="native",
-            confidence="high",
+            confidence="medium" if field_name in ODOO_DEFAULTED_FIELDS else "high",
             title=f"Manifest missing required field: {field_name!r}",
             message=f"The __manifest__.py for '{ctx.name}' is missing or has empty field '{field_name}'.",
             help=f"Add '{field_name}' to your __manifest__.py.",

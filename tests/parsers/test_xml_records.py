@@ -154,3 +154,86 @@ def test_a_delete_does_not_define_an_id(tmp_path: Path):
 </odoo>""",
     )
     assert ids == ["m.old_partner"]
+
+
+# --- the fields a declaration writes (convert.py) -----------------------------
+
+
+def _fields(tmp_path: Path, xml: str, module: str = "m") -> dict[str, set[str] | None]:
+    f = tmp_path / "d.xml"
+    f.write_text(xml)
+    return {
+        r.xml_id.split(".")[1]: None if r.field_names is None else set(r.field_names)
+        for r in parse_xml_records(f, module_name=module)
+    }
+
+
+def test_field_names_of_a_record_drop_the_translation_suffix(tmp_path: Path):
+    got = _fields(
+        tmp_path,
+        """<odoo>
+  <record id="r" model="x.y"><field name="name">a</field>
+    <field name="name@fi">b</field><field name="active" eval="True"/></record>
+</odoo>""",
+    )
+    assert got == {"r": {"name", "active"}}
+
+
+def test_field_names_of_a_menuitem_include_the_ones_it_always_sets(tmp_path: Path):
+    got = _fields(
+        tmp_path,
+        """<odoo>
+  <menuitem id="plain" name="P"/>
+  <menuitem id="full" name="F" sequence="3" action="act" groups="g1,g2" web_icon="a,b">
+    <menuitem id="child" name="C" web_icon="a,b"/>
+  </menuitem>
+</odoo>""",
+    )
+    always = {"parent_id", "active", "name"}
+    assert got["plain"] == always
+    assert got["full"] == always | {
+        "sequence",
+        "action",
+        "groups_id",
+        "group_ids",
+        "web_icon",
+    }
+    assert got["child"] == always  # a nested menu has a parent, web_icon is ignored
+
+
+def test_field_names_of_a_template_include_the_ones_it_always_sets(tmp_path: Path):
+    got = _fields(
+        tmp_path,
+        """<odoo>
+  <template id="t"><div/></template>
+  <template id="u" inherit_id="base.x" active="False" priority="3"><div/></template>
+</odoo>""",
+    )
+    assert got["t"] == {"name", "key", "type", "arch"}
+    assert got["u"] == {
+        "name",
+        "key",
+        "type",
+        "arch",
+        "inherit_id",
+        "active",
+        "priority",
+    }
+
+
+def test_auto_sequence_container_sets_sequence(tmp_path: Path):
+    got = _fields(
+        tmp_path,
+        """<odoo>
+  <data auto_sequence="1"><record id="a" model="x.y"><field name="n">1</field></record></data>
+  <data auto_sequence="0"><record id="b" model="x.y"><field name="n">1</field></record></data>
+</odoo>""",
+    )
+    assert got == {"a": {"n", "sequence"}, "b": {"n"}}
+
+
+def test_unknown_tag_has_no_field_names(tmp_path: Path):
+    assert _fields(
+        tmp_path,
+        "<odoo><asset id='a'><bundle>b</bundle><path>p</path></asset></odoo>",
+    ) == {"a": None}

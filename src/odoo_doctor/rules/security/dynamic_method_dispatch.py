@@ -44,20 +44,29 @@ def check_dynamic_method_dispatch(
         return []
 
     consts = _module_constants(tree)
+    validators = _validators(tree)
     diags: list[Diagnostic] = []
-    pending: list[tuple[ast.AST, bool]] = [(tree, False)]
+    # (node, inside a function, names that are the parameter of an enclosing __getattr__)
+    pending: list[tuple[ast.AST, bool, frozenset[str]]] = [(tree, False, frozenset())]
     while pending:
-        node, in_function = pending.pop()
+        node, in_function, hooks = pending.pop()
         for child in ast.iter_child_nodes(node):
             if isinstance(child, _FUNCTIONS):
                 diags.extend(
                     _check_function(
-                        child, in_function, consts, file_path, module_name, odoo_version
+                        child,
+                        in_function,
+                        consts,
+                        validators,
+                        hooks | _hook_names(child),
+                        file_path,
+                        module_name,
+                        odoo_version,
                     )
                 )
-                pending.append((child, True))
+                pending.append((child, True, hooks | _hook_names(child)))
             else:
-                pending.append((child, in_function))
+                pending.append((child, in_function, hooks))
     return sorted(diags, key=lambda d: (d.line, d.column))
 
 
@@ -164,8 +173,9 @@ def _tainted_names(fn, own: list[ast.AST], consts: set[str]) -> set[str]:
     return tainted
 
 
-def _guarded_names(own: list[ast.AST]) -> set[str]:
-    """Names the function compares against something or tests with ``startswith``."""
+def _guarded_names(own: list[ast.AST], validators: set[str]) -> set[str]:
+    """Names the function compares against something, tests with ``startswith`` or hands
+    to a validator of this file."""
     guarded: set[str] = set()
     for node in own:
         if isinstance(node, ast.Compare) and all(
@@ -182,7 +192,50 @@ def _guarded_names(own: list[ast.AST]) -> set[str]:
             and node.func.attr in ("startswith", "endswith")
         ):
             guarded |= _names(node.func.value)
+        elif isinstance(node, ast.Call) and _called_name(node) in validators:
+            for arg in node.args:
+                guarded |= _names(arg)
     return guarded
+
+
+def _called_name(call: ast.Call) -> str | None:
+    func = call.func
+    if isinstance(func, ast.Name):
+        return func.id
+    return func.attr if isinstance(func, ast.Attribute) else None
+
+
+def _hook_names(fn) -> frozenset[str]:
+    """``name`` of ``def __getattr__(self, name)``: Python's attribute hook, not a client."""
+    args = fn.args.args
+    if fn.name in ("__getattr__", "__getattribute__") and len(args) >= 2:
+        return frozenset({args[1].arg})
+    return frozenset()
+
+
+def _validators(tree: ast.Module) -> set[str]:
+    """Functions of this file that refuse a parameter naming an ORM method.
+
+    ``hasattr(models.BaseModel, name)`` is the test: it rejects ``unlink``, ``sudo``...
+    shortcut: only the test is looked for, not what the function does with the answer.
+    """
+    found: set[str] = set()
+    for fn in ast.walk(tree):
+        if not isinstance(fn, _FUNCTIONS):
+            continue
+        params = {a.arg for a in (*fn.args.posonlyargs, *fn.args.args)}
+        for node in ast.walk(fn):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "hasattr"
+                and len(node.args) == 2
+                and ast.unparse(node.args[0]).endswith("BaseModel")
+                and isinstance(node.args[1], ast.Name)
+                and node.args[1].id in params
+            ):
+                found.add(fn.name)
+    return found
 
 
 def _is_dir_call(node: ast.AST) -> bool:
@@ -216,6 +269,97 @@ def _confined_variable(name_expr: ast.expr, own: list[ast.AST]) -> bool:
         and any(isinstance(t, ast.Name) and t.id == name_expr.id for t in n.targets)
     ]
     return bool(values) and all(_has_constant_prefix(v) for v in values)
+
+
+def _is_fixed_text(node: ast.expr) -> bool:
+    return (isinstance(node, ast.Constant) and isinstance(node.value, str)) or (
+        _has_constant_prefix(node)
+    )
+
+
+_GROWS = {"append", "extend", "insert", "add", "update", "setdefault"}
+
+
+def _root_name(node: ast.AST) -> str | None:
+    while isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
+        node = node.func if isinstance(node, ast.Call) else node.value
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def _reshaped_names(own: list[ast.AST]) -> set[str]:
+    """Names changed after their first binding, or bound where we do not look:
+    ``x += y``, ``(x := y)``, ``with .. as x``, ``except .. as x``, comprehension
+    targets and ``x.append(y)`` style calls."""
+    out: set[str] = set()
+    for node in own:
+        if isinstance(node, (ast.AugAssign, ast.NamedExpr, ast.comprehension)):
+            out |= _names(node.target)
+        elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+            out |= _names(node.optional_vars)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            out.add(node.name)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _GROWS
+            and isinstance(node.func.value, ast.Name)
+        ):
+            out.add(node.func.value.id)
+    return out
+
+
+def _fixed_names(own: list[ast.AST], params: set[str]) -> set[str]:
+    """Locals only ever bound to something the code fixes.
+
+    That is the ``__name__`` of an object that is not a parameter (a decorated or inner
+    function), or an item of a literal tuple / list of constant or constant-prefixed
+    texts, directly or through a variable. A name that is later extended or rebound in
+    another way is not fixed.
+    shortcut: only plain assignments and ``for`` targets count as bindings, anything
+    else un-fixes the name; extend when a real false positive needs it.
+    """
+    values: dict[str, list[ast.AST | None]] = {}
+    loops: list[tuple[str, ast.AST]] = []
+    reshaped = _reshaped_names(own)
+    for node in own:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    values.setdefault(target.id, []).append(node.value)
+                else:
+                    for name in _names(target):
+                        values.setdefault(name, []).append(None)
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            if isinstance(node.target, ast.Name):
+                loops.append((node.target.id, node.iter))
+            else:
+                for name in _names(node.target):
+                    values.setdefault(name, []).append(None)
+
+    def literal_texts(node: ast.AST | None) -> bool:
+        if isinstance(node, ast.Name):
+            seen = values.get(node.id, [])
+            return node.id not in reshaped and len(seen) == 1 and literal_texts(seen[0])
+        return isinstance(node, (ast.Tuple, ast.List, ast.Set)) and all(
+            _is_fixed_text(e) for e in node.elts
+        )
+
+    def own_name(v: ast.AST | None) -> bool:
+        return (
+            isinstance(v, ast.Attribute)
+            and v.attr == "__name__"
+            and _root_name(v.value) not in params
+        )
+
+    fixed = {
+        name
+        for name, seen in values.items()
+        if name not in reshaped and all(own_name(v) for v in seen)
+    }
+    for name, iterable in loops:
+        if name not in values and name not in reshaped and literal_texts(iterable):
+            fixed.add(name)
+    return fixed
 
 
 def _is_logger(node: ast.expr) -> bool:
@@ -252,6 +396,8 @@ def _check_function(
     fn,
     nested: bool,
     consts: set[str],
+    validators: set[str],
+    hooks: frozenset[str],
     file_path: Path,
     module_name: str,
     odoo_version: str,
@@ -277,7 +423,10 @@ def _check_function(
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
     }
     tainted = _tainted_names(fn, own, consts)
-    guarded = _guarded_names(own)
+    guarded = _guarded_names(own, validators)
+    params = {a.arg for a in (*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs)}
+    params |= {a.arg for a in (fn.args.vararg, fn.args.kwarg) if a}
+    fixed = _fixed_names(own, params)
     entry = not nested and not fn.name.startswith("_")
 
     diags: list[Diagnostic] = []
@@ -299,6 +448,10 @@ def _check_function(
             continue
         used = _names(name_expr)
         if used & guarded:
+            continue
+        if isinstance(name_expr, ast.Name) and name_expr.id in hooks:
+            continue
+        if used and used <= fixed:
             continue
         from_client = _client_value(name_expr, tainted, consts)
         confidence = "high" if entry and from_client else "medium"

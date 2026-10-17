@@ -235,3 +235,142 @@ def test_two_parameters_glued_together_are_all_the_callers(tmp_path: Path):
         """,
     )
     assert [d.confidence for d in diags] == ["high"]
+
+
+def test_a_loop_over_a_literal_tuple_of_names_the_code_fixes_is_fine(tmp_path: Path):
+    diags = _diags(
+        tmp_path,
+        """\
+        class M:
+            def store(self):
+                names = ("_values_for_" + self.kind, "_values")
+                for name in names:
+                    handler = getattr(self, name, None)
+                    if handler:
+                        handler()
+        """,
+    )
+    assert diags == []
+
+
+def test_a_loop_over_a_tuple_that_also_holds_data_is_still_reported(tmp_path: Path):
+    diags = _diags(
+        tmp_path,
+        """\
+        class M:
+            def store(self):
+                for name in ("_values", self.callback):
+                    getattr(self, name)()
+        """,
+    )
+    assert [d.confidence for d in diags] == ["medium"]
+
+
+def test_a_name_that_is_a_function_name_is_fixed_by_the_code(tmp_path: Path):
+    diags = _diags(
+        tmp_path,
+        """\
+        def wrap(origin):
+            def wrapper(rec, *args):
+                method_name = origin.__name__
+                hook = getattr(rec, f"{method_name}_options", None)
+                hook and hook()
+                return getattr(rec, method_name)(*args)
+            return wrapper
+        """,
+    )
+    assert diags == []
+
+
+def test_a_name_that_is_a_function_name_in_one_branch_only_is_reported(tmp_path):
+    diags = _diags(
+        tmp_path,
+        """\
+        def wrap(origin, other):
+            def wrapper(rec):
+                method_name = origin.__name__
+                if other:
+                    method_name = other
+                return getattr(rec, method_name)()
+            return wrapper
+        """,
+    )
+    assert [d.confidence for d in diags] == ["medium"]
+
+
+def test_forwarding_the_name_of_a_getattr_hook_is_not_a_dispatch(tmp_path: Path):
+    diags = _diags(
+        tmp_path,
+        """\
+        class Proxy:
+            def __getattr__(self, name):
+                def call(*args, **kwargs):
+                    return getattr(self.target, name)(*args, **kwargs)
+                return call
+        """,
+    )
+    assert diags == []
+
+
+def test_a_name_validated_by_a_helper_that_refuses_orm_methods_is_fine(tmp_path):
+    diags = _diags(
+        tmp_path,
+        """\
+        from odoo import models
+
+        class M(models.Model):
+            def _callback_method(self, record, name):
+                name = (name or '').strip()
+                if not name or name.startswith('_') or hasattr(models.BaseModel, name):
+                    return None
+                return getattr(record, name, None)
+
+            def run(self, record):
+                for button in self.buttons.split(','):
+                    parts = button.split('-')
+                    if self._callback_method(record, parts[1]):
+                        getattr(record, parts[1].strip())()
+        """,
+    )
+    assert diags == []
+
+
+def test_a_helper_that_does_not_refuse_orm_methods_guards_nothing(tmp_path: Path):
+    diags = _diags(
+        tmp_path,
+        """\
+        class M:
+            def _exists(self, record, name):
+                return hasattr(record, name)
+
+            def run(self, record):
+                for button in self.buttons.split(','):
+                    if self._exists(record, button):
+                        getattr(record, button)()
+        """,
+    )
+    assert [d.confidence for d in diags] == ["medium"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        (
+            "names = ['_a', '_b']\n        names.append(name)\n"
+            "        for n in names:\n            getattr(self, n)()"
+        ),
+        (
+            "names = ('_a',)\n        names += (name,)\n"
+            "        for n in names:\n            getattr(self, n)()"
+        ),
+        "m = fn.__name__\n        m += name\n        getattr(self, m)()",
+        "m = fn.__name__\n        if (m := name):\n            getattr(self, m)()",
+        "m = name.__name__\n        getattr(self, m)()",
+        "m = name.x.__name__\n        getattr(self, m)()",
+    ],
+)
+def test_a_fixed_looking_name_that_is_extended_or_caller_supplied_is_reported(
+    tmp_path: Path, body: str
+):
+    src = f"def fn():\n    pass\n\nclass M:\n    def run(self, name):\n        {body}\n"
+    assert len(_diags(tmp_path, src)) == 1

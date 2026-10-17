@@ -132,7 +132,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         detects="`getattr(obj, name)(...)` (called directly or through a variable) "
         "where `name` is not a constant. A name built on a constant prefix "
         "(`'_get_%s' % kind`), looked up in a module-level table, checked in the "
-        "same function (`in` / `==`, `startswith`) or taken from a logger is ignored.",
+        "same function (`in` / `==`, `startswith`), taken from a logger, taken from "
+        "a literal tuple or `fn.__name__`, the name of a `__getattr__` hook, or "
+        "passed to a helper of the file that refuses ORM methods "
+        "(`hasattr(models.BaseModel, name)`) is ignored.",
         why="Whoever controls the name can run any method of the object, ORM methods "
         "such as `unlink()` or `sudo()` included. Refusing names that start with `_` "
         "is not enough.",
@@ -189,7 +192,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "sudo-without-comment": RuleDoc(
         detects="`.sudo()` calls with no justifying comment on any line of the "
         "statement or directly above it (a compound statement counts only its "
-        "header line(s)).",
+        "header line(s)). A comment naming sudo within five lines above, or a "
+        "function docstring naming it, also counts; so does a `.sudo()` on an "
+        "environment that `self = self.sudo()` already elevated.",
         why="Every privilege elevation should be reviewable; an undocumented "
         "`sudo()` is hard to audit.",
         fix="Add a short comment explaining why elevated privileges are needed.",
@@ -228,9 +233,22 @@ RULE_DOCS: dict[str, RuleDoc] = {
         lang="csv",
     ),
     "duplicate-xml-id": RuleDoc(
-        detects="The same XML ID declared more than once in a module.",
-        why="The later record silently overwrites the earlier one.",
-        fix="Remove or rename the duplicate.",
+        detects="The same XML ID declared more than once in a module, where the "
+        "later declaration is not just a patch of the record. It is reported with "
+        "high confidence when it gives the id another model, and with medium "
+        "confidence when it sets a field the earlier declarations already set.",
+        why="Odoo loads a repeated id as an update of the same record. Another "
+        "model makes the install fail (`found record of different model`). A "
+        "field set twice is allowed, the later value wins and the first is dead "
+        "code, so it is usually a copy-paste leftover.",
+        fix="Rename one of the IDs, or merge the declarations into one.",
+        notes="A later declaration that only sets fields the earlier ones did not "
+        "set is the normal way to adjust a record (for example "
+        '`<record id="menu_x" model="ir.ui.menu">` adding `group_ids`) and is '
+        "not reported. A `<menuitem>` counts as setting `name`, `parent_id` and "
+        "`active`, and a `<template>` as setting `name`, `key`, `type` and `arch`, "
+        "because Odoo always writes them. A tag the rule cannot read the fields of "
+        "(for example `<asset>`) keeps the plain duplicate finding at high.",
     ),
     "missing-xml-ref": RuleDoc(
         detects='`ref="..."`, `eval="ref(...)"` and `inherit_id` references '
@@ -262,6 +280,14 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="def create(self, vals):\n"
         "    record = super().create(vals)\n"
         "    return record",
+        notes="Not reported: a method whose body raises and never returns "
+        "(`def copy(self, default=None): raise UserError(...)`) blocks the "
+        "operation on purpose. Medium confidence, not high: the method calls its own "
+        "name on records of another model that it maps out of `self` "
+        "(`self.mapped('tmpl_id').copy(...)`, `self.line_ids.copy(...)`); calling it "
+        "on `self`, on `self.sudo()` / `self.with_context(..)` or on an `env` lookup "
+        "stays high. Also medium: `create`/`write` on a model with `_auto = False`, "
+        "which has no ORM table for `super()` to write into.",
     ),
     "compute-missing-depends": RuleDoc(
         detects="Compute methods that read fields not declared in `@api.depends`.",
@@ -365,24 +391,40 @@ RULE_DOCS: dict[str, RuleDoc] = {
         detects="`__manifest__.py` missing one of `name`, `version`, `depends`, "
         "`data`, `license`.",
         fix="Add the missing key. Run `odoo-doctor fix` to apply it automatically.",
-        notes="Fixable via `odoo-doctor fix`. `installable` is not required "
-        "(Odoo defaults it to `True`), and `data` is not required when the "
-        "manifest declares `assets` or `demo`.",
+        notes="Missing `version` and `data` are `medium` confidence (Odoo "
+        "defaults both, and Odoo core omits them from many manifests), so they "
+        "do not lower the score; `name`, `depends` and `license` stay `high`. "
+        "Fixable via `odoo-doctor fix`, which adds only the absent high-confidence "
+        "keys with a local edit and leaves every other line identical (line endings "
+        "are normalised to LF by `fix`). "
+        "`installable` is not required (Odoo defaults it to `True`), and `data` "
+        "is not required when the manifest declares `assets` or `demo`.",
     ),
     "manifest-data-order-risk": RuleDoc(
-        detects="`data` files in the manifest listed in an unsafe load order "
-        "(for example a security file after views/actions).",
-        why="Wrong order causes missing references or access rights at load time.",
-        fix="Order data files by dependency: security first, then views, then data.",
+        detects="A security file listed in `data` after a view/action file. It is "
+        "reported with high confidence only when that security XML creates a group "
+        "which an earlier file already needs when it loads (a `<menuitem groups=...>`, "
+        "a `<template groups=...>`, or a `groups_id` / `group_ids` / `groups` field "
+        'with `ref` or `eval="ref(...)"`).',
+        why="Odoo resolves those references while the earlier file loads and raises "
+        "if the group does not exist yet, so the module cannot be installed. A group "
+        "named only in a view arch (`groups=` on a field or button) just logs a "
+        "warning.",
+        fix="List the security file that creates the group before the first file that "
+        "uses it.",
         bad="'data': [\n"
-        "    'views/my_views.xml',\n"
-        "    'security/ir.model.access.csv',\n"
+        "    'views/menus.xml',      # <menuitem groups=\"my_mod.group_x\"/>\n"
+        "    'security/groups.xml',  # creates group_x\n"
         "]",
-        good="'data': [\n"
-        "    'security/ir.model.access.csv',\n"
-        "    'views/my_views.xml',\n"
-        "]",
-        notes="Fixable via `odoo-doctor fix`.",
+        good="'data': [\n    'security/groups.xml',\n    'views/menus.xml',\n]",
+        notes="Every other case is advisory (medium confidence, no score impact, not "
+        "auto-fixed): `ir.model.access.csv` and security files that only update a group "
+        "which already exists, or that define groups no earlier file needs. Fixable via "
+        "`odoo-doctor fix` for the high case: the file is moved in front of the first "
+        "file that needs it, with a local edit of the `data` lines (line endings are "
+        "normalised to LF by `fix`). The fixer declines when the list is not one "
+        "element per line or when it cannot show the new position keeps what the "
+        "file depends on loaded before it.",
     ),
     "manifest-missing-dependency": RuleDoc(
         detects="Modules required by Python `_inherit` models, XML external ID "

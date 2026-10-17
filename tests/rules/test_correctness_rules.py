@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from textwrap import dedent
+from textwrap import dedent, indent
 
 from odoo_doctor.rules.correctness.override_missing_super import (
     check_override_missing_super,
@@ -92,6 +92,153 @@ def test_non_override_method_silent(tmp_path: Path):
     f.write_text(code)
     diags = check_override_missing_super(f, "test_mod", "17.0")
     assert len(diags) == 0
+
+
+def _super_diags(tmp_path: Path, body: str, header: str = "") -> list:
+    code = (
+        "from odoo import models\n\n"
+        "class X(models.Model):\n"
+        '    _name = "x"\n' + header + "\n" + indent(dedent(body), "    ")
+    )
+    f = tmp_path / "m.py"
+    f.write_text(code)
+    return check_override_missing_super(f, "test_mod", "19.0")
+
+
+def test_override_that_only_raises_is_not_reported(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            \"\"\"Frozen.\"\"\"
+            raise UserError("no")
+    """
+    assert _super_diags(tmp_path, body) == []
+
+
+def test_override_with_conditional_raise_still_high(tmp_path: Path):
+    body = """\
+        def unlink(self):
+            if not self:
+                raise ValueError("nothing")
+            return True
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_override_that_raises_after_a_return_path_still_high(tmp_path: Path):
+    body = """\
+        def write(self, vals):
+            if vals:
+                return True
+            raise ValueError("empty")
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_delegation_to_same_method_of_another_recordset_is_medium(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            return self.mapped("tmpl_id").copy(default=default)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "medium"
+
+
+def test_call_of_same_name_on_self_is_not_a_delegation(tmp_path: Path):
+    body = """\
+        def create(self, vals):
+            return self.create({})
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_create_on_an_env_lookup_stays_high(tmp_path: Path):
+    body = """\
+        def create(self, vals):
+            return self.env["res.partner"].create(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_loop_variable_of_same_name_stays_high(tmp_path: Path):
+    body = """\
+        def write(self, vals):
+            for rec in self:
+                rec.write(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_delegation_to_a_local_recordset_is_medium(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            tmpls = self.env["x.tmpl"].concat(*[r.tmpl_id for r in self])
+            return tmpls.copy(default=default)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "medium"
+
+
+def test_same_model_adapter_chain_stays_high(tmp_path: Path):
+    for expr in (
+        "self.sudo().write(vals)",
+        "self.with_context(a=1).write(vals)",
+        "self.browse(self.ids).write(vals)",
+    ):
+        body = f"def write(self, vals):\n    return {expr}\n"
+        (diag,) = _super_diags(tmp_path, body)
+        assert diag.confidence == "high", expr
+
+
+def test_local_of_same_model_adapter_stays_high(tmp_path: Path):
+    body = """\
+        def write(self, vals):
+            s = self.sudo()
+            return s.write(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_create_on_local_env_lookup_stays_high(tmp_path: Path):
+    body = """\
+        def create(self, vals):
+            p = self.env["m"].browse(1)
+            return p.create(vals)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "high"
+
+
+def test_delegation_through_field_chain_is_medium(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            return self.line_ids.copy(default)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "medium"
+
+
+def test_copy_on_model_without_own_table_stays_high(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            return self.browse()
+    """
+    (diag,) = _super_diags(tmp_path, body, header="    _auto = False\n")
+    assert diag.confidence == "high"
+
+
+def test_model_without_own_table_is_medium(tmp_path: Path):
+    body = """\
+        def create(self, vals_list):
+            return self
+    """
+    (diag,) = _super_diags(tmp_path, body, header="    _auto = False\n")
+    assert diag.confidence == "medium"
 
 
 def test_compute_reads_undeclared_repo_field_catches(tmp_path: Path):

@@ -28,6 +28,111 @@ def test_duplicate_xml_id_clean(sample_addon: Path):
     assert diags == []
 
 
+def _dups(tmp_path: Path, files: dict[str, str], name: str = "dup_mod"):
+    """Scan a one-addon repo whose data files are *files* (path -> <odoo> body)."""
+    mod = tmp_path / name
+    for rel, body in files.items():
+        (mod / rel).parent.mkdir(parents=True, exist_ok=True)
+        (mod / rel).write_text(f"<odoo>{body}</odoo>")
+    (mod / "__manifest__.py").write_text(
+        f"{{'name': 'n', 'depends': ['base'], 'license': 'LGPL-3', 'data': {list(files)!r}}}"
+    )
+    graph = build_project_graph([tmp_path], odoo_version="17.0")
+    return check_duplicate_xml_id(graph.modules[name])
+
+
+_CAT = '<record id="c" model="res.partner.category">{}</record>'
+
+
+def test_duplicate_xml_id_patch_is_not_reported(tmp_path: Path):
+    diags = _dups(
+        tmp_path,
+        {
+            "a.xml": _CAT.format('<field name="name">A</field>'),
+            "b.xml": _CAT.format('<field name="color">3</field>'),
+        },
+    )
+    assert diags == []
+
+
+def test_duplicate_xml_id_menuitem_then_record_patch(tmp_path: Path):
+    menu = '<menuitem id="m" name="M"/>'
+    patch = '<record id="m" model="ir.ui.menu"><field name="{}">{}</field></record>'
+    assert _dups(tmp_path, {"a.xml": menu, "b.xml": patch.format("sequence", 5)}) == []
+
+
+def test_duplicate_xml_id_menuitem_always_sets_its_name(tmp_path: Path):
+    menu = '<menuitem id="m" name="M"/>'
+    patch = '<record id="m" model="ir.ui.menu"><field name="name">N</field></record>'
+    diags = _dups(tmp_path, {"a.xml": menu, "b.xml": patch})
+    assert [d.confidence for d in diags] == ["medium"]
+    assert "name" in diags[0].message
+
+
+def test_duplicate_xml_id_same_field_again_is_medium(tmp_path: Path):
+    diags = _dups(
+        tmp_path,
+        {
+            "a.xml": _CAT.format('<field name="name">A</field>'),
+            "b.xml": _CAT.format('<field name="name@fr">B</field>'),
+        },
+    )
+    assert [(d.confidence, d.file_path.endswith("b.xml")) for d in diags] == [
+        ("medium", True)
+    ]
+
+
+def test_duplicate_xml_id_overlap_counts_every_earlier_declaration(tmp_path: Path):
+    diags = _dups(
+        tmp_path,
+        {
+            "a.xml": _CAT.format('<field name="name">A</field>'),
+            "b.xml": _CAT.format('<field name="color">1</field>'),
+            "c.xml": _CAT.format('<field name="color">2</field>'),
+        },
+    )
+    assert [(d.confidence, Path(d.file_path).name) for d in diags] == [
+        ("medium", "c.xml")
+    ]
+
+
+def test_duplicate_xml_id_other_model_is_high(tmp_path: Path):
+    diags = _dups(
+        tmp_path,
+        {
+            "a.xml": _CAT.format('<field name="name">A</field>'),
+            "b.xml": '<record id="c" model="res.partner.title"><field name="name">A</field></record>',
+        },
+    )
+    assert [d.confidence for d in diags] == ["high"]
+    assert "res.partner.title" in diags[0].message
+
+
+def test_duplicate_xml_id_menuitem_vs_view_record_is_high(tmp_path: Path):
+    diags = _dups(
+        tmp_path,
+        {
+            "a.xml": '<menuitem id="x" name="X"/>',
+            "b.xml": '<record id="x" model="ir.ui.view"><field name="name">X</field></record>',
+        },
+    )
+    assert [d.confidence for d in diags] == ["high"]
+
+
+def test_duplicate_xml_id_theme_template_and_record_share_a_model(tmp_path: Path):
+    files = {
+        "a.xml": '<template id="t"><div/></template>',
+        "b.xml": '<record id="t" model="theme.ir.ui.view"><field name="active" eval="True"/></record>',
+    }
+    assert _dups(tmp_path, files, name="theme_dup") == []
+
+
+def test_duplicate_xml_id_unknown_tag_keeps_high(tmp_path: Path):
+    asset = "<asset id='a'><bundle>b</bundle><path>p</path></asset>"
+    diags = _dups(tmp_path, {"a.xml": asset, "b.xml": asset})
+    assert [d.confidence for d in diags] == ["high"]
+
+
 def test_view_field_not_in_model_unknown_model(tmp_path: Path):
     """Views referencing completely unknown models -> UNKNOWN -> no false positive."""
     mod = tmp_path / "unknown_mod"

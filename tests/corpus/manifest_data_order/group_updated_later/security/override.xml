@@ -1,0 +1,4 @@
+<odoo>
+    <!-- odoo-doctor: disable=duplicate-xml-id -->
+    <record id="group_x" model="res.groups"/>
+</odoo>

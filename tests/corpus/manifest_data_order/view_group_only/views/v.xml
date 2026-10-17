@@ -1,0 +1,9 @@
+<odoo>
+    <record id="view_x" model="ir.ui.view">
+        <field name="name">x</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <form><field name="name" groups="view_group_only.group_x"/></form>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="thing_a" model="res.partner.category">
+        <field name="name">Alpha</field>
+    </record>
+</odoo>

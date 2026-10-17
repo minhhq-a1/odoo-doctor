@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="tag_a" model="res.partner.category">
+        <field name="name">Alpha</field>
+        <field name="color">1</field>
+    </record>
+</odoo>

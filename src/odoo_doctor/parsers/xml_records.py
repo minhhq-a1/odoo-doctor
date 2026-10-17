@@ -20,6 +20,9 @@ class XmlIdInfo:
     refs: list[str] = field(default_factory=list)  # referenced xml IDs
     ref_lines: dict[str, int] = field(default_factory=dict)
     noupdate: bool = False
+    # Fields this declaration writes when loaded (``@lang`` translation suffix dropped),
+    # as ``odoo/tools/convert.py`` builds them. None for a tag it does not know.
+    field_names: frozenset[str] | None = None
 
 
 @dataclass
@@ -70,6 +73,56 @@ def _defines_xml_id(elem: etree._Element) -> bool:
             return False
         parent = parent.getparent()
     return True
+
+
+def _written_fields(elem: etree._Element) -> frozenset[str] | None:
+    """The fields Odoo writes for a data element, mirroring ``convert.py``.
+
+    ``<menuitem>`` and ``<template>`` are turned into records that always set some fields
+    (``_tag_menuitem``, ``_tag_template``), so those count even without an attribute.
+    Both spellings of the groups field are listed (``groups_id`` before 19.0).
+    """
+    names: set[str] = set()
+    if elem.tag == "record":
+        names = {
+            f.get("name", "").partition("@")[0]
+            for f in elem.findall("field")
+            if f.get("name")
+        }
+        parent = elem.getparent()
+        auto = (
+            (parent.get("auto_sequence") or "").strip().lower()
+            if parent is not None
+            else ""
+        )
+        if auto and auto not in ("0", "false", "off"):  # convert.py str2bool
+            names.add("sequence")  # next_sequence() fills it in
+    elif elem.tag == "menuitem":
+        names = {"parent_id", "active", "name"}
+        if elem.get("sequence"):
+            names.add("sequence")
+        if elem.get("action"):
+            names.add("action")
+        parent = elem.getparent()
+        if elem.get("web_icon") and not elem.get("parent") and parent.tag != "menuitem":
+            names.add("web_icon")  # only read when the menu has no parent
+        if any(g for g in elem.get("groups", "").split(",")):
+            names |= {"groups_id", "group_ids"}
+    elif elem.tag == "template":
+        names = {"name", "key", "type", "arch"}
+        names |= {a for a in ("track", "priority", "website_id") if elem.get(a)}
+        names |= {"inherit_id"} if elem.get("inherit_id") else set()
+        if elem.get("active") in ("True", "False"):
+            names.add("active")
+        if elem.get("customize_show") in ("True", "False"):
+            names.add("customize_show")
+        if elem.get("groups"):
+            names |= {"groups_id", "group_ids"}
+        if elem.get("primary") == "True":
+            names.add("mode")
+    else:
+        return None
+    return frozenset(names)
 
 
 def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
@@ -134,6 +187,7 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
                 refs=refs,
                 ref_lines=ref_lines,
                 noupdate=noupdate,
+                field_names=_written_fields(elem),
             )
         )
 

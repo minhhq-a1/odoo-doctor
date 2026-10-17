@@ -33,6 +33,10 @@ class MethodInfo:
     depends: list[str] = field(default_factory=list)
     is_override: bool = False
     calls_super: bool = False
+    # The body raises on every path that returns nothing: the operation is blocked.
+    always_raises: bool = False
+    # Calls the method of the same name on another receiver (`tmpl.copy(...)`, not `self`).
+    delegates: bool = False
     line: int = 0
 
 
@@ -51,6 +55,9 @@ class ModelInfo:
     # True when a class defines the model: it has a `_name` that its own `_inherit` does not
     # list. `_name = 'x'` with `_inherit = ['x', mixin]` (and `_inherit = 'x'` alone) extends.
     defines: bool = False
+    # False when the class sets `_auto = False`: no table is created by the ORM, so the
+    # default `create`/`write` behind `super()` has nothing to store into.
+    auto_table: bool = True
 
 
 @dataclass
@@ -194,6 +201,8 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                 if isinstance(target, ast.Name):
                     if target.id == "_name" and isinstance(item.value, ast.Constant):
                         model.name = item.value.value
+                    elif target.id == "_auto" and isinstance(item.value, ast.Constant):
+                        model.auto_table = bool(item.value.value)
                     elif target.id == "_inherit":
                         model.inherit = _extract_inherit(item.value)
                     elif target.id == "_inherits" and isinstance(item.value, ast.Dict):
@@ -339,6 +348,8 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
         depends=depends,
         is_override=is_override,
         calls_super=calls_super,
+        always_raises=_body_always_raises(func),
+        delegates=_body_delegates(func),
         line=func.lineno,
     )
 
@@ -355,6 +366,106 @@ def _body_calls_super(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "super"
+        ):
+            return True
+    return False
+
+
+def _body_always_raises(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """A top-level ``raise`` and no ``return`` anywhere: the method never completes."""
+    return any(isinstance(n, ast.Raise) for n in func.body) and not any(
+        isinstance(n, ast.Return) for n in ast.walk(func)
+    )
+
+
+# Methods that return records of the same model: a call on them is still a call on self.
+_SAME_MODEL_ADAPTERS = {
+    "sudo",
+    "with_context",
+    "with_user",
+    "with_company",
+    "with_env",
+    "browse",
+    "exists",
+    "filtered",
+    "filtered_domain",
+    "sorted",
+}
+
+
+def _strip_adapters(node: ast.expr) -> ast.expr:
+    while (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in _SAME_MODEL_ADAPTERS
+    ):
+        node = node.func.value
+    return node
+
+
+def _body_delegates(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Calls its own name on records of another model that it maps out of ``self``.
+
+    That is a receiver chain such as ``self.mapped('tmpl_id')`` / ``self.line_ids``, or a
+    local built from ``self`` (``tmpls = self.env['t'].concat(*[r.t for r in self])``).
+    ``self`` itself, its same-model adapters (``self.sudo()``), and anything that only
+    looks a model up in ``env`` (``self.env['m'].browse(1)``) are not delegation.
+
+    shortcut: a local reassigned in a loop is judged by every assignment alike, when a
+    flow analysis could follow one value at a time.
+    """
+    assigns = [
+        (t.id, n.value)
+        for n in ast.walk(func)
+        if isinstance(n, ast.Assign)
+        for t in n.targets
+        if isinstance(t, ast.Name)
+    ]
+    derived: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, value in assigns:
+            if name in derived:
+                continue
+            value = _strip_adapters(value)
+            if isinstance(value, ast.Name) and value.id == "self":
+                continue
+            env_roots = {
+                id(n.value)
+                for n in ast.walk(value)
+                if isinstance(n, ast.Attribute)
+                and n.attr == "env"
+                and isinstance(n.value, ast.Name)
+            }
+            if any(
+                isinstance(n, ast.Name)
+                and ((n.id == "self" and id(n) not in env_roots) or n.id in derived)
+                for n in ast.walk(value)
+            ):
+                derived.add(name)
+                changed = True
+    for node in ast.walk(func):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == func.name
+        ):
+            continue
+        recv = node.func.value
+        if isinstance(recv, ast.Name) and recv.id in derived:
+            return True
+        attrs, base = [], recv
+        while isinstance(base, (ast.Attribute, ast.Call, ast.Subscript)):
+            if isinstance(base, ast.Attribute):
+                attrs.append(base.attr)
+            base = base.func if isinstance(base, ast.Call) else base.value
+        if (
+            attrs  # not bare `self`
+            and isinstance(base, ast.Name)
+            and base.id == "self"
+            and "env" not in attrs
+            and not set(attrs) <= _SAME_MODEL_ADAPTERS
         ):
             return True
     return False

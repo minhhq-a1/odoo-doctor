@@ -69,6 +69,8 @@ Key concepts that span files:
 2. Test in `tests/rules/` — build a temp addon, assemble a `ModuleContext`, assert on emitted diagnostics (positive and negative cases). Shared fixture addons are in `tests/fixtures/`.
 3. Add the import to `cli/app.py`, a `RuleDoc` entry to `rules/rule_docs.py` and an effort to `core/roi.py::EFFORT_BY_RULE`, then `odoo-doctor rules docs --out docs/rules.md`.
 
+A rule's confidence is decided by whether its pattern fires on Odoo core 19: a pattern that Odoo's own addons use is at most `medium`, and `high` needs a true positive with evidence and a positive golden-corpus case (see the Changed notes of the CHANGELOG).
+
 **Never hand-edit `docs/rules.md`.** `tests/test_rule_docs_complete.py` fails if any rule lacks a `RULE_DOCS` entry, a `RULE_DOCS` entry is stale, or the page isn't regenerated. A single `@rule` function can register several names (`create_write_in_loop.py` registers both `create-in-loop` and `write-in-loop`).
 
 ## Releasing

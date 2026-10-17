@@ -1,0 +1,32 @@
+[
+  [
+    "manifest-data-order-risk",
+    "csv_only/__manifest__.py",
+    "medium"
+  ],
+  [
+    "manifest-data-order-risk",
+    "group_updated_later/__manifest__.py",
+    "medium"
+  ],
+  [
+    "manifest-data-order-risk",
+    "groups_unused/__manifest__.py",
+    "medium"
+  ],
+  [
+    "manifest-data-order-risk",
+    "menu_group_real/__manifest__.py",
+    "high"
+  ],
+  [
+    "manifest-data-order-risk",
+    "other_group_used/__manifest__.py",
+    "medium"
+  ],
+  [
+    "manifest-data-order-risk",
+    "view_group_only/__manifest__.py",
+    "medium"
+  ]
+]
