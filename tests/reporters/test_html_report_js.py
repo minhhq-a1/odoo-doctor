@@ -187,3 +187,23 @@ def test_smoke_only_https_rule_urls_become_links(tmp_path: Path):
     plain = sorted(n["text"] for n in nodes if n["tag"] == "span")
     assert plain == ["rule-http", "rule-js"]
     assert all(n["href"] is None for n in nodes if n["tag"] == "span")
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+@pytest.mark.parametrize(
+    ("dirty", "expected"),
+    [
+        (True, "main @ abc1234 (uncommitted changes)"),
+        (False, "main @ abc1234"),
+        (None, "main @ abc1234"),
+    ],
+)
+def test_smoke_header_marks_uncommitted_changes_only_when_dirty(
+    tmp_path: Path, dirty, expected
+):
+    html = render_html_report(
+        make_payload([make_diag()]), meta={**META, "dirty": dirty}
+    ).html
+    text = _smoke(tmp_path, html)["text"]
+    assert expected in text
+    assert ("uncommitted changes" in text) is bool(dirty)

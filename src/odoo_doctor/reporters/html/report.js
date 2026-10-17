@@ -75,7 +75,7 @@
     var lines = [];
     lines.push("Odoo Doctor " + (meta.tool_version || report.version || "") + " · generated " + (meta.generated_at || ""));
     lines.push("Modules: " + (ps.module_count || moduleNames.length) + " · Findings: " + findingsTotal);
-    if (meta.branch || meta.commit) lines.push((meta.branch || "unknown branch") + " @ " + (meta.commit || "no commit"));
+    if (meta.branch || meta.commit) lines.push((meta.branch || "unknown branch") + " @ " + (meta.commit || "no commit") + (meta.dirty === true ? " (uncommitted changes)" : ""));
 
     var themeBtn = el("button", { type: "button", text: "Toggle theme", onclick: toggleTheme });
     var head = el("header", { class: "top" }, [

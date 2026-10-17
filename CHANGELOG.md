@@ -6,6 +6,18 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- HTML report: the header says `(uncommitted changes)` after the commit when the scanned working tree is
+  dirty (new `dirty` key in the page's `meta`; computed with a read-only `git status`, never written to
+  the scanned repo; absent outside git).
+
+### Changed
+
+- HTML report: finding paths in the page are relative to the scan root instead of absolute, so the file
+  no longer reveals the scanning machine's directory layout (paths outside the root stay absolute).
+  `scan --json` and other outputs are unchanged.
+
 ### Fixed
 
 - Baseline: findings of one rule at one location kept the same identity, so a baseline holding only a

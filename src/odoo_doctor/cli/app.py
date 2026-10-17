@@ -752,6 +752,7 @@ def _write_html_report(
         "baseline": baseline,
         "commit": commit[:7] if commit else None,
         "branch": info["branch"],
+        "dirty": info["dirty"],
     }
     history = None
     skipped = 0
@@ -760,7 +761,7 @@ def _write_html_report(
     target = Path(html_path)
     try:
         report = html_report.render_html_report(
-            build_payload(diags, scores),
+            html_report.relativize_paths(build_payload(diags, scores), config_root),
             meta=meta,
             history=history,
             history_skipped=skipped,
