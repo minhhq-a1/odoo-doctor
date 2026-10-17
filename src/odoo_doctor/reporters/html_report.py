@@ -15,6 +15,7 @@ import json
 import math
 import re
 from importlib import resources
+from pathlib import Path
 from typing import NamedTuple
 
 from odoo_doctor.rules.rule_docs import DOCS_BASE_URL, rule_doc_url
@@ -89,6 +90,37 @@ def _without_low(payload: dict) -> dict:
         for name, module in payload.get("modules", {}).items()
     }
     return slim
+
+
+def _relative(path: str, root: Path) -> str:
+    try:
+        return Path(path).relative_to(root).as_posix()
+    except ValueError:  # outside the scan root (or already relative): keep as is
+        return path
+
+
+def relativize_paths(payload: dict, root: str | Path) -> dict:
+    """A copy of the payload whose finding paths are relative to ``root``.
+
+    Paths outside ``root`` stay absolute. Input untouched; only the page uses this,
+    ``--json`` keeps the absolute paths.
+    """
+    root = Path(root)
+
+    def fix(rows: list[dict]) -> list[dict]:
+        return [{**r, "file_path": _relative(r["file_path"], root)} for r in rows]
+
+    out = dict(payload)
+    out["top_findings"] = fix(payload.get("top_findings", []))
+    out["modules"] = {
+        name: {
+            **m,
+            "fix_priorities": fix(m.get("fix_priorities", [])),
+            "diagnostics": fix(m.get("diagnostics", [])),
+        }
+        for name, m in payload.get("modules", {}).items()
+    }
+    return out
 
 
 def _rule_urls(payload: dict) -> dict[str, str]:

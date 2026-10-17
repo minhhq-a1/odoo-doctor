@@ -173,3 +173,26 @@ def test_text_that_looks_like_rich_markup_is_printed_literally():
     assert "see [/dim] here" in out
     assert "https://example.com/[/x]" in out
     assert "addons/[/m]/a.py" in out
+
+
+def test_render_terminal_shows_secondary_scores_when_they_differ():
+    a = ScoreResult(
+        100.0, "Excellent", [], [], 0, python_lines=300, overall_with_medium=100.0
+    )
+    b = ScoreResult(80.0, "Good", [], [], 1, python_lines=100, overall_with_medium=60.0)
+    output = render_terminal([], {"a": a, "b": b})
+    assert "Weighted by code size: 95.0" in output
+    assert "Counting medium findings: 80.0" in output
+
+
+def test_render_terminal_hides_secondary_scores_when_equal():
+    a = ScoreResult(100.0, "Excellent", [], [], 0)
+    b = ScoreResult(100.0, "Excellent", [], [], 0)
+    assert "Weighted" not in render_terminal([], {"a": a, "b": b})
+
+
+def test_render_terminal_shows_a_difference_of_exactly_one_tenth():
+    # 90.0 vs 89.9 is 0.0999... as a float but a displayed difference of 0.1
+    a = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
+    b = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
+    assert "Counting medium findings: 89.9" in render_terminal([], {"a": a, "b": b})

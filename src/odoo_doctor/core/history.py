@@ -50,8 +50,40 @@ def to_utc_iso(value: str) -> str:
     return parsed.astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
-def git_info(cwd: Path) -> dict[str, str | None]:
-    """Best-effort commit/branch; CI environment variables win over git."""
+def _git_dirty(cwd: Path) -> bool | None:
+    """True when the working tree has uncommitted or untracked changes (the scan cache
+    directory aside); None without git.
+
+    Read-only: ``--no-optional-locks`` stops ``status`` from refreshing (writing) the
+    scanned repository's index.
+    """
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "--no-optional-locks",
+                "status",
+                "--porcelain",
+                "--",
+                ":/",
+                # the scan's own --cache directory (see ScanCache in cli/app.py)
+                ":(exclude,glob,top)**/.odoo_doctor_cache/**",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=15,
+            check=False,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return bool(out.stdout.strip()) if out.returncode == 0 else None
+
+
+def git_info(cwd: Path) -> dict[str, str | bool | None]:
+    """Best-effort commit/branch/dirty; CI environment variables win over git for the
+    commit and branch, ``dirty`` always comes from the working tree."""
 
     def run(*args: str) -> str | None:
         try:
@@ -75,7 +107,7 @@ def git_info(cwd: Path) -> dict[str, str | None]:
     )
     if branch == "HEAD":  # detached
         branch = None
-    return {"commit": commit, "branch": branch}
+    return {"commit": commit, "branch": branch, "dirty": _git_dirty(cwd)}
 
 
 def build_record(

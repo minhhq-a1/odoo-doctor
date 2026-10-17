@@ -78,7 +78,20 @@ def test_html_is_written_and_stdout_is_unchanged(tmp_path: Path):
     assert f"Wrote HTML report to {report}" in with_html.stderr
     assert "Wrote HTML report" not in with_html.stdout
     env = _envelope(report)
-    assert env["report"] == json.loads(plain.stdout)
+    expected = json.loads(plain.stdout)
+    # only paths differ: the page shows them relative to the scan root
+    for mod in expected["modules"].values():
+        for d in mod["diagnostics"]:
+            d["file_path"] = (
+                Path(d["file_path"]).relative_to(addons.resolve()).as_posix()
+            )
+        for d in mod["fix_priorities"]:
+            d["file_path"] = (
+                Path(d["file_path"]).relative_to(addons.resolve()).as_posix()
+            )
+    for d in expected["top_findings"]:
+        d["file_path"] = Path(d["file_path"]).relative_to(addons.resolve()).as_posix()
+    assert env["report"] == expected
     assert env["meta"]["project"] == addons.name  # the scanned folder
     assert env["meta"]["scope"] == {"partial": False, "diff": None, "modules": []}
     assert env["history"] is None
@@ -151,7 +164,7 @@ def test_baseline_is_named_in_meta_and_hides_known_findings(tmp_path: Path):
     done = _scan(tmp_path, str(addons), "--baseline", str(base), "--html", str(report))
     assert done.returncode == 0
     env = _envelope(report)
-    assert env["meta"]["baseline"] == str(base)
+    assert env["meta"]["baseline"] == "baseline.json"  # outside the root: name only
     assert env["truncated"]["findings_total"] == 1
     only = env["report"]["modules"]["m"]["diagnostics"]
     assert len(only) == 1 and only[0]["file_path"].endswith("y.py")
@@ -317,3 +330,53 @@ def test_failed_html_beats_the_delta_line_on_stdout(tmp_path: Path):
     good = tmp_path / "good.html"
     both = _scan(repo, str(addons), "--score-delta", "main", "--html", str(good))
     assert both.returncode == 0 and "Score Delta:" in both.stdout
+
+
+def test_report_paths_are_relative_to_the_scan_root(tmp_path: Path):
+    addons = _project(tmp_path, bad=True)
+    report = tmp_path / "r.html"
+    _scan(tmp_path, str(addons), "--html", str(report))
+    html = report.read_text(encoding="utf-8")
+    assert str(tmp_path.resolve()) not in html
+    env = _envelope(report)
+    diags = [d for m in env["report"]["modules"].values() for d in m["diagnostics"]]
+    assert diags and all(not d["file_path"].startswith("/") for d in diags)
+    assert any(d["file_path"] == "m/x.py" for d in diags)
+    # --json keeps the absolute path
+    out = _scan(tmp_path, str(addons), "--json").stdout
+    assert str(tmp_path.resolve()) in out
+
+
+def test_header_marks_a_dirty_tree_only_when_dirty(tmp_path: Path):
+    repo = tmp_path / "repo"
+    addons = _project(repo, bad=True)
+    _git_init(repo)
+    clean, dirty = tmp_path / "c.html", tmp_path / "d.html"
+    _scan(repo, str(addons), "--html", str(clean))
+    (repo / "addons" / "m" / "x.py").write_text("# edited\n")
+    _scan(repo, str(addons), "--html", str(dirty))
+    assert _envelope(clean)["meta"]["dirty"] is False
+    assert _envelope(dirty)["meta"]["dirty"] is True
+
+
+def test_absolute_baseline_path_never_reaches_the_page(tmp_path: Path):
+    addons = _project(tmp_path, bad=True)
+    inside = addons / "baseline.json"
+    outside_dir = tmp_path / "elsewhere"
+    outside_dir.mkdir()
+    outside = outside_dir / "base.json"
+    for base, expected in ((inside, "baseline.json"), (outside, "base.json")):
+        (addons / "m" / "y.py").unlink(missing_ok=True)
+        _scan(tmp_path, str(addons), "--write-baseline", str(base))
+        (addons / "m" / "y.py").write_text(  # unknown to the baseline, else no report
+            'def g(self, name):\n    self.env.cr.execute(f"SELECT {name}")\n'
+        )
+        report = tmp_path / "r.html"
+        done = _scan(
+            tmp_path, str(addons), "--baseline", str(base), "--html", str(report)
+        )
+        assert done.returncode == 0, done.stderr
+        html = report.read_text(encoding="utf-8")
+        assert _envelope(report)["meta"]["baseline"] == expected
+        assert str(tmp_path.resolve()) not in html and str(tmp_path) not in html
+        assert str(Path.home()) not in html

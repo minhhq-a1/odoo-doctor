@@ -147,3 +147,59 @@ def test_score_per_module_keeps_modules_that_only_have_stats():
     assert scores["ghost"].suppression_stats == stats["ghost"]
     # without extra_modules the module set is unchanged (baseline re-scoring relies on it)
     assert _score_per_module([], _cfg(), "17.0", stats=stats) == {}
+
+
+def _addon_with_lines(tmp_path: Path) -> Path:
+    # 4 lines in a.py + 1 in __init__.py + 1 in __manifest__.py = 6.
+    root = _addon(tmp_path)
+    (root / "my_addon" / "a.py").write_text("a = 1\nb = 2\nc = 3\nd = 4\n")
+    (root / "my_addon" / "__init__.py").write_text("from . import a")
+    return root
+
+
+def test_python_lines_are_identical_on_the_live_and_the_cached_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    root = _addon_with_lines(tmp_path)
+    cache = ScanCache(tmp_path / ".odoo_doctor_cache")
+    cfg = OdooDoctorConfig(odoo_version="17.0")
+    _, live = collect_scores([root], cfg, "17.0", config_root=root, cache=cache)
+    monkeypatch.setattr(
+        "odoo_doctor.core.scanner.build_project_graph",
+        lambda **kw: (_ for _ in ()).throw(AssertionError("expected a cache hit")),
+    )
+    _, hit = collect_scores([root], cfg, "17.0", config_root=root, cache=cache)
+    assert live["my_addon"].python_lines == hit["my_addon"].python_lines == 6
+    assert hit["my_addon"].overall_with_medium == live["my_addon"].overall_with_medium
+
+
+def _addon_with_medium_finding(tmp_path: Path) -> Path:
+    root = _addon(tmp_path)
+    (root / "my_addon" / "__init__.py").write_text("from . import m\n")
+    (root / "my_addon" / "m.py").write_text(
+        "from odoo import models\n\n\nclass M(models.Model):\n"
+        '    _name = "x.m"\n\n    def go(self):\n        self.env.cr.commit()\n'
+    )
+    return root
+
+
+def test_with_medium_counts_a_real_medium_finding_live_and_cached(
+    tmp_path: Path,
+):
+    import odoo_doctor.cli.app  # noqa: F401  (registers the rules)
+    from odoo_doctor.core.scoring import project_score, secondary_scores
+
+    root = _addon_with_medium_finding(tmp_path)
+    cfg = OdooDoctorConfig(odoo_version="17.0")
+    cache = ScanCache(tmp_path / ".odoo_doctor_cache")
+
+    def numbers(scores):
+        return {**project_score(scores), **secondary_scores(scores)}
+
+    diags, live = collect_scores([root], cfg, "17.0", config_root=root, cache=cache)
+    assert [d.confidence for d in diags if d.rule == "manual-cr-commit"] == ["medium"]
+    live_numbers = numbers(live)
+    assert live_numbers["with_medium"] < live_numbers["overall"]
+
+    _, hit = collect_scores([root], cfg, "17.0", config_root=root, cache=cache)
+    assert numbers(hit) == live_numbers

@@ -35,37 +35,63 @@ def _snippet(diag: Diagnostic) -> str:
     return ""
 
 
+def _identity(diag: Diagnostic, *parts: str) -> str:
+    norm_path = diag.file_path.replace("\\", "/")
+    key = "\0".join((diag.rule, diag.module, norm_path, _snippet(diag), *parts))
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
 def finding_identity(diag: Diagnostic) -> str:
-    """Stable identity for a finding: rule + module + path + line snippet.
+    """Stable identity for a finding: rule + module + path + line snippet + title.
 
     Line/column numbers are deliberately excluded so an edit elsewhere does not
     invalidate the baseline entry. The snippet (normalized line content) keeps
-    distinct findings distinct even within one file. When the file cannot be
-    read, the snippet is empty and identity falls back to rule+module+path —
-    acceptable because that only collapses findings of the same rule in an
-    unreadable file, which is rare and fails safe (over-suppress, not crash).
+    distinct findings distinct even within one file; the title keeps findings of
+    one rule at one location apart (the manifest rules report every finding at
+    line 1, and the title names the field or file). Messages are not hashed:
+    several embed line numbers. When the file cannot be read, the snippet is
+    empty and identity falls back to rule+module+path+title.
     """
-    norm_path = diag.file_path.replace("\\", "/")
-    key = f"{diag.rule}\0{diag.module}\0{norm_path}\0{_snippet(diag)}"
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return _identity(diag, diag.title)
+
+
+def _legacy_identity(diag: Diagnostic) -> str:
+    """Version 1 identity (no title): only used to read old baseline files."""
+    return _identity(diag)
+
+
+class Baseline(set):
+    """Loaded baseline ids; `legacy` is True for a version 1 file."""
+
+    legacy = False
 
 
 def write_baseline(diagnostics: list[Diagnostic], path: Path) -> None:
     ids = sorted({finding_identity(d) for d in diagnostics})
     Path(path).write_text(
-        json.dumps({"version": 1, "ids": ids}, indent=2), encoding="utf-8"
+        json.dumps({"version": 2, "ids": ids}, indent=2), encoding="utf-8"
     )
 
 
-def load_baseline(path: Path) -> set[str]:
+def load_baseline(path: Path) -> Baseline:
+    loaded = Baseline()
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return set()
-    return set(data.get("ids", []))
+        loaded.update(data["ids"])
+        loaded.legacy = data.get("version") == 1
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return Baseline()
+    return loaded
 
 
 def filter_against_baseline(
     diagnostics: list[Diagnostic], baseline_ids: set[str]
 ) -> list[Diagnostic]:
-    return [d for d in diagnostics if finding_identity(d) not in baseline_ids]
+    # shortcut: a plain set is treated as version 2 (no old-style matching).
+    legacy = getattr(baseline_ids, "legacy", False)
+    return [
+        d
+        for d in diagnostics
+        if finding_identity(d) not in baseline_ids
+        and not (legacy and _legacy_identity(d) in baseline_ids)
+    ]

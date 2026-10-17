@@ -338,7 +338,7 @@ def test_baseline_file_format_is_stable(tmp_path: Path):
     )
     assert result.exit_code == 0, result.output
     data = json.loads(baseline.read_text())
-    assert data["version"] == 1
+    assert data["version"] == 2
     assert isinstance(data["ids"], list) and data["ids"]
 
 

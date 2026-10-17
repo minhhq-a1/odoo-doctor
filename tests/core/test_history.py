@@ -193,3 +193,83 @@ def test_malformed_module_entries_are_ignored_not_fatal():
     last["modules"] = {"a": {"overall": 70}, "b": {"overall": 1}, "c": None}
     found = {r["scope"] for r in detect_regressions([prev, last])}
     assert found == {"project", "a"}
+
+
+def _git(repo, *args):
+    import subprocess
+
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+
+def _repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.txt").write_text("x")
+    for cmd in (
+        ["init", "-q", "-b", "main"],
+        ["config", "user.email", "t@example.com"],
+        ["config", "user.name", "T"],
+        ["add", "."],
+        ["commit", "-qm", "init"],
+    ):
+        _git(repo, *cmd)
+    return repo
+
+
+def test_git_info_dirty_is_false_on_a_clean_tree_and_true_after_an_edit(
+    tmp_path, monkeypatch
+):
+    from odoo_doctor.core.history import git_info
+
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    repo = _repo(tmp_path)
+    assert git_info(repo)["dirty"] is False
+    (repo / "a.txt").write_text("changed")
+    assert git_info(repo)["dirty"] is True
+
+
+def test_git_info_dirty_counts_untracked_files(tmp_path):
+    from odoo_doctor.core.history import git_info
+
+    repo = _repo(tmp_path)
+    (repo / "new.txt").write_text("x")
+    assert git_info(repo)["dirty"] is True
+
+
+def test_git_info_dirty_is_none_without_git(tmp_path):
+    from odoo_doctor.core.history import git_info
+
+    assert git_info(tmp_path)["dirty"] is None
+
+
+def test_git_info_dirty_ignores_ci_commit_env_and_never_writes_the_repo(
+    tmp_path, monkeypatch
+):
+    from odoo_doctor.core.history import git_info
+
+    repo = _repo(tmp_path)
+    monkeypatch.setenv("GITHUB_SHA", "f" * 40)
+    (repo / "a.txt").write_text("changed")
+    index = repo / ".git" / "index"
+    before = index.stat().st_mtime_ns
+    info = git_info(repo)
+    assert info["commit"] == "f" * 40 and info["dirty"] is True
+    assert index.stat().st_mtime_ns == before
+
+
+def test_git_info_dirty_ignores_the_scan_cache_directory(tmp_path):
+    from odoo_doctor.core.history import git_info
+
+    repo = _repo(tmp_path)
+    (repo / "sub").mkdir()
+    (repo / "sub" / ".odoo_doctor_cache").mkdir()
+    (repo / "sub" / ".odoo_doctor_cache" / "scan.json").write_text("{}")
+    (repo / ".odoo_doctor_cache").mkdir()
+    (repo / ".odoo_doctor_cache" / "scan.json").write_text("{}")
+    assert git_info(repo)["dirty"] is False
+    assert git_info(repo / "sub")["dirty"] is False  # scan root below the repo root
+    (repo / "real.txt").write_text("x")
+    assert git_info(repo / "sub")["dirty"] is True
+    (repo / "real.txt").unlink()
+    (repo / "a.txt").write_text("changed")
+    assert git_info(repo)["dirty"] is True

@@ -417,3 +417,20 @@ def test_select_never_exceeds_its_container():
     )
     body = _css_rule_body(css, 'button, select, input[type="search"]')
     assert "max-width: 100%" in body
+
+
+def test_relativize_paths_makes_paths_relative_and_keeps_outside_ones():
+    root = "/srv/repo"
+    inside = make_diag(file_path="/srv/repo/m/models/a.py")
+    outside = make_diag(file_path="/elsewhere/b.py", line=9)
+    payload = make_payload([inside, outside])
+    payload["modules"]["m"]["fix_priorities"] = [{"file_path": inside.file_path}]
+    before = json.dumps(payload)
+    rel = html_report_module.relativize_paths(payload, root)
+    assert json.dumps(payload) == before  # input untouched
+    paths = [d["file_path"] for d in rel["modules"]["m"]["diagnostics"]]
+    assert paths == ["m/models/a.py", "/elsewhere/b.py"]
+    tops = {t["file_path"] for t in rel["top_findings"]}
+    assert tops == {"m/models/a.py", "/elsewhere/b.py"}
+    fixes = [f["file_path"] for f in rel["modules"]["m"]["fix_priorities"]]
+    assert fixes == ["m/models/a.py"]

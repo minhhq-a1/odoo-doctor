@@ -8,7 +8,11 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from odoo_doctor import __version__
-from odoo_doctor.core.scoring import SCORE_SCHEMA_VERSION, project_score
+from odoo_doctor.core.scoring import (
+    SCORE_SCHEMA_VERSION,
+    project_score,
+    secondary_scores,
+)
 from odoo_doctor.rules.registry import default_registry
 
 # Importing the rule modules triggers their @rule registration so the registry
@@ -70,7 +74,7 @@ def build_payload(
         "version": __version__,
         "schema_version": "1.0",
         "score_schema_version": SCORE_SCHEMA_VERSION,
-        "project_score": project_score(scores),
+        "project_score": {**project_score(scores), **secondary_scores(scores)},
         "top_findings": [
             {
                 "module": d.module,

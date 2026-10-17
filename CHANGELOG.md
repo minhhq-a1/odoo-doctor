@@ -6,6 +6,37 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- HTML report: the header says `(uncommitted changes)` after the commit when the scanned working tree is
+  dirty (new `dirty` key in the page's `meta`; computed with a read-only `git status`, never written to
+  the scanned repo; absent outside git; untracked files count, the scan's `.odoo_doctor_cache`
+  directory does not).
+- Two secondary project numbers next to the main score, which keeps its formula and
+  `score_schema_version`: `project_score.weighted` (module scores weighted by each module's Python line
+  count, every `*.py` file under the module path, tests and vendored code included, so large
+  modules dominate) and `project_score.with_medium` (plain mean with `medium` findings counted too).
+  The terminal shows them on a dim line when they differ from the main score by 0.1 or more, and the HTML header
+  shows them. `--min-score`, `--fail-on`, history and the badge still use the main score only.
+  The scan cache now also stores the per-module line counts, so `CACHE_VERSION` is 3 and older caches
+  are rebuilt once.
+
+### Changed
+
+- HTML report: finding paths in the page are relative to the scan root instead of absolute, so the file
+  no longer reveals the scanning machine's directory layout (paths outside the root stay absolute); the
+  `--baseline` file is shown relative to the root, or by file name only when outside it. `scan --json`
+  and other outputs are unchanged.
+
+### Fixed
+
+- Baseline: findings of one rule at one location kept the same identity, so a baseline holding only a
+  `medium` `manifest-missing-required-fields` (e.g. no `version`) also hid a later `high` one (e.g. no
+  `license`), and the same for several `manifest-data-order-risk` findings in one manifest. The finding
+  title is now part of the identity, and `--write-baseline` writes `"version": 2`. Existing version 1
+  baselines keep working (matched by the old identity); rewrite them with `--write-baseline` to get the
+  stricter identity. The `manifest-data-order-risk` title now names the security file.
+
 ## [0.10.1] — 2026-10-17
 
 ### Changed

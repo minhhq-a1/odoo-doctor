@@ -34,11 +34,14 @@ Notes:
 - If no addon is found, no file is written (a note goes to stderr). A `--baseline` that hides
   every finding of the project currently also ends in "No addons found" (the scoring step
   returns no module), so no report is written in that case either.
-- Finding paths are always embedded as resolved absolute paths, exactly as in `scan --json`,
-  whatever form the scan target has, and the `--baseline` argument is embedded as you typed
-  it. A report shared outside your team therefore reveals the directory layout of the machine
-  that scanned (a home directory or a CI runner path). Generate it in CI, where that layout is
-  not sensitive, when the report will be shared.
+- Finding paths in the page are relative to the scan root (the directory the scan ran on), so the
+  file does not reveal your machine's directory layout; a file outside that directory keeps its
+  absolute path. `scan --json` and every other output keep absolute paths. The `--baseline`
+  file is shown relative to the scan root, or by file name only when it lies outside it.
+- When the scanned directory is in a git repository, the header shows `branch @ commit`, followed
+  by `(uncommitted changes)` when the working tree differs from that commit (untracked files
+  count, except the `.odoo_doctor_cache` directory of `--cache`), so you know the commit may not match the scanned code. The check is read-only
+  (`git status --porcelain --no-optional-locks`); outside git nothing is shown.
 
 ## CI recipes
 

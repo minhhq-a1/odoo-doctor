@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Bump when the serialized Diagnostic payload schema changes. A mismatch makes
 # any older on-disk cache miss cleanly instead of raising on Diagnostic(**old).
-CACHE_VERSION = 2  # v2 adds the suppression_stats payload
+CACHE_VERSION = 3  # v2 adds suppression_stats, v3 adds python_lines
 
 _CACHE_FILE = "scan_cache.json"
 _SCANNED_SUFFIXES = {".py", ".xml", ".csv"}
@@ -86,6 +86,7 @@ class ScanCache:
         self._fp: str | None = None
         self._diagnostics: list | None = None
         self._suppression_stats: dict | None = None
+        self._python_lines: dict | None = None
 
     @property
     def _path(self) -> Path:
@@ -101,6 +102,7 @@ class ScanCache:
         self._fp = data.get("fp")
         self._diagnostics = data.get("diagnostics")
         self._suppression_stats = data.get("suppression_stats")
+        self._python_lines = data.get("python_lines")
 
     def save(self) -> None:
         if self._fp is None:
@@ -113,6 +115,7 @@ class ScanCache:
                     "fp": self._fp,
                     "diagnostics": self._diagnostics or [],
                     "suppression_stats": self._suppression_stats or {},
+                    "python_lines": self._python_lines or {},
                 }
             ),
             encoding="utf-8",
@@ -129,12 +132,20 @@ class ScanCache:
             return self._suppression_stats or {}
         return {}
 
+    def lookup_lines(self, fingerprint: str) -> dict:
+        """Per-module Python line counts stored with the entry ({} on a miss)."""
+        if self._fp == fingerprint:
+            return self._python_lines or {}
+        return {}
+
     def store(
         self,
         fingerprint: str,
         diagnostics: list,
         suppression_stats: dict | None = None,
+        python_lines: dict | None = None,
     ) -> None:
         self._fp = fingerprint
         self._diagnostics = diagnostics
         self._suppression_stats = suppression_stats or {}
+        self._python_lines = python_lines or {}

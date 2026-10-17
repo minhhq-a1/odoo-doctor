@@ -225,7 +225,7 @@ def check_data_order_risk(ctx: ModuleContext) -> list[Diagnostic]:
             tier="P2",
             source="native",
             confidence="high" if data_file in high else "medium",
-            title="Security file loaded after views/actions",
+            title=f"Security file '{data_file}' loaded after views/actions",
             message=f"Security file '{data_file}' is loaded after view/action file '{first_view_file}'.",
             help="Move security files before views and actions in the 'data' list to ensure access rights are created first.",
             odoo_version=ctx.odoo_version,
