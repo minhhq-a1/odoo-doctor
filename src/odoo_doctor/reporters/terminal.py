@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from odoo_doctor.core.scoring import score_label
+from odoo_doctor.core.scoring import score_label, secondary_scores
 from odoo_doctor.core.suppression_stats import actionable_count
 
 if TYPE_CHECKING:
@@ -125,6 +125,17 @@ def render_terminal(
         console.print(
             f"\n[bold]Project Score:[/bold] [{color}]{overall:.1f}/100 ({label})[/{color}]"
         )
+        extra = secondary_scores(scores)
+        parts = [
+            f"{text}: {extra[key]:.1f}"
+            for key, text in (
+                ("weighted", "Weighted by code size"),
+                ("with_medium", "Counting medium findings"),
+            )
+            if abs(extra[key] - round(overall, 1)) >= 0.1
+        ]
+        if parts:
+            console.print(f"[dim]{' · '.join(parts)}[/dim]", highlight=False)
 
     hint = _noise_hint(scores)
     if hint:

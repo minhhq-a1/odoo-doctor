@@ -166,3 +166,33 @@ def test_user_weights_override_defaults():
     result = score_diagnostics([d], [True], category_weights={"Security": 3.0})
     sec = next(c for c in result.categories if c.category == "Security")
     assert sec.total_impact == 30.0
+
+
+def _scored(overall, lines, with_medium=None):
+    return ScoreResult(
+        overall, "", [], [], 0, python_lines=lines, overall_with_medium=with_medium
+    )
+
+
+def test_secondary_scores_weight_by_lines_and_count_medium():
+    from odoo_doctor.core.scoring import secondary_scores
+
+    scores = {"a": _scored(100.0, 300, 100.0), "b": _scored(80.0, 100, 60.0)}
+    # weighted: (100*300 + 80*100) / 400 = 95.0 ; with_medium: (100 + 60) / 2 = 80.0
+    assert secondary_scores(scores) == {"weighted": 95.0, "with_medium": 80.0}
+
+
+def test_secondary_scores_fall_back_to_the_plain_mean_without_lines():
+    from odoo_doctor.core.scoring import secondary_scores
+
+    scores = {"a": _scored(100.0, 0), "b": _scored(80.0, 0)}
+    assert secondary_scores(scores) == {"weighted": 90.0, "with_medium": 90.0}
+    assert secondary_scores({}) == {"weighted": 100.0, "with_medium": 100.0}
+
+
+def test_medium_findings_only_count_in_the_with_medium_number():
+    from odoo_doctor.core.pipeline import mark_score_eligibility
+
+    diags = [_diag(confidence="medium"), _diag(confidence="low")]
+    assert mark_score_eligibility(diags) == [False, False]
+    assert mark_score_eligibility(diags, include_medium=True) == [True, False]

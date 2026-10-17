@@ -11,6 +11,13 @@ All notable changes to Odoo Doctor are documented here.
 - HTML report: the header says `(uncommitted changes)` after the commit when the scanned working tree is
   dirty (new `dirty` key in the page's `meta`; computed with a read-only `git status`, never written to
   the scanned repo; absent outside git).
+- Two secondary project numbers next to the main score, which keeps its formula and
+  `score_schema_version`: `project_score.weighted` (module scores weighted by each module's Python line
+  count) and `project_score.with_medium` (plain mean with `medium` findings counted too). The terminal
+  shows them on a dim line when they differ from the main score by 0.1 or more, and the HTML header
+  shows them. `--min-score`, `--fail-on`, history and the badge still use the main score only.
+  The scan cache now also stores the per-module line counts, so `CACHE_VERSION` is 3 and older caches
+  are rebuilt once.
 
 ### Changed
 

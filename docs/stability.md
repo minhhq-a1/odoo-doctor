@@ -69,7 +69,8 @@ Do not rely on the exit code of anything not listed here.
 ### Machine-readable output
 
 - `scan --json`: top-level keys `version`, `schema_version`, `score_schema_version`,
-  `project_score`, `top_findings`, `modules`; per module `score`, `fix_priorities`,
+  `project_score` (`overall`, `label`, `module_count`; the optional, additive `weighted` and
+  `with_medium` are secondary numbers and never gate anything), `top_findings`, `modules`; per module `score`, `fix_priorities`,
   `suppression_stats`, `diagnostics`; each diagnostic carries `module`, `file_path`,
   `line`, `column`, `rule`, `category`, `severity`, `tier`, `source`, `confidence`,
   `title`, `message`, `help`, `odoo_version`, `url`.

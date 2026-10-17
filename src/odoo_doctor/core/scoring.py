@@ -54,6 +54,10 @@ class ScoreResult:
     # Per-rule suppression counts for this module (core.suppression_stats):
     # {rule: {"surfaced", "inline", "ignore_rule", "severity_off"}}; filled by the scanner.
     suppression_stats: dict = field(default_factory=dict)
+    # Same module score with `medium` findings counted too (None = not computed), and
+    # the module's Python line count; both feed secondary_scores(), filled by the scanner.
+    overall_with_medium: float | None = None
+    python_lines: int = 0
 
     def compute_label(self) -> str:
         return score_label(self.overall)
@@ -145,3 +149,24 @@ def project_score(scores: dict[str, ScoreResult]) -> dict[str, float | str | int
         "label": score_label(overall),
         "module_count": module_count,
     }
+
+
+def secondary_scores(scores: dict[str, ScoreResult]) -> dict[str, float]:
+    """Extra project numbers shown next to the main score (which they never replace).
+
+    ``weighted``: module scores averaged by Python line count (plain mean if no module
+    has any lines). ``with_medium``: plain mean of the module scores that also count
+    ``medium`` findings (a module without that number counts at its main score).
+    """
+    if not scores:
+        return {"weighted": 100.0, "with_medium": 100.0}
+    total = sum(s.python_lines for s in scores.values())
+    if total > 0:
+        weighted = sum(s.overall * s.python_lines for s in scores.values()) / total
+    else:
+        weighted = sum(s.overall for s in scores.values()) / len(scores)
+    medium = sum(
+        s.overall if s.overall_with_medium is None else s.overall_with_medium
+        for s in scores.values()
+    ) / len(scores)
+    return {"weighted": round(weighted, 1), "with_medium": round(medium, 1)}

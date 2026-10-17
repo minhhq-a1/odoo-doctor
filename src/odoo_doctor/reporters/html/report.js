@@ -67,6 +67,13 @@
     return Object.keys(seen).sort();
   }
 
+  function secondaryScores(ps) {
+    var parts = [];
+    if (typeof ps.weighted === "number") parts.push("Weighted by code size: " + ps.weighted.toFixed(1));
+    if (typeof ps.with_medium === "number") parts.push("Counting medium findings: " + ps.with_medium.toFixed(1));
+    return el("div", { class: "muted", text: parts.join(" · ") });
+  }
+
   // ---- header --------------------------------------------------------------
   function renderHeader() {
     var ps = report.project_score || {};
@@ -88,6 +95,7 @@
           el("span", { class: "score-num", text: overall.toFixed(1) }),
           el("span", { class: "score-label", text: ps.label || bandLabel(overall) }),
         ]),
+        secondaryScores(ps),
         text(" "),
         themeBtn,
       ]),

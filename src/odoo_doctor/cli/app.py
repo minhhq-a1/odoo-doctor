@@ -266,7 +266,8 @@ def scan(
         # findings. Reuse the SAME scoring helper that collect_scores uses, so
         # eligibility (mark_score_eligibility) and in-scope logic cannot drift.
         stats = {m: s.suppression_stats for m, s in scores.items()}
-        scores = _score_per_module(diags, cfg, version, stats=stats)
+        lines = {m: s.python_lines for m, s in scores.items()}
+        scores = _score_per_module(diags, cfg, version, stats=stats, lines=lines)
 
     if not scores:
         if html_path:

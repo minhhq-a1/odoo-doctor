@@ -207,3 +207,12 @@ def test_smoke_header_marks_uncommitted_changes_only_when_dirty(
     text = _smoke(tmp_path, html)["text"]
     assert expected in text
     assert ("uncommitted changes" in text) is bool(dirty)
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_smoke_header_shows_the_secondary_scores(tmp_path: Path):
+    payload = make_payload([make_diag()])
+    payload["project_score"].update({"weighted": 92.2, "with_medium": 90.9})
+    text = _smoke(tmp_path, render_html_report(payload, meta=META).html)["text"]
+    assert "Weighted by code size: 92.2" in text
+    assert "Counting medium findings: 90.9" in text

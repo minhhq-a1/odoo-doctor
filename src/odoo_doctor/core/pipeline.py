@@ -272,9 +272,13 @@ def apply_capability_gates(
 
 def mark_score_eligibility(
     diagnostics: list[Diagnostic],
+    include_medium: bool = False,
 ) -> list[bool]:
-    """Return parallel list of booleans — True if the diagnostic counts toward score."""
-    return [d.confidence == "high" and d.category in CATEGORIES for d in diagnostics]
+    """Return parallel list of booleans — True if the diagnostic counts toward score.
+
+    *include_medium* also counts ``medium`` findings (the secondary project number)."""
+    levels = ("high", "medium") if include_medium else ("high",)
+    return [d.confidence in levels and d.category in CATEGORIES for d in diagnostics]
 
 
 # --- Composed pipeline ---

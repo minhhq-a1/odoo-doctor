@@ -21,6 +21,7 @@ from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.pipeline import (
     derive_capabilities,
+    mark_score_eligibility,
     rule_is_enabled,
     run_pipeline_with_stats,
 )
@@ -74,8 +75,10 @@ def _score_module(
     cfg: OdooDoctorConfig,
     in_scope: list[str],
     stats: dict | None = None,
+    python_lines: int = 0,
 ):
-    """Score one module and attach its best-first fix priorities and suppression stats."""
+    """Score one module and attach its fix priorities, suppression stats and the inputs
+    of the secondary project numbers (score counting medium findings, Python lines)."""
     result = score_diagnostics(
         mod_diags,
         mod_elig,
@@ -90,6 +93,13 @@ def _score_module(
         is_fixable=_is_fixable_rule,
     )
     result.suppression_stats = stats or {}
+    result.python_lines = python_lines
+    result.overall_with_medium = score_diagnostics(
+        mod_diags,
+        mark_score_eligibility(mod_diags, include_medium=True),
+        category_weights=cfg.category_weights,
+        in_scope_categories=in_scope,
+    ).overall
     return result
 
 
@@ -99,11 +109,10 @@ def _score_per_module(
     version: str,
     stats: dict | None = None,
     extra_modules=(),
+    lines: dict | None = None,
 ) -> dict[str, object]:
     """Score every module that has findings, plus *extra_modules* (e.g. modules whose
     findings were all suppressed). *stats* is the full {module: {rule: counts}} map."""
-    from odoo_doctor.core.pipeline import mark_score_eligibility
-
     eligible = mark_score_eligibility(diags)
     in_scope = _in_scope_categories(version, cfg)
     scores: dict[str, object] = {}
@@ -112,7 +121,12 @@ def _score_per_module(
         mod_diags = [d for d in diags if d.module == name]
         mod_elig = [e for d, e in zip(diags, eligible) if d.module == name]
         scores[name] = _score_module(
-            mod_diags, mod_elig, cfg, in_scope, (stats or {}).get(name)
+            mod_diags,
+            mod_elig,
+            cfg,
+            in_scope,
+            (stats or {}).get(name),
+            (lines or {}).get(name, 0),
         )
     return scores
 
@@ -145,8 +159,14 @@ def collect_scores(
         if hit is not None:
             diags = [Diagnostic(**d) for d in hit]
             stats = cache.lookup_stats(fingerprint)
+            lines = cache.lookup_lines(fingerprint)
             scores = _score_per_module(
-                diags, cfg, version, stats=stats, extra_modules=stats
+                diags,
+                cfg,
+                version,
+                stats=stats,
+                extra_modules={*stats, *lines},
+                lines=lines,
             )
             return diags, scores
 
@@ -260,9 +280,17 @@ def collect_scores(
 
     # Collect suppressions
     suppressions: set[tuple[str, int, str]] = set()
+    python_lines: dict[str, int] = {}
     for ctx in graph.modules.values():
+        python_lines[ctx.name] = 0
         for py_file in ctx.path.rglob("*.py"):
             suppressions |= scan_python_suppressions(py_file)
+            try:
+                python_lines[ctx.name] += len(
+                    py_file.read_bytes().decode("utf-8", "replace").splitlines()
+                )
+            except OSError:
+                pass
         for data_file in ctx.manifest.data:
             xml_path = ctx.path / data_file
             if xml_path.suffix == ".xml" and xml_path.exists():
@@ -282,7 +310,7 @@ def collect_scores(
         stats = {}  # a --diff scan sees only some files: partial numbers would mislead
 
     if cache is not None and fingerprint is not None:
-        cache.store(fingerprint, [asdict(d) for d in diags], stats)
+        cache.store(fingerprint, [asdict(d) for d in diags], stats, python_lines)
 
     # Determine in-scope categories
     in_scope = _in_scope_categories(version, cfg)
@@ -293,7 +321,12 @@ def collect_scores(
         mod_diags = [d for d in diags if d.module == module_name]
         mod_elig = [elig for d, elig in zip(diags, eligible) if d.module == module_name]
         scores[module_name] = _score_module(
-            mod_diags, mod_elig, cfg, in_scope, stats.get(module_name)
+            mod_diags,
+            mod_elig,
+            cfg,
+            in_scope,
+            stats.get(module_name),
+            python_lines.get(module_name, 0),
         )
 
     return diags, scores

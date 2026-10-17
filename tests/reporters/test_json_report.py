@@ -6,7 +6,7 @@ import json
 
 from odoo_doctor import __version__
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.scoring import score_diagnostics
+from odoo_doctor.core.scoring import ScoreResult, score_diagnostics
 from odoo_doctor.reporters.json_report import render_json
 
 
@@ -68,3 +68,16 @@ def test_render_json_is_the_serialized_build_payload():
     assert isinstance(payload, dict)
     assert payload["project_score"]["overall"] == 100.0
     assert render_json([], scores) == json.dumps(payload, indent=2)
+
+
+def test_project_score_carries_the_secondary_numbers():
+    scores = {
+        "a": ScoreResult(
+            100.0, "x", [], [], 0, python_lines=300, overall_with_medium=100.0
+        ),
+        "b": ScoreResult(
+            80.0, "x", [], [], 0, python_lines=100, overall_with_medium=60.0
+        ),
+    }
+    ps = json.loads(render_json([], scores))["project_score"]
+    assert (ps["overall"], ps["weighted"], ps["with_medium"]) == (90.0, 95.0, 80.0)
