@@ -77,7 +77,7 @@ A rule's confidence is decided by whether its pattern fires on Odoo core 19: a p
 
 Follow the `release` skill (`.claude/skills/release/SKILL.md`). Never put the VS Code Marketplace publisher token in the repo or in chat.
 
-Current version: `0.10.1`.
+Current version: `0.10.2`.
 
 ## Further Reading
 
