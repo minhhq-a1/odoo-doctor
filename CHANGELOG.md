@@ -10,7 +10,8 @@ All notable changes to Odoo Doctor are documented here.
 
 - HTML report: the header says `(uncommitted changes)` after the commit when the scanned working tree is
   dirty (new `dirty` key in the page's `meta`; computed with a read-only `git status`, never written to
-  the scanned repo; absent outside git).
+  the scanned repo; absent outside git; untracked files count, the scan's `.odoo_doctor_cache`
+  directory does not).
 - Two secondary project numbers next to the main score, which keeps its formula and
   `score_schema_version`: `project_score.weighted` (module scores weighted by each module's Python line
   count, every `*.py` file under the module path, tests and vendored code included, so large
@@ -23,9 +24,9 @@ All notable changes to Odoo Doctor are documented here.
 ### Changed
 
 - HTML report: finding paths in the page are relative to the scan root instead of absolute, so the file
-  no longer reveals the scanning machine's directory layout (paths outside the root stay absolute); the `--baseline` file is shown relative to the root, or by
-  file name only when outside it.
-  `scan --json` and other outputs are unchanged.
+  no longer reveals the scanning machine's directory layout (paths outside the root stay absolute); the
+  `--baseline` file is shown relative to the root, or by file name only when outside it. `scan --json`
+  and other outputs are unchanged.
 
 ### Fixed
 

@@ -255,3 +255,21 @@ def test_git_info_dirty_ignores_ci_commit_env_and_never_writes_the_repo(
     info = git_info(repo)
     assert info["commit"] == "f" * 40 and info["dirty"] is True
     assert index.stat().st_mtime_ns == before
+
+
+def test_git_info_dirty_ignores_the_scan_cache_directory(tmp_path):
+    from odoo_doctor.core.history import git_info
+
+    repo = _repo(tmp_path)
+    (repo / "sub").mkdir()
+    (repo / "sub" / ".odoo_doctor_cache").mkdir()
+    (repo / "sub" / ".odoo_doctor_cache" / "scan.json").write_text("{}")
+    (repo / ".odoo_doctor_cache").mkdir()
+    (repo / ".odoo_doctor_cache" / "scan.json").write_text("{}")
+    assert git_info(repo)["dirty"] is False
+    assert git_info(repo / "sub")["dirty"] is False  # scan root below the repo root
+    (repo / "real.txt").write_text("x")
+    assert git_info(repo / "sub")["dirty"] is True
+    (repo / "real.txt").unlink()
+    (repo / "a.txt").write_text("changed")
+    assert git_info(repo)["dirty"] is True

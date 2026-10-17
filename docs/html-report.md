@@ -40,7 +40,7 @@ Notes:
   file is shown relative to the scan root, or by file name only when it lies outside it.
 - When the scanned directory is in a git repository, the header shows `branch @ commit`, followed
   by `(uncommitted changes)` when the working tree differs from that commit (untracked files
-  count), so you know the commit may not match the scanned code. The check is read-only
+  count, except the `.odoo_doctor_cache` directory of `--cache`), so you know the commit may not match the scanned code. The check is read-only
   (`git status --porcelain --no-optional-locks`); outside git nothing is shown.
 
 ## CI recipes

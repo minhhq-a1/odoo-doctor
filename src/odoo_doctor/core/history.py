@@ -51,14 +51,24 @@ def to_utc_iso(value: str) -> str:
 
 
 def _git_dirty(cwd: Path) -> bool | None:
-    """True when the working tree has uncommitted or untracked changes; None without git.
+    """True when the working tree has uncommitted or untracked changes (the scan cache
+    directory aside); None without git.
 
     Read-only: ``--no-optional-locks`` stops ``status`` from refreshing (writing) the
     scanned repository's index.
     """
     try:
         out = subprocess.run(
-            ["git", "--no-optional-locks", "status", "--porcelain"],
+            [
+                "git",
+                "--no-optional-locks",
+                "status",
+                "--porcelain",
+                "--",
+                ":/",
+                # the scan's own --cache directory (see ScanCache in cli/app.py)
+                ":(exclude,glob,top)**/.odoo_doctor_cache/**",
+            ],
             capture_output=True,
             text=True,
             cwd=cwd,
