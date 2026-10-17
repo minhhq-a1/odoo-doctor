@@ -6,6 +6,8 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-10-17
+
 ### Changed
 
 Precision audit. A finding is `high` only if its pattern does not fire on Odoo core 19, unless it is a

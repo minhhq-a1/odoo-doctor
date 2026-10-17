@@ -17,7 +17,8 @@ cache.
 | Whole tree, `--cache`, nothing changed | 2.0 s | |
 | One module (`--module sale`) | 1.0 s | |
 
-The run reported 7457 findings across the 636 modules and an overall score of 93.2.
+The timings above were measured at 0.9.3. At 0.10.1 the same tree reports 7339 findings across the 636 modules and
+an overall score of 93.9 (0.9.3: 7457 findings, 93.2; the difference is the precision audit in the changelog).
 
 The 0.9.0 reference run (47.7 s) used 40 rules on an older commit of the same tree, so the
 two tables compare different work and say nothing about speed between releases.
