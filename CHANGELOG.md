@@ -6,6 +6,8 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-10-17
+
 ### Added
 
 - HTML report: the header says `(uncommitted changes)` after the commit when the scanned working tree is
