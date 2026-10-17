@@ -6,6 +6,15 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Baseline: findings of one rule at one location kept the same identity, so a baseline holding only a
+  `medium` `manifest-missing-required-fields` (e.g. no `version`) also hid a later `high` one (e.g. no
+  `license`), and the same for several `manifest-data-order-risk` findings in one manifest. The finding
+  title is now part of the identity, and `--write-baseline` writes `"version": 2`. Existing version 1
+  baselines keep working (matched by the old identity); rewrite them with `--write-baseline` to get the
+  stricter identity. The `manifest-data-order-risk` title now names the security file.
+
 ## [0.10.1] — 2026-10-17
 
 ### Changed

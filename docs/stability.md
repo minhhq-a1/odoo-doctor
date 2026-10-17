@@ -77,7 +77,7 @@ Do not rely on the exit code of anything not listed here.
   `ignore_rule`, `severity_off`, `suppressed`, `total`, `ratio`, `noisy`, `suggestion`).
   The noise thresholds themselves may be tuned.
 - Score history (`--history`, JSON Lines, `history_schema_version` 1) and the baseline
-  file (`--write-baseline`, `"version": 1`).
+  file (`--write-baseline`, `"version": 2`; version 1 files are still read).
 - SARIF output is valid SARIF 2.1.0 with the rule name as `ruleId`. GitHub annotations
   follow GitHub's own workflow-command format.
 
