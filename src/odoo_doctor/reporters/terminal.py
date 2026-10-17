@@ -132,7 +132,7 @@ def render_terminal(
                 ("weighted", "Weighted by code size"),
                 ("with_medium", "Counting medium findings"),
             )
-            if abs(extra[key] - round(overall, 1)) >= 0.1
+            if round(abs(round(extra[key], 1) - round(overall, 1)), 1) >= 0.1
         ]
         if parts:
             console.print(f"[dim]{' · '.join(parts)}[/dim]", highlight=False)

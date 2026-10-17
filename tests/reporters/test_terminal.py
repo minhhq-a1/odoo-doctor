@@ -189,3 +189,10 @@ def test_render_terminal_hides_secondary_scores_when_equal():
     a = ScoreResult(100.0, "Excellent", [], [], 0)
     b = ScoreResult(100.0, "Excellent", [], [], 0)
     assert "Weighted" not in render_terminal([], {"a": a, "b": b})
+
+
+def test_render_terminal_shows_a_difference_of_exactly_one_tenth():
+    # 90.0 vs 89.9 is 0.0999... as a float but a displayed difference of 0.1
+    a = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
+    b = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
+    assert "Counting medium findings: 89.9" in render_terminal([], {"a": a, "b": b})
