@@ -164,7 +164,7 @@ def test_baseline_is_named_in_meta_and_hides_known_findings(tmp_path: Path):
     done = _scan(tmp_path, str(addons), "--baseline", str(base), "--html", str(report))
     assert done.returncode == 0
     env = _envelope(report)
-    assert env["meta"]["baseline"] == str(base)
+    assert env["meta"]["baseline"] == "baseline.json"  # outside the root: name only
     assert env["truncated"]["findings_total"] == 1
     only = env["report"]["modules"]["m"]["diagnostics"]
     assert len(only) == 1 and only[0]["file_path"].endswith("y.py")
@@ -357,3 +357,23 @@ def test_header_marks_a_dirty_tree_only_when_dirty(tmp_path: Path):
     _scan(repo, str(addons), "--html", str(dirty))
     assert _envelope(clean)["meta"]["dirty"] is False
     assert _envelope(dirty)["meta"]["dirty"] is True
+
+
+def test_absolute_baseline_path_never_reaches_the_page(tmp_path: Path):
+    addons = _project(tmp_path, bad=True)
+    inside = addons / "baseline.json"
+    outside_dir = tmp_path / "elsewhere"
+    outside_dir.mkdir()
+    outside = outside_dir / "base.json"
+    for base, expected in ((inside, "baseline.json"), (outside, "base.json")):
+        (addons / "m" / "y.py").unlink(missing_ok=True)
+        _scan(tmp_path, str(addons), "--write-baseline", str(base))
+        report = tmp_path / "r.html"
+        done = _scan(
+            tmp_path, str(addons), "--baseline", str(base), "--html", str(report)
+        )
+        assert done.returncode == 0, done.stderr
+        html = report.read_text(encoding="utf-8")
+        assert _envelope(report)["meta"]["baseline"] == expected
+        assert str(tmp_path.resolve()) not in html and str(tmp_path) not in html
+        assert str(Path.home()) not in html

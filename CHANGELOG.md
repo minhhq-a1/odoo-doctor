@@ -22,7 +22,8 @@ All notable changes to Odoo Doctor are documented here.
 ### Changed
 
 - HTML report: finding paths in the page are relative to the scan root instead of absolute, so the file
-  no longer reveals the scanning machine's directory layout (paths outside the root stay absolute).
+  no longer reveals the scanning machine's directory layout (paths outside the root stay absolute); the `--baseline` file is shown relative to the root, or by
+  file name only when outside it.
   `scan --json` and other outputs are unchanged.
 
 ### Fixed

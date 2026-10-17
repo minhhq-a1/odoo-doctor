@@ -37,7 +37,7 @@ Notes:
 - Finding paths in the page are relative to the scan root (the directory the scan ran on), so the
   file does not reveal your machine's directory layout; a file outside that directory keeps its
   absolute path. `scan --json` and every other output keep absolute paths. The `--baseline`
-  argument is embedded as you typed it.
+  file is shown relative to the scan root, or by file name only when it lies outside it.
 - When the scanned directory is in a git repository, the header shows `branch @ commit`, followed
   by `(uncommitted changes)` when the working tree differs from that commit (untracked files
   count), so you know the commit may not match the scanned code. The check is read-only

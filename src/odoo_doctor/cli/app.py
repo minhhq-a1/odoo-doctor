@@ -722,6 +722,17 @@ def _write_score_artifacts(
         typer.echo(f"Wrote badge to {badge_path}", err=True)
 
 
+def _report_baseline(baseline: str | None, root: Path) -> str | None:
+    """The baseline path for the page: relative to the scan root, else just the file name."""
+    if baseline is None:
+        return None
+    path = Path(baseline).resolve()
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.name
+
+
 def _write_html_report(
     diags: list[Diagnostic],
     scores: dict[str, object],
@@ -750,7 +761,7 @@ def _write_html_report(
             "diff": diff,
             "modules": list(target_modules),
         },
-        "baseline": baseline,
+        "baseline": _report_baseline(baseline, config_root),
         "commit": commit[:7] if commit else None,
         "branch": info["branch"],
         "dirty": info["dirty"],
