@@ -824,7 +824,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "        self.env.cr.commit()",
         good="def action_import(self):\n    self.create(rows)",
         notes="Not reported: a cursor or environment the code opened itself "
-        "(`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`), cron "
+        "(`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`) in the "
+        "function that commits it or an enclosing one (or at module level), not "
+        "elsewhere in the file and not under a parameter of the same name, cron "
         "methods (a function with `cron` in its name), install hooks (`init`, "
         "`_auto_init`, `post_init_hook`...), a commit under an `if` that tests "
         "`test_enable` / `testing`, and a line marked "

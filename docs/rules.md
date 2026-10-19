@@ -770,7 +770,7 @@ records = self.env['res.partner'].search(
 
 **Fix**: Remove the commit and let Odoo commit when the request succeeds. Run batch work from a cron or a queue job, or in its own cursor (`with self.pool.cursor() as cr:`).
 
-**Note**: Not reported: a cursor or environment the code opened itself (`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`), cron methods (a function with `cron` in its name), install hooks (`init`, `_auto_init`, `post_init_hook`...), a commit under an `if` that tests `test_enable` / `testing`, and a line marked `# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` are skipped.
+**Note**: Not reported: a cursor or environment the code opened itself (`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`) in the function that commits it or an enclosing one (or at module level), not elsewhere in the file and not under a parameter of the same name, cron methods (a function with `cron` in its name), install hooks (`init`, `_auto_init`, `post_init_hook`...), a commit under an `if` that tests `test_enable` / `testing`, and a line marked `# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` are skipped.
 
 Bad:
 
