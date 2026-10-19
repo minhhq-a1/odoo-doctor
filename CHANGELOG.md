@@ -83,8 +83,45 @@ All notable changes to Odoo Doctor are documented here.
   unchanged. `--end-of-options` is not used: it needs git 2.24 and the check above already leaves
   nothing for git to read as an option.
 
+### Changed
+
+- `public-controller-sudo-risk` grades a route by whether `auth=` is written on it. `auth='public'` or
+  `'none'` on the route stays `high` (`medium` after an access check). A route that omits `auth` now takes
+  the auth of the route it overrides (see Fixed) and is `medium` (`low` after an access check) when that
+  auth is public or cannot be resolved: Odoo's own addons override public routes and elevate in them as a
+  convention. Measured on Odoo 19 community: 7 routes (6 public, 1 unresolved) newly reported, all reviewed as
+  conventions (`cloud_storage` `mail_attachment_upload` elevates the attachment its own `super()` call just
+  created, `im_livechat` `channel_call_join` a documented read-only `search` that raises `NotFound`,
+  `website_crm_partner_assign` `partners_detail` shows only published partners, `website_event_sale` and
+  `website_sale_collect` read the session's own cart and website configuration,
+  `pos_online_payment_self_order` `pos_order_pay_confirmation` reads one transaction after `super()` checked
+  the access token). Hence no new `high` on core 19 (151 high stay, medium 68 -> 74, low 0 -> 1) or on core 17
+  scanned as 19 (medium 57 -> 61, low 0 -> 2). `scripts/measure.py` shows no new `high` for any rule and no
+  change on the working repository.
+
 ### Fixed
 
+- `view-field-not-in-model` reported `message_ids`, `activity_ids` and every field of a parent as unknown (error,
+  high) for a model whose `_inherit` is a tuple (`_inherit = ("mail.thread", "mail.activity.mixin")`): the
+  parser read only strings and lists, so the model looked complete. `_inherit` and `_inherits` are now read as
+  a string, a list or a tuple (an extension written with a tuple adds its fields too), and a parent that is not
+  written out (`_inherit = MIXINS`, `_inherit = _name`, `*args`, a computed entry) makes the model incomplete,
+  so no field is reported missing. On Odoo 17 scanned as 19, 9 false `high` findings go (all on the
+  `ir.module.module` views of `website`, whose model is declared with `_inherit = _name`); none change on Odoo 19.
+- A route that omits `auth` (a bare `@http.route()` override, or `@http.route('/x', website=True)`) was
+  recorded as `auth='user'`, although Odoo merges the parent route's routing into the override. Overridden
+  public routes (`/shop`, portal pages) therefore escaped `public-controller-sudo-risk`. The auth is now taken
+  from the route of the same name in the class's bases, found by class name through every scanned addon
+  (several levels, an explicit `auth=` wins). A parent that is not among the scanned classes (an addon that is
+  not scanned) or a computed `auth=` leaves it `unknown` rather than `user`; a route with no parent at all
+  still runs as `user`. Limit: only `auth` is inherited, not `csrf`, `type` or `methods`, and a parent is found
+  by class name, so an import alias (`import X as Y`) is an unresolved parent.
+- `rpc-sudo-without-access-check` treated a class as a controller only when a base was literally named
+  `Controller`, so routes of a `CustomerPortal` or `WebsiteSale` subclass were never looked at. A class with a
+  `@http.route` method is now a controller whatever its base is called (a method needs a route to be reachable,
+  so resolving the base would add nothing). The rule takes each route's auth from the same resolution; a route
+  whose auth is public or unknown is left to `public-controller-sudo-risk`. Measured: no new `high` on core;
+  3 new `medium` on core 17 scanned as 19 and 4 on core 19 (the totals above, medium 6 -> 10 and 4 -> 7).
 - `scan --diff` missed changed files whose name has non-ASCII characters (`modèle.py`), a tab or a
   newline: git prints such names quoted and escaped (`"mod\303\250le.py"`), which matched no file, so
   their findings were silently left out of the diff scan. Changed files are now read with `-z`
