@@ -253,3 +253,17 @@ def test_a_missing_linter_has_a_fixed_marker(monkeypatch):
         "adapter=pylint_odoo:off",
         "adapter=ruff:unavailable",
     )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="shell script stand-ins")
+def test_pylint_odoo_version_comes_from_the_interpreter_behind_pylint(tmp_path: Path):
+    from odoo_doctor.core.cache import _pylint_odoo_version
+
+    interp = tmp_path / "fakepython"
+    interp.write_text("#!/bin/sh\necho 9.9.9\n")
+    interp.chmod(0o755)
+    pylint = tmp_path / "pylint"
+    pylint.write_text(f"#!{interp}\n")
+    assert _pylint_odoo_version(str(pylint), str(tmp_path)) == "9.9.9"
+    pylint.write_text("not a script\n")
+    assert _pylint_odoo_version(str(pylint), str(tmp_path)) == "unknown"

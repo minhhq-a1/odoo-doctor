@@ -57,27 +57,60 @@ _ADAPTER_TOOLS = {"ruff": "ruff", "pylint_odoo": "pylint"}
 _tool_versions: dict[str, str] = {}  # resolved executable path -> `--version` output
 
 
+def _safe_env(scratch: str) -> dict[str, str]:
+    env = {
+        k: os.environ[k]
+        for k in ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "COMSPEC", "PATHEXT")
+        if k in os.environ
+    }
+    env.update(HOME=scratch, TMPDIR=scratch, TEMP=scratch)
+    return env
+
+
+def _pylint_odoo_version(pylint_path: str, scratch: str) -> str:
+    """The pylint-odoo distribution version, read by the interpreter behind ``pylint``.
+
+    ``pylint --version`` does not name its plugins, so upgrading pylint-odoo alone would keep
+    stale findings on a hit. The interpreter is the shebang of the ``pylint`` script (or the
+    ``python`` beside a launcher script); ``unknown`` when there is none (Windows launcher)
+    or the import fails.
+    """
+    try:
+        with open(pylint_path, "rb") as fh:
+            first = fh.readline(512)
+        if not first.startswith(b"#!"):
+            return "unknown"
+        interpreter = os.fsdecode(first[2:]).split()[0]
+        if os.path.basename(interpreter) in ("sh", "bash", "env"):
+            # a launcher script (uv's long-path form): the venv's own python sits beside it
+            interpreter = str(Path(pylint_path).parent / "python")
+        out = subprocess.run(
+            [
+                interpreter,
+                "-c",
+                "import importlib.metadata as m; print(m.version('pylint-odoo'))",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            cwd=scratch,
+            env=_safe_env(scratch),
+        )
+        return out.stdout.strip() if out.returncode == 0 else "unknown"
+    except (OSError, IndexError, subprocess.SubprocessError):
+        return "unknown"
+
+
 def _linter_version(exe: str) -> str:
-    """``<exe> --version``, run once per process; a fixed marker when it cannot run."""
+    """``<exe> --version`` (plus pylint-odoo's version for pylint), run once per process;
+    a fixed marker when it cannot run."""
     path = shutil.which(exe)
     if path is None:
         return "unavailable"
     if path not in _tool_versions:
         try:
             with tempfile.TemporaryDirectory(prefix="odoo-doctor-version-") as scratch:
-                env = {
-                    k: os.environ[k]
-                    for k in (
-                        "PATH",
-                        "LANG",
-                        "LC_ALL",
-                        "SYSTEMROOT",
-                        "COMSPEC",
-                        "PATHEXT",
-                    )
-                    if k in os.environ
-                }
-                env.update(HOME=scratch, TMPDIR=scratch, TEMP=scratch)
                 out = subprocess.run(
                     [path, "--version"],
                     capture_output=True,
@@ -85,11 +118,12 @@ def _linter_version(exe: str) -> str:
                     timeout=30,
                     check=False,
                     cwd=scratch,  # pylint prints the rc file it found from the cwd
-                    env=env,
+                    env=_safe_env(scratch),
                 )
-            _tool_versions[path] = (
-                out.stdout.strip() if out.returncode == 0 else "error"
-            )
+                version = out.stdout.strip() if out.returncode == 0 else "error"
+                if exe == "pylint" and out.returncode == 0:
+                    version += f"|pylint-odoo={_pylint_odoo_version(path, scratch)}"
+            _tool_versions[path] = version
         except (OSError, subprocess.SubprocessError):
             _tool_versions[path] = "error"
     return _tool_versions[path]
