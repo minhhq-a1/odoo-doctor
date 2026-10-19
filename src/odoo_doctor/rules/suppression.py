@@ -10,6 +10,8 @@ from pathlib import Path
 
 from lxml import etree
 
+from odoo_doctor.core.source import warn_skipped
+
 _SUPPRESS_RE = re.compile(r"odoo-doctor:\s*disable=([a-z0-9_-]+(?:,\s*[a-z0-9_-]+)*)")
 _SUPPRESS_FILE_RE = re.compile(
     r"odoo-doctor:\s*disable-file=([a-z0-9_-]+(?:,\s*[a-z0-9_-]+)*)"
@@ -63,7 +65,10 @@ def scan_xml_suppressions(file_path: Path) -> Suppressions:
 
     try:
         tree = etree.parse(str(file_path))
-    except (etree.XMLSyntaxError, OSError):
+    except etree.XMLSyntaxError:
+        return suppressions
+    except OSError:
+        warn_skipped(file_path, "not readable as XML (encoding?)")
         return suppressions
 
     # Collect all comments: those inside root via iter, plus preceding siblings of root

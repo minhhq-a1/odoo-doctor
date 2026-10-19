@@ -45,7 +45,7 @@ def test_xml_with_invalid_utf8_bytes(tmp_path: Path):
 
 def test_python_that_blows_the_parser_stack(tmp_path: Path):
     py = tmp_path / "deep.py"
-    py.write_text("x = " + "(" * 5000 + "1" + ")" * 5000 + "\n")
+    py.write_text("x = " + "not " * 8000 + "1\n")  # RecursionError on every Python
     clear_source_cache()
     assert parse_python(py) is None
 
@@ -64,3 +64,17 @@ def test_access_csv_with_nul_byte(tmp_path: Path):
     csv_file = tmp_path / "ir.model.access.csv"
     csv_file.write_bytes(b"id,name\na,b\x00c\n")
     parse_access_csv(csv_file, "m")  # must not raise
+
+
+def test_chain_guard_thresholds():
+    from odoo_doctor.core.source import chain_too_long
+
+    big = " + ".join(["1"] * 60_000)  # over both the size gate and the chain limit
+    assert chain_too_long("x = " + big + "\n")
+    assert not chain_too_long("x = " + " + ".join(["1"] * 10_000) + "\n")  # small file
+    # a 1 MB data list is not a chain: commas reset the count
+    assert not chain_too_long("x = [" + ", ".join(["1.5"] * 200_000) + "]\n")
+    assert not chain_too_long("x = [" + ", ".join(["a + b"] * 100_000) + "]\n")
+    assert chain_too_long("x = a" + ".b" * 60_000 + "\n" + "#" * 100_000)
+    assert chain_too_long("x = a" + "[0]" * 60_000 + "\n" + "#" * 100_000)
+    assert not chain_too_long("x = (1 +\n" + "1 +\n" * 10 + " 1)\n" + "#" * 300_000)

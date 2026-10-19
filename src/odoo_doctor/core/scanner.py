@@ -27,7 +27,7 @@ from odoo_doctor.core.pipeline import (
 )
 from odoo_doctor.core.roi import rank_fixes
 from odoo_doctor.core.scoring import CATEGORIES, score_diagnostics
-from odoo_doctor.core.source import clear_source_cache
+from odoo_doctor.core.source import clear_source_cache, flush_skipped
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
@@ -239,6 +239,7 @@ def collect_scores(
     for bucket in by_rule:
         all_diags.extend(bucket)
     clear_source_cache()  # release the parsed trees of the last files
+    flush_skipped()
 
     # Run adapters
     adapters = []

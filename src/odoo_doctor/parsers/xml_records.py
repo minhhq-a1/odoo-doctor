@@ -9,6 +9,8 @@ from pathlib import Path
 
 from lxml import etree
 
+from odoo_doctor.core.source import warn_skipped
+
 
 @dataclass
 class XmlIdInfo:
@@ -129,7 +131,10 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
     """Extract all XML IDs from an Odoo data/view file."""
     try:
         tree = etree.parse(str(file_path))
-    except (etree.XMLSyntaxError, OSError):
+    except etree.XMLSyntaxError:
+        return []
+    except OSError:
+        warn_skipped(file_path, "not readable as XML (encoding?)")
         return []
 
     root = tree.getroot()
@@ -198,7 +203,10 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
     """Extract view definitions (ir.ui.view records) with field/button references."""
     try:
         tree = etree.parse(str(file_path))
-    except (etree.XMLSyntaxError, OSError):
+    except etree.XMLSyntaxError:
+        return []
+    except OSError:
+        warn_skipped(file_path, "not readable as XML (encoding?)")
         return []
 
     root = tree.getroot()

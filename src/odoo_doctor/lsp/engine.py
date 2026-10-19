@@ -42,6 +42,9 @@ def scan_project(root: Path) -> dict[str, list[Diagnostic]]:
     Whole-project on purpose: cross-module rules need every addon, so a partial scan
     would lose sibling models and report false findings.
     """
+    from odoo_doctor.core.source import reset_skipped
+
+    reset_skipped()
     root = Path(root).resolve()
     cfg = load_config(root)
     if cfg.enable_plugins:

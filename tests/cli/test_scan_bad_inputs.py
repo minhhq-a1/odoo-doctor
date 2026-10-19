@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from odoo_doctor.cli.app import app
@@ -26,21 +27,44 @@ def _addon(root: Path, name: str, manifest: str | None = None) -> Path:
     return mod
 
 
-def _scan_rules(root: Path) -> set[str]:
+def _scan(root: Path) -> tuple[set[str], list[str]]:
+    """(rules reported, WARN lines on stderr); stdout must be the pure JSON report."""
     result = runner.invoke(app, ["scan", str(root), "--json"])
     assert result.exit_code in (0, 1), (result.output, result.exception)
-    assert not isinstance(result.exception, Exception) or isinstance(
-        result.exception, SystemExit
-    ), repr(result.exception)
+    assert result.exception is None or isinstance(result.exception, SystemExit), repr(
+        result.exception
+    )
     report = json.loads(result.stdout)
-    return {d["rule"] for m in report["modules"].values() for d in m["diagnostics"]}
+    rules = {d["rule"] for m in report["modules"].values() for d in m["diagnostics"]}
+    return rules, [
+        ln for ln in result.stderr.splitlines() if ln.startswith("[WARN] skipped")
+    ]
 
 
 def test_malformed_manifest_values(tmp_path: Path):
     _addon(tmp_path, "none_data", MANIFEST % "'data': None")
     _addon(tmp_path, "int_depends", "{'name': 'M', 'depends': 5, 'data': []}")
     _addon(tmp_path, "unhashable", "{'name': 'M', ['a']: 1}")
-    assert "eval-usage" in _scan_rules(tmp_path)
+    rules, warns = _scan(tmp_path)
+    assert "eval-usage" in rules
+    assert len(warns) == 1 and "unhashable/__manifest__.py" in warns[0]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "'version': 7",
+        "'version': ['a']",
+        "'external_dependencies': {'python': 5}",
+        "'external_dependencies': 5",
+        "'external_dependencies': ['x']",
+    ],
+)
+def test_odd_manifest_value_types(tmp_path: Path, extra: str):
+    _addon(
+        tmp_path, "mod", f"{{'name': 'M', 'depends': ['base'], 'data': [], {extra}}}"
+    )
+    assert "eval-usage" in _scan(tmp_path)[0]
 
 
 def test_xml_declared_utf8_with_latin1_bytes(tmp_path: Path):
@@ -50,31 +74,64 @@ def test_xml_declared_utf8_with_latin1_bytes(tmp_path: Path):
         b'<?xml version="1.0" encoding="UTF-8"?>\n<odoo><record id="r" model="x">'
         b'<field name="name">caf\xe9</field></record></odoo>'
     )
-    assert "eval-usage" in _scan_rules(tmp_path)
+    rules, warns = _scan(tmp_path)
+    assert "eval-usage" in rules
+    assert len(warns) == 1 and "v.xml" in warns[0]
 
 
 def test_python_file_too_deep_for_the_parser(tmp_path: Path):
     mod = _addon(tmp_path, "mod")
-    (mod / "models" / "deep.py").write_text(
-        "x = " + "(" * 5000 + "1" + ")" * 5000 + "\n"
-    )
-    (mod / "models" / "nul.py").write_text("x = 1\x00\n")
-    (mod / "models" / "long.py").write_text("x = " + " + ".join(["1"] * 200000) + "\n")
-    assert "eval-usage" in _scan_rules(tmp_path)
+    # right-nested: RecursionError on every supported Python
+    (mod / "models" / "deep.py").write_text("x = " + "not " * 8000 + "1\n")
+    rules, warns = _scan(tmp_path)
+    assert "eval-usage" in rules
+    assert len(warns) == 1 and "deep.py" in warns[0]
+
+
+def test_python_file_with_a_huge_operator_chain_is_skipped_by_the_guard(tmp_path: Path):
+    mod = _addon(tmp_path, "mod")
+    # 240 KB, 60k links: parseable on 3.12+ (RecursionError) and on 3.10, but over the guard
+    (mod / "models" / "long.py").write_text("x = " + " + ".join(["1"] * 60_000) + "\n")
+    rules, warns = _scan(tmp_path)
+    assert "eval-usage" in rules
+    assert len(warns) == 1 and "long.py" in warns[0] and "too long" in warns[0]
 
 
 def test_access_csv_not_utf8_or_short_rows(tmp_path: Path):
     mod = _addon(tmp_path, "mod")
     (mod / "security").mkdir()
-    (mod / "security" / "ir.model.access.csv").write_bytes(
+    csv_file = mod / "security" / "ir.model.access.csv"
+    csv_file.write_bytes(
         b"id,name,model_id:id,perm_read\nshort\nok,caf\xe9,model_x,1\n"
     )
-    assert "eval-usage" in _scan_rules(tmp_path)
+    rules, warns = _scan(tmp_path)
+    assert "eval-usage" in rules
+    assert len(warns) == 1 and "ir.model.access.csv" in warns[0]
 
-    (mod / "security" / "ir.model.access.csv").write_bytes(
-        b"id,name,model_id:id\nshort\n,,\n"
+    csv_file.write_bytes(b"id,name,model_id:id\nshort\n,,\n")  # short rows, valid UTF-8
+    rules, warns = _scan(tmp_path)
+    assert "eval-usage" in rules and warns == []
+
+
+def test_skipped_file_warnings_are_capped(tmp_path: Path):
+    mod = _addon(tmp_path, "mod")
+    for i in range(30):
+        (mod / "models" / f"d{i}.py").write_text("x = " + "not " * 8000 + "1\n")
+    result = runner.invoke(app, ["scan", str(tmp_path), "--json"])
+    assert result.exit_code in (0, 1)
+    json.loads(result.stdout)
+    lines = [ln for ln in result.stderr.splitlines() if ln.startswith("[WARN] ")]
+    assert (
+        len(
+            [
+                ln
+                for ln in lines
+                if "skipped /" in ln or "skipped " in ln and "more" not in ln
+            ]
+        )
+        == 20
     )
-    assert "eval-usage" in _scan_rules(tmp_path)
+    assert lines[-1] == "[WARN] ... and 10 more skipped"
 
 
 def test_addon_name_with_brackets_in_terminal_report(tmp_path: Path):

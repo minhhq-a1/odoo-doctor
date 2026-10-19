@@ -7,7 +7,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import chain_too_long, read_source
 
 
 @dataclass
@@ -29,6 +29,13 @@ def _str_list(value: object) -> list[str]:
     return [v for v in value if isinstance(v, str)]
 
 
+def _external_dependencies(value: object) -> dict[str, list[str]]:
+    """`external_dependencies` as {kind: [package, ...]}; a malformed value yields {}."""
+    if not isinstance(value, dict):
+        return {}
+    return {k: _str_list(v) for k, v in value.items() if isinstance(k, str)}
+
+
 def parse_manifest(addon_path: Path) -> ManifestData | None:
     """Parse __manifest__.py from an addon directory. Returns None if missing/invalid."""
     manifest_file = addon_path / "__manifest__.py"
@@ -37,6 +44,8 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
 
     source = read_source(manifest_file)
     if source is None:
+        return None
+    if chain_too_long(source):
         return None
     try:
         raw = ast.literal_eval(source)
@@ -50,9 +59,18 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
     if not isinstance(assets, dict):
         assets = {}
 
+    version = raw.get("version")
+    if "external_dependencies" in raw:
+        raw = {
+            **raw,
+            "external_dependencies": _external_dependencies(
+                raw["external_dependencies"]
+            ),
+        }
+
     return ManifestData(
         name=raw.get("name", addon_path.name),
-        version=raw.get("version"),
+        version=version if isinstance(version, str) else None,
         depends=_str_list(raw.get("depends")),
         data=_str_list(raw.get("data")),
         license=raw.get("license"),

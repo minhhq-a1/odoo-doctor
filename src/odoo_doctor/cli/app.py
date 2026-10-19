@@ -176,6 +176,9 @@ def scan(
     ),
 ) -> None:
     """Scan Odoo addons and report health score."""
+    from odoo_doctor.core.source import reset_skipped
+
+    reset_skipped()  # skipped-file warnings are per scan
     if (history_path or badge_path) and diff:
         typer.echo(
             "[ERROR] --history/--badge need a full scan; they cannot be combined "

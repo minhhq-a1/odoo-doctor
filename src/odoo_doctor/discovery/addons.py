@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import chain_too_long, read_source, warn_skipped
 
 
 @dataclass
@@ -53,12 +53,17 @@ def _try_add(
     source = read_source(manifest_file)
     if source is None:
         return
+    if chain_too_long(source):
+        warn_skipped(manifest_file, "expression too long to parse safely")
+        return
     try:
         manifest = ast.literal_eval(source)
-    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError) as exc:
+        warn_skipped(manifest_file, f"manifest cannot be parsed ({type(exc).__name__})")
         return
 
     if not isinstance(manifest, dict):
+        warn_skipped(manifest_file, "manifest is not a dict")
         return
     if not manifest.get("installable", True):
         return

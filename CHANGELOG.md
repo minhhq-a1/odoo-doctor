@@ -50,6 +50,17 @@ All notable changes to Odoo Doctor are documented here.
   parser (`RecursionError`/`MemoryError`), and an `ir.model.access.csv` that is not UTF-8 or has short
   rows are skipped (or read leniently) and the other files are still reported. Addon names, rule names
   and paths containing `[` or `]` are escaped in the terminal report instead of being mangled.
+- A manifest `version` that is not a string, or `external_dependencies` of the wrong shape, no longer
+  aborts the scan (the value is ignored).
+- A skipped input is no longer silent: one `[WARN] skipped <file>: <reason>` line on stderr per file
+  (stdout is untouched, at most 20 lines per scan then `... and N more skipped`, exit codes unchanged) for
+  an unparseable manifest, XML that cannot be read, a non-UTF-8 `ir.model.access.csv`, and a Python file
+  the parser cannot handle. A plain `SyntaxError` in a user file stays quiet.
+- Python 3.10 crashed the interpreter (segmentation fault, nothing catchable) on a file holding one
+  expression chained over ~134,000 links (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`). Files of at least
+  200,000 characters whose single expression chains more than 50,000 operators are now skipped with a
+  warning, in Python files and manifests. Smaller files cannot reach the crash; deeper-than-recursion
+  expressions on 3.12+ are skipped through the existing `RecursionError` handling.
 
 ## [0.10.2] — 2026-10-17
 

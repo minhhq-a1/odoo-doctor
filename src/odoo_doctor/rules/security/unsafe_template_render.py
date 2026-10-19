@@ -6,6 +6,7 @@ from __future__ import annotations
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import warn_skipped
 from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.rules.registry import rule
 
@@ -38,7 +39,10 @@ def check_unsafe_template_render(ctx: ModuleContext) -> list[Diagnostic]:
             continue
         try:
             tree = etree.parse(str(xml_path))
-        except (etree.XMLSyntaxError, OSError):
+        except etree.XMLSyntaxError:
+            continue
+        except OSError:
+            warn_skipped(xml_path, "not readable as XML (encoding?)")
             continue
 
         for elem in tree.getroot().iter():
