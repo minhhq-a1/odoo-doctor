@@ -296,3 +296,29 @@ def test_plain_receivers_stay_high_and_inferred_ones_are_medium(tmp_path: Path):
         (11, "high"),
         (12, "medium"),
     ]
+
+
+def test_rebinding_self_or_a_loop_variable_keeps_the_plain_tier(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self):
+                self = self.with_context(a=1)
+                task = self.env["x"].browse(1)
+                for task in self:
+                    task.search([("a", "=", task.id)])
+                for rec in self:
+                    self.env["x"].search([("a", "=", rec.id)])
+        """
+    assert _tiers(tmp_path, src) == [(6, "high"), (8, "high")]
+
+
+def test_env_lookup_on_a_local_adapter_of_self_stays_high(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self):
+                ctx = self.with_context(a=1)
+                for rec in self:
+                    ctx.env["x"].search([("a", "=", rec.id)])
+                    ctx.search([("a", "=", rec.id)])
+        """
+    assert _tiers(tmp_path, src) == [(5, "high"), (6, "medium")]

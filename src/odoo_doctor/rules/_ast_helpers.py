@@ -255,6 +255,8 @@ def _bind_loop_targets(
             orm_vars.update(names)
             if _root_name(it) in inferred:
                 inferred.update(names)
+            else:
+                inferred.difference_update(names)
 
 
 def _bind_assign(
@@ -274,7 +276,8 @@ def _bind_assign(
     )
     is_records = not plain_data and node_is_orm(value, orm_vars, plain)
     for target in node.targets:
-        if isinstance(target, ast.Name):
+        # `self = self.with_context(..)` still is the plain receiver.
+        if isinstance(target, ast.Name) and target.id not in ("self", "cls"):
             if is_records:
                 orm_vars.add(target.id)
                 inferred.add(target.id)
@@ -314,9 +317,9 @@ def orm_calls_in_loops(
                         and n.func.attr in methods
                         and receiver_is_orm(n, orm_vars, plain)
                     ):
-                        guessed = isinstance(node, Comprehension) or (
-                            _root_name(n.func.value) in inferred
-                        )
+                        guessed = isinstance(
+                            node, Comprehension
+                        ) or not receiver_is_orm(n, orm_vars - inferred, plain)
                         yield n, node, guessed
         for child in ast.iter_child_nodes(node):
             yield from walk(child, orm_vars, inferred, plain)
