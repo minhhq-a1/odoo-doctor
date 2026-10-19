@@ -93,6 +93,24 @@ def scannable_files(root: Path, pattern: str = "*.py") -> Iterator[Path]:
             yield path
 
 
+_LINT_SUFFIXES = (".py", ".pyi", ".pyw", ".ipynb")
+
+
+def lint_targets(root: Path) -> list[Path]:
+    """What to hand an external linter (ruff, pylint): ``[root]``, or the regular ``.py`` files.
+
+    A linter walks the directory and opens everything it finds, so a FIFO named ``x.py``
+    would hang it. When the tree holds such a file (see :func:`is_scannable`) the linter
+    gets the other ``.py`` files one by one instead; an ordinary tree is unchanged.
+    """
+    for dirpath, _dirs, names in os.walk(root):
+        for name in names:
+            path = Path(dirpath, name)
+            if name.endswith(_LINT_SUFFIXES) and not is_scannable(path, root):
+                return sorted(scannable_files(root))
+    return [root]
+
+
 def flush_skipped() -> None:
     """End of a scan: summarise the warnings the cap held back."""
     extra = len(_skipped) - _WARN_CAP

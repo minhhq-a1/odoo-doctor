@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +21,7 @@ else:
         import tomli as tomllib  # type: ignore[no-redef]
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import lint_targets
 
 
 @dataclass
@@ -53,14 +56,36 @@ class RuffAdapter:
                 )
             ]
 
+        module = Path(module_path).resolve()
+        targets = lint_targets(module)
+        if not targets:
+            return []
+        by_file = targets != [module]
         try:
-            result = subprocess.run(
-                ["ruff", "check", "--output-format=json", str(module_path)],
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
-            )
+            # The scanned repo's ruff.toml / pyproject.toml must not steer the run: its
+            # `cache-dir` writes elsewhere, its `ignore` hides findings and its `extend`
+            # reads any file. So: --isolated (no config, ruff's own default rules),
+            # --no-cache (default would write .ruff_cache into the repo), a scratch cwd
+            # and a secret-free environment. Filter findings with `[ignore] rules`.
+            with tempfile.TemporaryDirectory(prefix="odoo-doctor-ruff-") as scratch:
+                result = subprocess.run(
+                    [
+                        "ruff",
+                        "check",
+                        "--isolated",
+                        "--no-cache",
+                        # ruff's default excludes (node_modules ...) for files listed one by one
+                        *(["--force-exclude"] if by_file else []),
+                        "--output-format=json",
+                        *map(str, targets),  # absolute: cwd is the scratch dir
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                    cwd=scratch,
+                    env=_safe_env(scratch),
+                )
         except subprocess.TimeoutExpired:
             return [
                 _adapter_warning(
@@ -172,6 +197,16 @@ class RuffAdapter:
                 confidence=info.get("confidence", "high"),
             )
         return result
+
+
+_ENV_KEEP = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "COMSPEC", "PATHEXT")
+
+
+def _safe_env(scratch: str) -> dict[str, str]:
+    """Only what ruff needs to start: no tokens, no ``RUFF_*`` overrides."""
+    env = {k: os.environ[k] for k in _ENV_KEEP if k in os.environ}
+    env.update(HOME=scratch, TMPDIR=scratch, TEMP=scratch)
+    return env
 
 
 def _adapter_warning(

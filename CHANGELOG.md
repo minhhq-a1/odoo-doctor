@@ -26,6 +26,15 @@ All notable changes to Odoo Doctor are documented here.
   `GIT_*` variables, `GIT_TERMINAL_PROMPT=0`). Your own global git config still applies. Side effect: a
   `--score-delta` base checkout holds git-lfs pointer files instead of the real content (filters are
   off); scanned source is not affected.
+- The Ruff adapter no longer takes its configuration from the scanned repo. A repo `ruff.toml` or
+  `pyproject.toml` could set `cache-dir` (ruff then wrote there), `ignore` rules (hiding findings) or
+  `extend` another file; and ruff's default cache wrote a `.ruff_cache` folder into the scanned repo.
+  Ruff now runs with `--isolated --no-cache`, from a temporary directory, with a minimal environment,
+  so it reports ruff's own default rule set whatever the repo configures. If you relied on a repo
+  ruff config (more rules, `ignore`, `line-length`), move the filtering to `[ignore] rules` in
+  `odoo-doctor.toml`; rules the repo config had switched on are no longer reported.
+  Ruff and Pylint-Odoo also open every Python file they find, so a FIFO named `*.py` hung them; when
+  the addon holds a file that must not be opened, they now get the regular `.py` files one by one.
 
 ## [0.11.0] — 2026-10-19
 

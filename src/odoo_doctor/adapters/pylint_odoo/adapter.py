@@ -21,6 +21,7 @@ else:
         import tomli as tomllib  # type: ignore[no-redef]
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import lint_targets
 
 _LINE_RE = re.compile(
     r"^(.+?):(\d+):(\d+):\s+([A-Z]\d+):\s+(.+?)(?:\s+\(([^)]+)\))?\s*$"
@@ -59,6 +60,9 @@ class PylintOdooAdapter:
                 )
             ]
 
+        targets = lint_targets(Path(module_path).resolve())
+        if not targets:
+            return []
         try:
             # Pylint executes the `init-hook` of any rc/pyproject it discovers from the
             # cwd, so the scanned repo must never be that source: pin an empty rcfile and
@@ -72,7 +76,7 @@ class PylintOdooAdapter:
                         f"--rcfile={rcfile}",
                         "--load-plugins=pylint_odoo",
                         "--output-format=text",
-                        str(Path(module_path).resolve()),  # cwd is the scratch dir
+                        *map(str, targets),  # absolute: cwd is the scratch dir
                     ],
                     capture_output=True,
                     text=True,

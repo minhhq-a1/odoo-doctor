@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 
@@ -186,3 +190,72 @@ def test_ruff_adapter_keeps_findings_on_exit_1(monkeypatch, tmp_path: Path):
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
     assert diags[0].rule == "E501"
+
+
+def _addon_with_hostile_ruff_config(root: Path) -> tuple[Path, Path]:
+    """An addon whose repo config hides F401 and sends the ruff cache elsewhere."""
+    evil_cache = root / "evil_cache"
+    repo = root / "repo"
+    mod = repo / "m"
+    mod.mkdir(parents=True)
+    (mod / "__manifest__.py").write_text("{'name': 'm'}\n")
+    (mod / "__init__.py").write_text("")
+    (mod / "models.py").write_text("import os\n")
+    (repo / "ruff.toml").write_text(
+        f'cache-dir = "{evil_cache}"\n[lint]\nignore = ["F401"]\n'
+    )
+    return repo, evil_cache
+
+
+def test_ruff_command_ignores_repo_config(tmp_path: Path, monkeypatch):
+    import odoo_doctor.adapters.ruff.adapter as mod
+
+    repo, _ = _addon_with_hostile_ruff_config(tmp_path)
+    seen: dict = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"], seen["kw"] = cmd, kw
+        return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+
+    monkeypatch.setenv("GH_TOKEN", "secret")
+    monkeypatch.setenv("RUFF_CACHE_DIR", str(repo / "c"))
+    monkeypatch.setenv("HOME", str(repo))
+    monkeypatch.setattr(mod.shutil, "which", lambda _n: "/usr/bin/ruff")
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    monkeypatch.chdir(repo)
+    RuffAdapter().run(repo / "m", "17.0")
+
+    cmd = seen["cmd"]
+    assert "--isolated" in cmd and "--no-cache" in cmd
+    assert Path(cmd[-1]).is_absolute()
+    assert not Path(seen["kw"]["cwd"]).resolve().is_relative_to(repo.resolve())
+    env = seen["kw"]["env"]
+    assert "GH_TOKEN" not in env and "RUFF_CACHE_DIR" not in env
+    assert not Path(env["HOME"]).resolve().is_relative_to(repo.resolve())
+
+
+def test_ruff_ignores_repo_config_for_real(tmp_path: Path, monkeypatch):
+    if shutil.which("ruff") is None:
+        pytest.skip("ruff is not installed")
+    repo, evil_cache = _addon_with_hostile_ruff_config(tmp_path)
+    monkeypatch.chdir(repo)
+    diags = RuffAdapter().run(repo / "m", "17.0")
+    assert "F401" in {d.rule for d in diags}  # not hidden by the repo's ignore
+    assert not evil_cache.exists()  # the repo's cache-dir was not honoured
+    assert (
+        not (repo / ".ruff_cache").exists()
+        and not (repo / "m" / ".ruff_cache").exists()
+    )
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no os.mkfifo")
+def test_ruff_does_not_hang_on_a_fifo_named_py(tmp_path: Path, monkeypatch):
+    if shutil.which("ruff") is None:
+        pytest.skip("ruff is not installed")
+    repo, _ = _addon_with_hostile_ruff_config(tmp_path)
+    os.mkfifo(repo / "m" / "pipe.py")
+    diags = RuffAdapter().run(
+        repo / "m", "17.0"
+    )  # blocks (60 s timeout warning) if broken
+    assert "F401" in {d.rule for d in diags}
+    assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
