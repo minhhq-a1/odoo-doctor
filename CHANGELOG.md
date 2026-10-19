@@ -100,6 +100,19 @@ All notable changes to Odoo Doctor are documented here.
   change on the working repository. The grade of an explicit `auth='public'` with `sudo()` (`high`, 151 hits in
   Odoo 19 community, mostly conventions like the above) is a pre-existing choice and is not touched here; the
   inherited grade is deliberately `medium`.
+- `search-in-loop`, `create-in-loop` and `write-in-loop` report a finding as `medium` (not `high`, no effect on
+  the score) when it rests on an inferred receiver or an aggregate query: a local that was assigned a recordset
+  (`recs = self.env['x'].search([])` then `recs.write(..)`, or the model handle `Model = self.env['x']`), a
+  comprehension, or `search_read` / `search_fetch` / `read_group` / `_read_group`. `self` and `env[...]`
+  receivers in a `for` / `while` loop stay `high` and are unchanged (no `high` finding of these rules changed
+  on core 19, core 17 scanned as 19, or the working repository: `scripts/measure.py` shows only `medium`
+  increases). Odoo's own addons query per company or per group inside loops: of the 152 new core 19
+  findings 35 are `_read_group` / `search_fetch` / `search_read` calls (often per entry of a `grouped(..).items()`
+  dict or per company), 114 follow a local (many are `Model = self.env['x']` handles used per file, warehouse or
+  company) and 3 are in comprehensions, so the policy keeps them out of `high`. Measured: Odoo 19 community
+  76 + 27 + 49 new `medium`
+  (`search` / `create` / `write`; `high` 405 / 185 / 138 unchanged), core 17 scanned as 19 62 + 30 + 39, the
+  working repository 3 + 2 + 2.
 
 ### Fixed
 
@@ -165,6 +178,38 @@ All notable changes to Odoo Doctor are documented here.
     rule's own module file only, so another file of the plugin package is not hashed.
 
   `CACHE_VERSION` is now 4, so older cache files are rebuilt once.
+- `override-missing-super` accepted any `super()` call in the body: `super().write(..)` inside `create` counted as
+  the call chain, so the missing `create` super was never reported. The call must now be
+  `super().<same method>` (`super().create(..)`, `super(Cls, self).create(..)`); a `super()` kept in a variable
+  (`parent = super()`) is still trusted. The raise-only skip, the delegation `medium` and the `_auto = False`
+  `medium` of 0.10.1 are unchanged. No finding of this rule changes on Odoo 19 community (3 medium), core 17
+  scanned as 19 (2 medium) or the working repository: core uses `super().<same method>` everywhere.
+- `search-in-loop`, `create-in-loop` and `write-in-loop` (one shared walker in `rules/_ast_helpers.py`,
+  `orm_calls_in_loops`): they never looked inside a comprehension (`[self.env['x'].search(..) for r in recs]`,
+  dict/set comprehensions and generator expressions: the element, the conditions and the iterables after the
+  first run once per item; the first iterable runs once); they did not follow a local assigned from an ORM
+  expression, so `recs = self.env['x'].search([]); for r in recs: r.write(..)` was missed (the iterable of a
+  `for` over a search result, `for r in self.env['x'].search([]):`, was already correct and is not reported:
+  it runs once); `search_read`, `search_fetch`, `read_group` and `_read_group` were not in the method set of
+  `search-in-loop`; and any `self.<attr>` was treated as a recordset, so `self.client.search(..)` on a service
+  object was a false `high`. An attribute that `__init__` sets (`self.client = client`) or that the class body
+  assigns something other than a `fields.X(..)` declaration is now a plain object; a field, or an attribute
+  inherited from a plain base class that is not scanned, is still taken for a recordset. New golden corpus
+  case `loop_forms`. The new detections are `medium`, see Changed.
+- `view-attrs-states-removed` never checked a kanban view outside its `<templates>`: any `t-*` attribute made the
+  whole view QWeb, so `attrs` / `states` on the `<field>` and `<button>` elements of a kanban were not
+  reported, although Odoo 17 and later reject them. Only the QWeb parts are skipped now (a `qweb` view, a
+  `<templates>` block, an element with a `t-*` directive, and an xpath whose `expr` names `templates` or `@t-`
+  into them), and an xpath into a template is no longer reported. No change on Odoo 19 community, core 17
+  scanned as 19 or the working repository (none has the pattern). New golden corpus case `kanban_attrs`.
+- `manual-cr-commit` exempted every `cr.commit()` on a name that the file bound to its own cursor or
+  environment anywhere (`with self.pool.cursor() as cr:` in one method silenced `cr.commit()` and
+  `env.cr.commit()` of every other function, including the request's own cursor passed as a parameter).
+  The exemption now follows scope: the function that opens the cursor and the functions nested in it, and the
+  module level; a parameter with the same name shadows an outer binding. `self.env.cr.commit()` was never
+  exempt. No change on Odoo 19 community (23 medium), core 17 scanned as 19 (30 medium) or the working
+  repository (1 medium). New golden corpus case `cr_commit_scope`.
+
 
 ## [0.11.0] — 2026-10-19
 
