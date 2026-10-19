@@ -326,7 +326,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="def create(self, vals):\n"
         "    record = super().create(vals)\n"
         "    return record",
-        notes="Not reported: a method whose body raises and never returns "
+        notes="The `super()` call must be for the same method: `super().write(..)` "
+        "inside `create` is not the call chain (a `super()` kept in a variable is "
+        "trusted). Not reported: a method whose body raises and never returns "
         "(`def copy(self, default=None): raise UserError(...)`) blocks the "
         "operation on purpose. Medium confidence, not high: the method calls its own "
         "name on records of another model that it maps out of `self` "

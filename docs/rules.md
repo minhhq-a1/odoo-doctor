@@ -468,7 +468,7 @@ amount = fields.Monetary(string="Amount")
 
 **Fix**: Call and return the parent implementation.
 
-**Note**: Not reported: a method whose body raises and never returns (`def copy(self, default=None): raise UserError(...)`) blocks the operation on purpose. Medium confidence, not high: the method calls its own name on records of another model that it maps out of `self` (`self.mapped('tmpl_id').copy(...)`, `self.line_ids.copy(...)`); calling it on `self`, on `self.sudo()` / `self.with_context(..)` or on an `env` lookup stays high. Also medium: `create`/`write` on a model with `_auto = False`, which has no ORM table for `super()` to write into.
+**Note**: The `super()` call must be for the same method: `super().write(..)` inside `create` is not the call chain (a `super()` kept in a variable is trusted). Not reported: a method whose body raises and never returns (`def copy(self, default=None): raise UserError(...)`) blocks the operation on purpose. Medium confidence, not high: the method calls its own name on records of another model that it maps out of `self` (`self.mapped('tmpl_id').copy(...)`, `self.line_ids.copy(...)`); calling it on `self`, on `self.sudo()` / `self.with_context(..)` or on an `env` lookup stays high. Also medium: `create`/`write` on a model with `_auto = False`, which has no ORM table for `super()` to write into.
 
 Bad:
 

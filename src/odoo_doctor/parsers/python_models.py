@@ -455,21 +455,33 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
     )
 
 
+def _is_super_call(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "super"
+    )
+
+
 def _body_calls_super(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """``super().<func.name>`` is reached; ``super().write()`` inside ``create`` is not.
+
+    shortcut: a ``super()`` that is stored or passed on (``parent = super()``) is trusted
+    to be used for this method, when it could be followed through the local.
+    """
+    accessed: set[int] = set()  # super() calls used as `super().<attr>`
     for node in ast.walk(func):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "super"
-        ):
-            return True
+        if isinstance(node, ast.Attribute) and _is_super_call(node.value):
+            if node.attr == func.name:
+                return True
+            accessed.add(id(node.value))
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "super"
         ):
             return True
-    return False
+    return any(_is_super_call(n) and id(n) not in accessed for n in ast.walk(func))
 
 
 def _body_always_raises(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:

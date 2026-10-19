@@ -241,6 +241,47 @@ def test_model_without_own_table_is_medium(tmp_path: Path):
     assert diag.confidence == "medium"
 
 
+def test_super_of_another_method_is_not_the_call_chain(tmp_path: Path):
+    for name, other in (
+        ("create", "write"),
+        ("write", "create"),
+        ("unlink", "write"),
+        ("copy", "copy_data"),
+    ):
+        body = f"def {name}(self, vals):\n    super().{other}(vals)\n    return self\n"
+        (diag,) = _super_diags(tmp_path, body)
+        assert diag.confidence == "high", name
+
+
+def test_super_of_the_same_method_in_either_spelling_is_silent(tmp_path: Path):
+    for expr in (
+        "super().write(vals)",
+        "super(X, self).write(vals)",
+        "super(X, self.sudo()).write(vals)",
+    ):
+        body = f"def write(self, vals):\n    res = {expr}\n    return res\n"
+        assert _super_diags(tmp_path, body) == [], expr
+
+
+def test_stored_super_object_is_given_the_benefit_of_the_doubt(tmp_path: Path):
+    body = """\
+        def unlink(self):
+            parent = super()
+            return parent.unlink()
+    """
+    assert _super_diags(tmp_path, body) == []
+
+
+def test_super_of_another_method_keeps_the_delegation_tier(tmp_path: Path):
+    body = """\
+        def copy(self, default=None):
+            super().copy_data(default)
+            return self.mapped("tmpl_id").copy(default=default)
+    """
+    (diag,) = _super_diags(tmp_path, body)
+    assert diag.confidence == "medium"
+
+
 def test_compute_reads_undeclared_repo_field_catches(tmp_path: Path):
     from odoo_doctor.graph.module_context import build_project_graph
     from odoo_doctor.rules.correctness.compute_missing_depends import (
