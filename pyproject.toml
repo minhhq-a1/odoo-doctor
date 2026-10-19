@@ -27,7 +27,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "typer>=0.12",
+    "typer>=0.16",
     "rich>=13.0",
     "lxml>=5.0",
     "tomli>=2.0; python_version < '3.11'",
@@ -55,15 +55,15 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/odoo_doctor"]
 
-# Ensure stub JSON data files are included in the wheel
-[tool.hatch.build.targets.wheel.shared-data]
-
 [tool.hatch.build]
+# Leading slashes anchor the patterns to the repository root; a bare "README.md"
+# would also match editors/vscode/README.md. Stubs, skills and html assets are
+# package data under src/odoo_doctor and ship in the wheel through `packages`.
 include = [
-    "src/odoo_doctor/**",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
+    "/src/odoo_doctor/**",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
 ]
 
 [tool.pytest.ini_options]

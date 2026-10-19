@@ -33,6 +33,18 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Fixed
 
+- Packaging: the `typer>=0.12` lower bound was wrong. Older Typer releases crash on current Click
+  (`TypeError: Secondary flag is not valid for non-boolean flag`) or fail on `scan --help`; the
+  bound is now `typer>=0.16`. A CI job (`lowest-versions`) installs the lowest allowed versions
+  of every direct dependency on Python 3.10 and runs the test suite.
+- Publishing: `publish.yml` uploaded to PyPI without checking anything. It now runs the tests and
+  ruff, checks that the tag is `vX.Y.Z` and equals `pyproject.toml` and `odoo_doctor.__version__`
+  (`scripts/check_release_version.py`), and installs the built wheel in a clean virtual
+  environment to run `odoo-doctor --version` and a scan, before the upload. Run manually, the
+  workflow must be started from a tag.
+- The sdist no longer contains `editors/vscode/README.md` and `editors/vscode/LICENSE` (the
+  `include` patterns are anchored), and the empty `wheel.shared-data` table with its wrong
+  comment is gone. The wheel is unchanged.
 - One bad input file no longer aborts a scan. A manifest with an unhashable key or a non-list
   `depends`/`data`, an XML file declared UTF-8 but holding other bytes, a Python file too deep for the
   parser (`RecursionError`/`MemoryError`), and an `ir.model.access.csv` that is not UTF-8 or has short
