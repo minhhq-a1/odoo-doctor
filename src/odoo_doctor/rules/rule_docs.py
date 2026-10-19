@@ -284,7 +284,11 @@ RULE_DOCS: dict[str, RuleDoc] = {
         why="Odoo rejects the view at load time.",
         fix="Add the field to the model or remove it from the view.",
         notes="Fires with high confidence only when the model is known (stubs or "
-        "this repository) and the field provably does not exist.",
+        "this repository) and the field provably does not exist. `_inherit` and "
+        "`_inherits` are read as a string, a list or a tuple. A model with a parent "
+        "that is not packaged (the mixins of a stub-known module, a model of an "
+        "addon that is not scanned) or not written out (`_inherit = MIXINS`) may have "
+        "any field, so nothing is reported.",
     ),
     "button-method-not-found": RuleDoc(
         detects='Buttons with `type="object"` calling a method that does not '

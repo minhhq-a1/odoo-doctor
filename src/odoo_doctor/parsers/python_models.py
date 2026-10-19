@@ -58,6 +58,9 @@ class ModelInfo:
     # False when the class sets `_auto = False`: no table is created by the ORM, so the
     # default `create`/`write` behind `super()` has nothing to store into.
     auto_table: bool = True
+    # `_inherit` / `_inherits` is not a literal (a name, a computed list, `*args`): the parents
+    # are not all known, so the model's symbols cannot be proven complete.
+    inherit_unresolved: bool = False
 
 
 @dataclass
@@ -204,13 +207,12 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                     elif target.id == "_auto" and isinstance(item.value, ast.Constant):
                         model.auto_table = bool(item.value.value)
                     elif target.id == "_inherit":
-                        model.inherit = _extract_inherit(item.value)
-                    elif target.id == "_inherits" and isinstance(item.value, ast.Dict):
-                        for k, v in zip(item.value.keys, item.value.values):
-                            if isinstance(k, ast.Constant) and isinstance(
-                                v, ast.Constant
-                            ):
-                                model.inherits[k.value] = v.value
+                        model.inherit, literal = _extract_inherit(item.value)
+                        model.inherit_unresolved |= not literal
+                    elif target.id == "_inherits":
+                        model.inherit_unresolved |= not _extract_inherits(
+                            item.value, model.inherits
+                        )
 
         # Field definitions
         if isinstance(item, ast.Assign) and len(item.targets) == 1:
@@ -239,16 +241,35 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
     return model
 
 
-def _extract_inherit(node: ast.expr) -> list[str]:
+def _extract_inherit(node: ast.expr) -> tuple[list[str], bool]:
+    """The parents named by ``_inherit`` (string, list or tuple), and whether all are literal."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return [node.value]
-    if isinstance(node, ast.List):
-        return [
+        return [node.value], True
+    if isinstance(node, (ast.List, ast.Tuple)):
+        names = [
             e.value
             for e in node.elts
             if isinstance(e, ast.Constant) and isinstance(e.value, str)
         ]
-    return []
+        return names, len(names) == len(node.elts)
+    return [], isinstance(node, ast.Constant) and node.value is None
+
+
+def _extract_inherits(node: ast.expr, into: dict[str, str]) -> bool:
+    """Fill ``into`` from a literal ``_inherits`` dict; False when some entry is not literal."""
+    if not isinstance(node, ast.Dict):
+        return False
+    literal = True
+    for k, v in zip(node.keys, node.values):
+        if (
+            isinstance(k, ast.Constant)
+            and isinstance(k.value, str)
+            and isinstance(v, ast.Constant)
+        ):
+            into[k.value] = v.value
+        else:
+            literal = False
+    return literal
 
 
 def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None:

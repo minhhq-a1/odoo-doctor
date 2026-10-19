@@ -77,6 +77,7 @@ def _add_model(models: dict[str, ModelInfo], m: ModelInfo) -> None:
     existing.fields.update(m.fields)
     existing.methods.update(m.methods)
     existing.inherit = list(dict.fromkeys(existing.inherit + m.inherit))
+    existing.inherit_unresolved |= m.inherit_unresolved
     for name, target in m.inherits.items():
         existing.inherits.setdefault(name, target)
     if m.defines and not existing.defines:
@@ -113,6 +114,7 @@ def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
         if other is base:
             continue
         merged.inherit.extend(i for i in other.inherit if i not in merged.inherit)
+        merged.inherit_unresolved |= other.inherit_unresolved
         for name, target in other.inherits.items():
             merged.inherits.setdefault(name, target)
         for name, info in other.fields.items():

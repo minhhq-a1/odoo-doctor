@@ -517,7 +517,7 @@ access_x,x,model_my_model,base.group_user,1,0,0,0
 
 **Fix**: Add the field to the model or remove it from the view.
 
-**Note**: Fires with high confidence only when the model is known (stubs or this repository) and the field provably does not exist.
+**Note**: Fires with high confidence only when the model is known (stubs or this repository) and the field provably does not exist. `_inherit` and `_inherits` are read as a string, a list or a tuple. A model with a parent that is not packaged (the mixins of a stub-known module, a model of an addon that is not scanned) or not written out (`_inherit = MIXINS`) may have any field, so nothing is reported.
 
 ### compute-missing-depends
 

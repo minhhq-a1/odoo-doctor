@@ -306,6 +306,8 @@ class SymbolResolver:
 
         repo_model = self._repo_models.get(model_name)
         if repo_model is not None:
+            if repo_model.inherit_unresolved:
+                return False  # a parent that is not written out may add any field
             ancestors = list(repo_model.inherit) + list(repo_model.inherits.keys())
             for anc in ancestors:
                 if anc == model_name:
