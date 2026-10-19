@@ -43,6 +43,10 @@ and the exit code 3 below, are public; the content and layout of the file are no
 terminal text), and neither are the keys of the data embedded in it. Read `--json` for data.
 `scan --show-low` lists the findings the terminal hides by default (`[surfaces.terminal]`) and
 changes nothing else: JSON, SARIF, HTML, `--fail-on` and scores are the same with or without it.
+`scan --upgrade-report` adds an upgrade readiness report for the target given by `--odoo-version`
+(printed after the normal terminal output, or the top-level `upgrade_report` key of `--json`).
+SARIF, GitHub annotations and HTML ignore it (a note on stderr), exit codes and every other
+key are unchanged, and without the flag the output is byte-identical.
 
 `odoo-doctor lsp` (the language server) is experimental and not covered by this contract
 until it is listed here; it exits 3 when the optional `lsp` extra is not installed.
@@ -75,6 +79,11 @@ Do not rely on the exit code of anything not listed here.
   `fix_priorities`, `suppression_stats`, `diagnostics`; each diagnostic carries `module`, `file_path`,
   `line`, `column`, `rule`, `category`, `severity`, `tier`, `source`, `confidence`,
   `title`, `message`, `help`, `odoo_version`, `url`.
+- `scan --json --upgrade-report`: one more top-level key, `upgrade_report`, present only with
+  the flag: `readiness_schema_version` (1), `target_version`, `modules` (name to `score`
+  0-100, `groups` and `totals`; a group has `group`, `rules`, `findings`, `files`, `effort`,
+  `mechanical`, `needs_review`) and project `totals`. Changing the readiness formula bumps
+  `readiness_schema_version`; `score_schema_version` is unaffected.
 - `rules stats --json`: `thresholds` and `rules` (per rule `surfaced`, `inline`,
   `ignore_rule`, `severity_off`, `suppressed`, `total`, `ratio`, `noisy`, `suggestion`).
   The noise thresholds themselves may be tuned.

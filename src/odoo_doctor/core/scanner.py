@@ -131,6 +131,44 @@ def _score_per_module(
     return scores
 
 
+def detect_scan_version(addon_paths: list[Path], cfg: OdooDoctorConfig) -> str:
+    """The Odoo version a scan runs as: config/CLI, else the first addon's manifest."""
+    if cfg.odoo_version:
+        return cfg.odoo_version
+    from odoo_doctor.discovery.addons import discover_addons
+    from odoo_doctor.discovery.odoo_version import detect_odoo_version
+    from odoo_doctor.parsers.manifest import parse_manifest
+
+    for addon in discover_addons(
+        addon_paths, target_modules=cfg.target_modules or None
+    ):
+        manifest = parse_manifest(addon.path)
+        if manifest is not None:
+            return detect_odoo_version(manifest_version=manifest.version)
+    return "unknown"
+
+
+def manifest_versions(addon_paths: list[Path], cfg: OdooDoctorConfig) -> dict[str, str]:
+    """Module -> Odoo version its own manifest declares (only recognised ``NN.0`` ones).
+
+    Rules are gated on this version, not on the configured one (see build_project_graph).
+    """
+    from odoo_doctor.discovery.addons import discover_addons
+    from odoo_doctor.discovery.odoo_version import detect_odoo_version
+    from odoo_doctor.parsers.manifest import parse_manifest
+
+    found: dict[str, str] = {}
+    for addon in discover_addons(
+        addon_paths, target_modules=cfg.target_modules or None
+    ):
+        manifest = parse_manifest(addon.path)
+        if manifest is not None:
+            ver = detect_odoo_version(manifest_version=manifest.version)
+            if ver != "unknown":
+                found[addon.name] = ver
+    return found
+
+
 def collect_scores(
     addon_paths: list[Path],
     cfg: OdooDoctorConfig,
@@ -138,6 +176,7 @@ def collect_scores(
     changed_files: set[str] | None = None,
     config_root: Path | None = None,
     cache: ScanCache | None = None,
+    force_version: bool = False,
 ) -> tuple[list[Diagnostic], dict[str, object]]:
     from dataclasses import asdict
 
@@ -152,7 +191,7 @@ def collect_scores(
         fingerprint = project_fingerprint(
             addon_paths=addon_paths,
             config_repr=_config_repr(cfg),
-            version=version,
+            version=f"{version}+forced" if force_version else version,
             ruleset=ruleset,
         )
         hit = cache.lookup(fingerprint)
@@ -175,6 +214,7 @@ def collect_scores(
         odoo_version=version,
         target_modules=cfg.target_modules or None,
         odoo_source_path=cfg.odoo_source_path or None,
+        force_version=force_version,
     )
     if not graph.modules:
         return [], {}
