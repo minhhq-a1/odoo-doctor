@@ -17,6 +17,7 @@ from odoo_doctor.core.config import (
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
+from odoo_doctor.core.git import run_git
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scanner import collect_scores as _collect_scores
 from odoo_doctor.core.scanner import detect_scan_version, manifest_versions
@@ -981,14 +982,7 @@ def _scan_base_ref(
 ) -> tuple[list[Diagnostic], dict[str, object]]:
     import tempfile
 
-    root_result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        cwd=config_root,
-        timeout=30,
-        check=False,
-    )
+    root_result = run_git(["rev-parse", "--show-toplevel"], config_root)
     if root_result.returncode != 0:
         typer.echo("[ERROR] --score-delta: Not a git repository.", err=True)
         raise typer.Exit(code=3)
@@ -996,12 +990,10 @@ def _scan_base_ref(
 
     tmpdir = Path(tempfile.mkdtemp(prefix="odoo-doctor-base-"))
     try:
-        wt_add = subprocess.run(
-            ["git", "worktree", "add", "--detach", str(tmpdir), base_ref],
-            cwd=git_root,
-            capture_output=True,
-            text=True,
-            check=False,
+        wt_add = run_git(
+            ["worktree", "add", "--detach", str(tmpdir), base_ref],
+            git_root,
+            timeout=None,
         )
         if wt_add.returncode != 0:
             typer.echo(
@@ -1030,12 +1022,7 @@ def _scan_base_ref(
             base_addon_paths, cfg, version, config_root=base_cfg_root
         )
     finally:
-        subprocess.run(
-            ["git", "worktree", "remove", "--force", str(tmpdir)],
-            cwd=git_root,
-            capture_output=True,
-            check=False,
-        )
+        run_git(["worktree", "remove", "--force", str(tmpdir)], git_root, timeout=None)
 
 
 def _compute_aggregate_delta(
@@ -1126,25 +1113,14 @@ def _echo_nested_addon_hint(addons_paths: list[Path]) -> None:
 
 def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
     try:
-        root_result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            cwd=repo_path,
-            timeout=30,
-            check=False,
-        )
+        root_result = run_git(["rev-parse", "--show-toplevel"], repo_path)
         if root_result.returncode != 0:
             return None
         git_root = Path(root_result.stdout.strip()).resolve()
 
-        result = subprocess.run(
-            ["git", "diff", "--name-only", base_branch],
-            capture_output=True,
-            text=True,
-            cwd=git_root,
-            timeout=30,
-            check=False,
+        result = run_git(
+            ["diff", "--no-ext-diff", "--no-textconv", "--name-only", base_branch],
+            git_root,
         )
         if result.returncode != 0:
             return None

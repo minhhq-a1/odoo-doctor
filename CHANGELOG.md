@@ -15,6 +15,17 @@ All notable changes to Odoo Doctor are documented here.
   leaves the addon directory is skipped too. This covers Python, XML and CSV files, manifests,
   inline suppressions, the scan-cache fingerprint, the Odoo source index, the language server and
   `fix`. A symlink to a regular file inside the addon is still scanned.
+- git no longer runs code chosen by the scanned repo. `scan --diff`, `--score-delta`, `--history`,
+  `--badge` and the HTML report's dirty flag ran git inside the repo, whose `.git/config` or hooks
+  could name a program: `core.fsmonitor` (run by `status` and `diff`), `core.hooksPath` or a
+  `post-checkout` hook (run by `worktree add`), a clean/smudge filter driver selected by
+  `.gitattributes`, `core.sshCommand`, `diff.external`. Every git call now goes through one helper
+  (`core/git.py`) that sets `core.fsmonitor=false`, `core.hooksPath` to the null device, an empty
+  `core.sshCommand`, `--no-optional-locks`, blanks every configured filter driver, passes
+  `--no-ext-diff --no-textconv` to `diff`, and runs git with a minimal environment (no tokens, no
+  `GIT_*` variables, `GIT_TERMINAL_PROMPT=0`). Your own global git config still applies. Side effect: a
+  `--score-delta` base checkout holds git-lfs pointer files instead of the real content (filters are
+  off); scanned source is not affected.
 
 ## [0.11.0] — 2026-10-19
 

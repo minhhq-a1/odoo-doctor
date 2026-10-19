@@ -28,6 +28,7 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
+from odoo_doctor.core.git import run_git
 from odoo_doctor.core.scoring import (
     SCORE_SCHEMA_VERSION,
     ScoreResult,
@@ -58,10 +59,8 @@ def _git_dirty(cwd: Path) -> bool | None:
     scanned repository's index.
     """
     try:
-        out = subprocess.run(
+        out = run_git(
             [
-                "git",
-                "--no-optional-locks",
                 "status",
                 "--porcelain",
                 "--",
@@ -69,12 +68,8 @@ def _git_dirty(cwd: Path) -> bool | None:
                 # the scan's own --cache directory (see ScanCache in cli/app.py)
                 ":(exclude,glob,top)**/.odoo_doctor_cache/**",
             ],
-            capture_output=True,
-            text=True,
-            cwd=cwd,
+            cwd,
             timeout=15,
-            check=False,
-            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -87,14 +82,7 @@ def git_info(cwd: Path) -> dict[str, str | bool | None]:
 
     def run(*args: str) -> str | None:
         try:
-            out = subprocess.run(
-                ["git", *args],
-                capture_output=True,
-                text=True,
-                cwd=cwd,
-                timeout=15,
-                check=False,
-            )
+            out = run_git(list(args), cwd, timeout=15)
         except (OSError, subprocess.TimeoutExpired):
             return None
         return out.stdout.strip() or None if out.returncode == 0 else None
