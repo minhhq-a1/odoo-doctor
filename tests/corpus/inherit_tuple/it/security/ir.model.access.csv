@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_it_base,it.base,model_it_base,base.group_user,1,1,1,1
+access_it_tup,it.tup,model_it_tup,base.group_user,1,1,1,1
+access_it_lst,it.lst,model_it_lst,base.group_user,1,1,1,1
+access_it_proto,it.proto,model_it_proto,base.group_user,1,1,1,1
+access_it_dyn,it.dyn,model_it_dyn,base.group_user,1,1,1,1
+access_it_unknown,it.unknown,model_it_unknown,base.group_user,1,1,1,1
