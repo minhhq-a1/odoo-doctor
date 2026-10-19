@@ -30,7 +30,15 @@ odoo-doctor scan . --diff main --json
 
 # 6. Báo cáo HTML một file (mở bằng trình duyệt, đính kèm CI)
 odoo-doctor scan . --html report.html
+
+# 7. Upgrade readiness: how far is each module from Odoo 19?
+odoo-doctor scan . --odoo-version 19.0 --upgrade-report
 ```
+
+**Upgrade readiness.** `--upgrade-report` (with `--odoo-version <target>`) groups the Upgrade
+Safety findings by kind of change, counts them, labels each one mechanical (a pure rename, fixer
+planned) or needs review, and scores every module 0-100. With `--json` it adds the top-level key
+`upgrade_report`. See [docs/upgrade-report.md](docs/upgrade-report.md).
 
 ---
 
