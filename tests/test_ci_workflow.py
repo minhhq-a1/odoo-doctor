@@ -66,7 +66,11 @@ def test_publish_waits_for_tests_version_check_and_smoke_test():
 
 
 def test_publish_keeps_trusted_publishing_on_the_publish_job_only():
+    workflow = yaml.safe_load(PUBLISH.read_text(encoding="utf-8"))
+    assert workflow.get("permissions") == {"contents": "read"}
+    assert "id-token" not in workflow["permissions"]
     jobs = _publish_jobs()
+    assert "build" in jobs["pypi-publish"]["needs"]
     publish = jobs["pypi-publish"]
     assert publish["permissions"]["id-token"] == "write"
     assert publish["environment"]["name"] == "pypi"

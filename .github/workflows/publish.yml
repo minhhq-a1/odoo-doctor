@@ -7,6 +7,10 @@ on:
   # rejects any ref that is not a vX.Y.Z tag.
   workflow_dispatch:
 
+# Least privilege for every job; only pypi-publish raises it (id-token for Trusted Publishing).
+permissions:
+  contents: read
+
 jobs:
   check-version:
     name: Tag matches the package version
