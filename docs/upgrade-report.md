@@ -122,8 +122,11 @@ applies only `high` findings (see [stability.md](stability.md) and `core/fixer.p
 `medium` finding is never promised as mechanical.
 
 In 0.11 the report says **mechanical (fixer planned for 0.12)**: nothing is auto-fixed yet.
-Mechanical counts include XPath-step and nested-`tree` findings, which the fixer will have to
-handle for the label to hold.
+The `view-tree-removed` label is deliberately broad: every `high` finding of that rule is
+mechanical, including XPath steps named `tree`, `<field name="type">tree</field>`, `eval=`
+`view_mode` strings and nested `tree` elements. One finding covers a whole view record, so these
+forms cannot be counted separately. The 0.12 fixer must either be extended to all of them or the
+label narrowed; until then the mechanical count for this group is an upper bound.
 
 ## Effort
 

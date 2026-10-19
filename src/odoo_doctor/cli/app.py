@@ -19,6 +19,7 @@ from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scanner import collect_scores as _collect_scores
+from odoo_doctor.core.scanner import detect_scan_version
 from odoo_doctor.core.suppression_stats import rule_noise
 from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
@@ -117,7 +118,7 @@ def _main(
     """Unified health scoring for Odoo custom addons."""
 
 
-def _upgrade_report(diags, scores, configured_version, output_format) -> dict | None:
+def _upgrade_report(diags, modules, target, output_format) -> dict | None:
     """Build the ``--upgrade-report`` payload (None for formats that ignore the flag)."""
     from odoo_doctor.core.upgrade import build_upgrade_report, has_migration_rules
 
@@ -127,14 +128,13 @@ def _upgrade_report(diags, scores, configured_version, output_format) -> dict | 
             err=True,
         )
         return None
-    target = configured_version or next((d.odoo_version for d in diags), "unknown")
-    if scores and not has_migration_rules(target):
+    if modules and not has_migration_rules(target):
         typer.echo(
             f"[WARN] --upgrade-report: Odoo version '{target}' has no migration rules, "
             "so the report is empty. Pass the target with --odoo-version (e.g. 19.0).",
             err=True,
         )
-    return build_upgrade_report(diags, scores, target)
+    return build_upgrade_report(diags, modules, target)
 
 
 @app.command()
@@ -280,6 +280,7 @@ def scan(
         )
         return
 
+    scanned_modules = list(scores)  # before --baseline drops fully-baselined modules
     if baseline:
         from odoo_doctor.core.baseline import filter_against_baseline, load_baseline
         from odoo_doctor.core.scanner import _score_per_module  # added in plan 04
@@ -296,7 +297,12 @@ def scan(
 
     report = None
     if upgrade_report:
-        report = _upgrade_report(diags, scores, cfg.odoo_version, output_format)
+        report = _upgrade_report(
+            diags,
+            scanned_modules,
+            detect_scan_version(addons_paths, cfg),
+            output_format,
+        )
 
     if not scores:
         if html_path:

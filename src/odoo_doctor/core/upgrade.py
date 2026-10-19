@@ -12,7 +12,7 @@ Mechanical or needs review. The label comes only from the static tables
 ``MECHANICAL_RULES`` and ``MECHANICAL_FIELDS``, never from the finding's text, and
 only a ``high`` confidence finding can be mechanical: ``fix`` applies only ``high``
 findings (``core.fixer.compute_fixes``). A finding is "mechanical" when the change
-is a rename that needs no decision. The fixer for these is planned (0.12); the
+is a rename that needs no decision. A fixer for these is planned (0.12); the
 report does not fix anything.
 
 Readiness score (``readiness_schema_version`` 1), per module::
@@ -63,7 +63,11 @@ _GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 RULE_GROUPS: dict[str, str] = {r: g for g, rules in _GROUPS for r in rules}
 
-# Rules whose high-confidence findings are all pure renames.
+# Rules whose high-confidence findings are all labelled mechanical. For view-tree-removed
+# this is broader than what the 0.12 fixer is planned to cover (XPath steps named
+# `tree`, <field name="type">tree</field>, eval= view_mode strings): one finding covers a
+# whole view record, so these forms cannot be told apart. 0.12 must either extend the
+# fixer to them or narrow this label.
 MECHANICAL_RULES = frozenset(
     {"view-tree-removed", "chatter-div-removed", "search-view-group-attributes"}
 )

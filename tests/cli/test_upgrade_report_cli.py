@@ -132,6 +132,10 @@ def test_exit_codes_do_not_change():
 def test_module_option_limits_the_report():
     up = _json("--upgrade-report", "--module", "mg")["upgrade_report"]
     assert set(up["modules"]) == {"mg"}
+    assert (
+        set(_json("--upgrade-report", "--module", "nope")["upgrade_report"]["modules"])
+        == set()
+    )
 
 
 def test_baseline_removes_the_known_findings_from_the_report(tmp_path: Path):
@@ -142,6 +146,8 @@ def test_baseline_removes_the_known_findings_from_the_report(tmp_path: Path):
     assert written.exit_code == 0
     report = _json("--upgrade-report", "--baseline", str(baseline))
     assert report["upgrade_report"]["totals"]["findings"] == 0
+    # A fully-baselined module is still in the scan: present, readiness 100.
+    assert report["upgrade_report"]["modules"]["mg"]["score"] == 100.0
     assert _upgrade_findings(report) == 0
 
 
@@ -150,6 +156,7 @@ def test_diff_report_matches_the_diff_scan():
     with patch("odoo_doctor.cli.app._get_changed_files", return_value=changed):
         report = _json("--upgrade-report", "--diff", "main")
     assert report["upgrade_report"]["totals"]["findings"] == _upgrade_findings(report)
+    assert set(report["upgrade_report"]["modules"]) == {"mg"}
     assert _upgrade_findings(report) > 0
 
 
@@ -169,3 +176,51 @@ def test_no_addons_with_the_flag(tmp_path: Path):
 
 def test_flag_is_listed_in_help():
     assert "--upgrade-report" in runner.invoke(app, ["scan", "--help"]).stdout
+
+
+def _addon(root: Path, version: str) -> Path:
+    mod = root / "clean"
+    mod.mkdir(parents=True)
+    (mod / "__init__.py").write_text("")
+    (mod / "__manifest__.py").write_text(
+        f"{{'name': 'C', 'version': '{version}.1.0.0', 'depends': ['base'], "
+        "'data': [], 'installable': True, 'license': 'LGPL-3'}"
+    )
+    return root
+
+
+def _run(root: Path, *args: str):
+    result = runner.invoke(
+        app, ["scan", str(root), "--json", "--upgrade-report", *args]
+    )
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)["upgrade_report"], result.stderr
+
+
+def test_target_is_the_detected_version_for_a_clean_project(tmp_path: Path):
+    up, err = _run(_addon(tmp_path, "19.0"))
+    assert up["target_version"] == "19.0"
+    assert "--odoo-version" not in err
+    assert up["modules"]["clean"]["score"] == 100.0
+
+
+def test_old_detected_version_warns(tmp_path: Path):
+    up, err = _run(_addon(tmp_path, "17.0"))
+    assert up["target_version"] == "17.0"
+    assert "--odoo-version" in err
+
+
+def test_explicit_option_beats_the_detected_version(tmp_path: Path):
+    up, err = _run(_addon(tmp_path, "17.0"), "--odoo-version", "19.0")
+    assert up["target_version"] == "19.0"
+    assert "--odoo-version" not in err
+
+
+def test_fully_baselined_project_keeps_target_and_modules(tmp_path: Path):
+    root = _addon(tmp_path, "19.0")
+    baseline = tmp_path / "b.json"
+    runner.invoke(app, ["scan", str(root), "--write-baseline", str(baseline)])
+    up, err = _run(root, "--baseline", str(baseline))
+    assert up["target_version"] == "19.0"
+    assert "clean" in up["modules"]
+    assert "--odoo-version" not in err

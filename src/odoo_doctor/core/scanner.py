@@ -131,6 +131,23 @@ def _score_per_module(
     return scores
 
 
+def detect_scan_version(addon_paths: list[Path], cfg: OdooDoctorConfig) -> str:
+    """The Odoo version a scan runs as: config/CLI, else the first addon's manifest."""
+    if cfg.odoo_version:
+        return cfg.odoo_version
+    from odoo_doctor.discovery.addons import discover_addons
+    from odoo_doctor.discovery.odoo_version import detect_odoo_version
+    from odoo_doctor.parsers.manifest import parse_manifest
+
+    for addon in discover_addons(
+        addon_paths, target_modules=cfg.target_modules or None
+    ):
+        manifest = parse_manifest(addon.path)
+        if manifest is not None:
+            return detect_odoo_version(manifest_version=manifest.version)
+    return "unknown"
+
+
 def collect_scores(
     addon_paths: list[Path],
     cfg: OdooDoctorConfig,
