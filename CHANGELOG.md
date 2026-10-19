@@ -6,6 +6,8 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-19
+
 ### Added
 
 - `scan --upgrade-report` (with `--odoo-version <target>`): groups the Upgrade Safety findings by kind
