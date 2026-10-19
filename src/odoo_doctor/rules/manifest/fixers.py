@@ -11,6 +11,7 @@ from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.fixer import default_fixers
+from odoo_doctor.core.source import chain_too_long
 from odoo_doctor.rules.manifest.data_order_risk import safe_placement
 from odoo_doctor.rules.manifest.missing_required_fields import (
     missing_fields_by_confidence,
@@ -48,9 +49,11 @@ def _last_token_is_comma(source: str) -> bool:
 
 def _insert_entries(text: str, entries: list[tuple[str, object]]) -> str | None:
     """Add `'key': value` entries before the closing brace; no existing byte is changed."""
+    if chain_too_long(text):  # same parser-stack guard as the scan
+        return None
     try:
         node = ast.parse(text, mode="eval").body
-    except SyntaxError:
+    except (SyntaxError, RecursionError):
         return None
     if not isinstance(node, ast.Dict) or node.end_lineno is None:
         return None
@@ -90,6 +93,8 @@ def fix_missing_required_field(diag: Diagnostic, text: str) -> str | None:
     is reported as not fixable. The fixer re-derives what is missing from the text
     (not from the diagnostic), so it is idempotent when called once per diagnostic.
     """
+    if chain_too_long(text):
+        return None
     try:
         data = ast.literal_eval(text)
     except (ValueError, SyntaxError, TypeError, RecursionError):
@@ -117,9 +122,11 @@ def _data_list_blocks(text: str) -> tuple[list[str], list[str], int] | None:
     None unless the `data` list has exactly one element per line, with nothing between
     the elements but each element's own trailing comma and `#` comment.
     """
+    if chain_too_long(text):  # same parser-stack guard as the scan
+        return None
     try:
         node = ast.parse(text, mode="eval").body
-    except SyntaxError:
+    except (SyntaxError, RecursionError):
         return None
     if not isinstance(node, ast.Dict):
         return None

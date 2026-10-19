@@ -42,7 +42,9 @@ def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         # a Latin-1 byte in one cell must not hide the whole file
-        warn_skipped(file_path, "not UTF-8, read with replacement characters")
+        warn_skipped(
+            file_path, "not UTF-8, read with replacement characters", read_anyway=True
+        )
         text = raw.decode("utf-8-sig", errors="replace")
     try:
         for lineno, row in enumerate(

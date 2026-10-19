@@ -37,7 +37,9 @@ def _scan(root: Path) -> tuple[set[str], list[str]]:
     report = json.loads(result.stdout)
     rules = {d["rule"] for m in report["modules"].values() for d in m["diagnostics"]}
     return rules, [
-        ln for ln in result.stderr.splitlines() if ln.startswith("[WARN] skipped")
+        ln
+        for ln in result.stderr.splitlines()
+        if ln.startswith("[WARN] ") and "more skipped" not in ln
     ]
 
 
@@ -107,6 +109,7 @@ def test_access_csv_not_utf8_or_short_rows(tmp_path: Path):
     rules, warns = _scan(tmp_path)
     assert "eval-usage" in rules
     assert len(warns) == 1 and "ir.model.access.csv" in warns[0]
+    assert "skipped" not in warns[0] and "not UTF-8" in warns[0]
 
     csv_file.write_bytes(b"id,name,model_id:id\nshort\n,,\n")  # short rows, valid UTF-8
     rules, warns = _scan(tmp_path)
@@ -121,16 +124,7 @@ def test_skipped_file_warnings_are_capped(tmp_path: Path):
     assert result.exit_code in (0, 1)
     json.loads(result.stdout)
     lines = [ln for ln in result.stderr.splitlines() if ln.startswith("[WARN] ")]
-    assert (
-        len(
-            [
-                ln
-                for ln in lines
-                if "skipped /" in ln or "skipped " in ln and "more" not in ln
-            ]
-        )
-        == 20
-    )
+    assert len([ln for ln in lines if "more skipped" not in ln]) == 20
     assert lines[-1] == "[WARN] ... and 10 more skipped"
 
 
@@ -143,3 +137,34 @@ def test_addon_name_with_brackets_in_terminal_report(tmp_path: Path):
     assert "Findings for my[addon]" in out
     assert "Findings for [red]second" in out
     assert "my[addon]/__manifest__.py" in out
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ["binop", "call_args", "slice", "call_kwargs", "call_dict", "fstring_binop"],
+)
+def test_chain_guard_skips_the_real_scan_of_each_shape_class(
+    tmp_path: Path, shape: str
+):
+    """In a subprocess, like a user: exit code unchanged, one warning, good file still scanned."""
+    import subprocess
+    import sys
+
+    from tests.parsers.test_bad_inputs import BYPASS_SHAPES, N
+
+    mod = _addon(tmp_path, "mod")
+    (mod / "models" / "long.py").write_text(BYPASS_SHAPES[shape](N) + "\n")
+    proc = subprocess.run(
+        [sys.executable, "-c", "from odoo_doctor.cli.app import app; app()"]
+        + ["scan", str(tmp_path), "--json"],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode in (0, 1), proc.stderr[-500:]
+    warns = [ln for ln in proc.stderr.splitlines() if ln.startswith("[WARN] ")]
+    assert len(warns) == 1 and "long.py" in warns[0] and "too long" in warns[0]
+    report = json.loads(proc.stdout)
+    rules = {d["rule"] for m in report["modules"].values() for d in m["diagnostics"]}
+    assert "eval-usage" in rules

@@ -29,14 +29,19 @@ _WARN_CAP = 20
 _skipped: set[str] = set()
 
 
-def warn_skipped(path: Path | str, reason: str) -> None:
-    """Say once per scan, on stderr, that a file was skipped and why."""
+def warn_skipped(path: Path | str, reason: str, *, read_anyway: bool = False) -> None:
+    """Say once per scan, on stderr, that a file was skipped (or only partly read) and why.
+
+    Nothing is parsed on a ``--cache`` hit, so the warnings appear once per change of
+    the project; run without ``--cache`` to see them again.
+    """
     key = str(path)
     if key in _skipped:
         return
     _skipped.add(key)
     if len(_skipped) <= _WARN_CAP:
-        typer.echo(f"[WARN] skipped {key}: {reason}", err=True)
+        what = f"{key}: {reason}" if read_anyway else f"skipped {key}: {reason}"
+        typer.echo(f"[WARN] {what}", err=True)
 
 
 def flush_skipped() -> None:
@@ -51,38 +56,58 @@ def reset_skipped() -> None:
     _skipped.clear()
 
 
-# shortcut: CPython's AST conversion recurses once per link of a left-nested chain
-# (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`). 3.10 segfaults at ~134k links (an
-# uncatchable crash); 3.12+ raises RecursionError from ~10k, which _parse catches. Only a
-# file of at least _GUARD_MIN_SIZE chars can hold that many links, so smaller files are
-# never tokenized. Revisit if a supported Python crashes lower.
-_GUARD_MIN_SIZE = 200_000
+# shortcut: best effort, NOT a proof. CPython's AST conversion recurses once per link of a
+# left-nested chain (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`, `f(1)(2)...`, also inside
+# brackets). 3.10 segfaults at ~136k links (an uncatchable crash, measured for ~20 shapes);
+# 3.12+ raises RecursionError from ~10k, which _parse catches. A chain that long needs at
+# least ~270k chars, so only files of _GUARD_MIN_SIZE chars are tokenized, and one chain
+# (counted per bracket depth, reset by `, ; = :` at that depth) over _MAX_CHAIN links
+# (2.7x below the crash) is skipped. On Python < 3.12 an f-string is one STRING token, so
+# its operator characters are counted as a whole. Known residual risk: a shape this count
+# does not model (found by a new fuzz, an exotic token mix) can still crash 3.10.
+_GUARD_MIN_SIZE = 100_000
 _MAX_CHAIN = 50_000
 _CHAIN_OPS = frozenset(
     ("+", "-", "*", "/", "//", "%", "@", "|", "&", "^", "<<", ">>", "**", ".")
 )
-_CHAIN_RESET = frozenset({",", ";", ":", "=", "{", "}"})
+_OPENERS = frozenset("([{")
+_CLOSERS = frozenset(")]}")
+_RESETS = frozenset((",", ";", "=", ":"))
+_FSTRING_OP_CHARS = "+-*/.([|&^%@<>"
 
 
 def chain_too_long(source: str) -> bool:
-    """True when one expression chains more than _MAX_CHAIN operators (see above)."""
+    """True when one expression chains more than _MAX_CHAIN links (see above)."""
     if len(source) < _GUARD_MIN_SIZE:
         return False
-    run = 0
+    depth = [0]  # chain links seen so far at each open bracket depth
     prev = ""
     try:
         for tok in tokenize.generate_tokens(io.StringIO(source).readline):
             kind, text = tok.type, tok.string
-            if kind in (tokenize.NEWLINE, tokenize.NL):
-                if kind == tokenize.NEWLINE:
-                    run = 0
+            if kind == tokenize.NEWLINE:
+                depth = [0]
+            elif kind == tokenize.STRING:
+                head = text[:3].lower()
+                if (
+                    "f" in head.split('"')[0].split("'")[0]
+                    and sum(map(text.count, _FSTRING_OP_CHARS)) > _MAX_CHAIN
+                ):
+                    return True
             elif kind == tokenize.OP:
-                if text in _CHAIN_RESET:
-                    run = 0
-                elif text in _CHAIN_OPS or (text in "([" and prev in (")", "]")):
-                    run += 1
-                    if run > _MAX_CHAIN:
-                        return True
+                if text in _OPENERS:
+                    if text != "{" and prev in (")", "]"):
+                        depth[-1] += 1  # f(..)(..) / a[..][..]: one more link
+                    depth.append(0)
+                elif text in _CLOSERS:
+                    if len(depth) > 1:
+                        depth.pop()
+                elif text in _RESETS:
+                    depth[-1] = 0
+                elif text in _CHAIN_OPS:
+                    depth[-1] += 1
+                if depth[-1] > _MAX_CHAIN:
+                    return True
             prev = text
     except (tokenize.TokenError, SyntaxError):
         return False  # let ast.parse report it

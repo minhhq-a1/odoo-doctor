@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from odoo_doctor.core.source import clear_source_cache, parse_python
 from odoo_doctor.discovery.addons import discover_addons
 from odoo_doctor.parsers.manifest import parse_manifest
@@ -66,15 +68,55 @@ def test_access_csv_with_nul_byte(tmp_path: Path):
     parse_access_csv(csv_file, "m")  # must not raise
 
 
+N = 60_000  # over the guard (50k), under the 3.10 crash point (~136k): safe to scan anywhere
+
+BYPASS_SHAPES = {
+    "binop": lambda n: "x = " + " + ".join(["1"] * n),
+    "attr": lambda n: "x = a" + ".b" * n,
+    "subscript": lambda n: "x = a" + "[0]" * n,
+    "call_args": lambda n: "x = f" + "(1,2)" * n,
+    "slice": lambda n: "x = a" + "[1:2]" * n,
+    "call_kwargs": lambda n: "x = f" + "(a=1)" * n,
+    "call_dict": lambda n: "x = f" + "({})" * n,
+    "in_parens": lambda n: "x = (1" + "+1" * n + ")",
+    "in_kwarg": lambda n: "x = f(a=1" + "+1" * n + ")",
+    "in_dict_value": lambda n: "x = {1: 1" + "+1" * n + "}",
+    "fstring_binop": lambda n: 'x = f"{' + "+".join(["1"] * n) + '}"',
+    "fstring_attr": lambda n: 'x = f"{a' + ".b" * n + '}"',
+    "rf_string_call": lambda n: 'x = rf"{f' + "()" * n + '}"',
+}
+
+
+@pytest.mark.parametrize("shape", sorted(BYPASS_SHAPES))
+def test_chain_guard_catches_every_known_shape(shape: str):
+    from odoo_doctor.core.source import chain_too_long
+
+    assert chain_too_long(BYPASS_SHAPES[shape](N) + "\n")
+
+
 def test_chain_guard_thresholds():
     from odoo_doctor.core.source import chain_too_long
 
-    big = " + ".join(["1"] * 60_000)  # over both the size gate and the chain limit
-    assert chain_too_long("x = " + big + "\n")
     assert not chain_too_long("x = " + " + ".join(["1"] * 10_000) + "\n")  # small file
-    # a 1 MB data list is not a chain: commas reset the count
-    assert not chain_too_long("x = [" + ", ".join(["1.5"] * 200_000) + "]\n")
-    assert not chain_too_long("x = [" + ", ".join(["a + b"] * 100_000) + "]\n")
-    assert chain_too_long("x = a" + ".b" * 60_000 + "\n" + "#" * 100_000)
-    assert chain_too_long("x = a" + "[0]" * 60_000 + "\n" + "#" * 100_000)
-    assert not chain_too_long("x = (1 +\n" + "1 +\n" * 10 + " 1)\n" + "#" * 300_000)
+    assert not chain_too_long(
+        "x = " + " + ".join(["1"] * 30_000) + "\n"
+    )  # under the limit
+    assert chain_too_long("x = " + " + ".join(["1"] * 50_002) + "\n")
+
+
+@pytest.mark.parametrize(
+    "legit",
+    [
+        "x = [" + ", ".join(["1.5"] * 200_000) + "]",
+        "x = [" + ", ".join(["a + b"] * 100_000) + "]",
+        "x = {" + ", ".join(f'"k{i}": f(1, 2)(3)' for i in range(50_000)) + "}",
+        "x = {" + ", ".join(f'"k{i}": [a.b.c, d[1:2]]' for i in range(50_000)) + "}",
+        "x = (" + " ".join(['"a"'] * 200_000) + ")",
+        "\n".join(f"y{i} = a.b.c + d[0] + f(1)(2)" for i in range(60_000)),
+        "f(" + ", ".join(f"a{i}=1+2" for i in range(60_000)) + ")",
+    ],
+)
+def test_chain_guard_does_not_skip_legitimate_big_files(legit: str):
+    from odoo_doctor.core.source import chain_too_long
+
+    assert len(legit) >= 100_000 and not chain_too_long(legit + "\n")

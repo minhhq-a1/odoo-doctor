@@ -60,12 +60,17 @@ All notable changes to Odoo Doctor are documented here.
 - A skipped input is no longer silent: one `[WARN] skipped <file>: <reason>` line on stderr per file
   (stdout is untouched, at most 20 lines per scan then `... and N more skipped`, exit codes unchanged) for
   an unparseable manifest, XML that cannot be read, a non-UTF-8 `ir.model.access.csv`, and a Python file
-  the parser cannot handle. A plain `SyntaxError` in a user file stays quiet.
+  the parser cannot handle. A plain `SyntaxError` in a user file stays quiet. Nothing is parsed on a
+  `--cache` hit, so the warnings appear once per change of the project; run without `--cache` to see
+  them again.
 - Python 3.10 crashed the interpreter (segmentation fault, nothing catchable) on a file holding one
-  expression chained over ~134,000 links (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`). Files of at least
-  200,000 characters whose single expression chains more than 50,000 operators are now skipped with a
-  warning, in Python files and manifests. Smaller files cannot reach the crash; deeper-than-recursion
-  expressions on 3.12+ are skipped through the existing `RecursionError` handling.
+  expression chained over ~136,000 links (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`, `f(1,2)(3)...`,
+  `a[1:2][1:2]...`, the same inside brackets or in an f-string). The scanner now skips, with a warning, a
+  file of at least 100,000 characters that chains more than 50,000 links in one expression (Python
+  files, manifests, the Odoo-source index and the manifest fixers). This is a best-effort guard, not a
+  proof: it models the chain shapes measured on 3.10 (about 20) and a shape it does not model could
+  still crash 3.10; 3.12+ raises a catchable `RecursionError` instead. Non-regular files (FIFOs) are not
+  covered.
 
 ## [0.10.2] — 2026-10-17
 
