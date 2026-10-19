@@ -53,16 +53,27 @@ def check_raw_sql_interpolation(
     disabled = pylint_disabled_ranges(
         read_source(file_path) or "", tree, ("sql-injection",)
     ) + _input_free_hook_ranges(tree)
+    owners = _owners(tree)
     methods = _method_ids(tree)
-    visitor = _RawSqlVisitor(disabled, methods)
+    visitor = _RawSqlVisitor(disabled, methods, owners)
     visitor.visit(tree)
     if not visitor.calls:
         return []
     # Second pass: trust every value that is not an entry point's parameter. A call that
     # is still dynamic then is built from something a caller outside the module controls.
-    with trusting_opaque_values():
-        caller = _RawSqlVisitor(disabled, methods, caller_params=True)
-        caller.visit(tree)
+    # A private helper's parameter is untrusted once a caller hands it such a value; the
+    # pass repeats so the input can travel a few hops (bounded: this is a heuristic).
+    untrusted: dict[_Key, set[str]] = {}
+    for _ in range(_MAX_HOPS + 1):
+        with trusting_opaque_values():
+            caller = _RawSqlVisitor(disabled, methods, owners, untrusted, True)
+            caller.visit(tree)
+        if all(
+            names <= untrusted.get(key, set()) for key, names in caller.marks.items()
+        ):
+            break
+        for key, names in caller.marks.items():
+            untrusted.setdefault(key, set()).update(names)
     reached = {(c.lineno, c.col_offset) for c in caller.calls}
     return [
         _make_diagnostic(
@@ -101,6 +112,28 @@ def _input_free_hook_ranges(tree: ast.AST) -> list[tuple[int, int]]:
     return ranges
 
 
+_MAX_HOPS = 3
+_Def = ast.FunctionDef | ast.AsyncFunctionDef
+# (class name, or "" for a module-level function; function name)
+_Key = tuple[str, str]
+
+
+def _owners(tree: ast.Module) -> dict[_Key, _Def]:
+    """Methods by (class, name) and module-level functions by ("", name)."""
+    found: dict[_Key, _Def] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            body, owner = node.body, node.name
+        elif node is tree:
+            body, owner = tree.body, ""
+        else:
+            continue
+        for stmt in body:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found[(owner, stmt.name)] = stmt
+    return found
+
+
 def _method_ids(tree: ast.AST) -> set[int]:
     """`id()` of every function defined directly in a class body."""
     return {
@@ -123,13 +156,21 @@ class _RawSqlVisitor(TaintVisitor):
         self,
         disabled_ranges: list[tuple[int, int]],
         method_ids: set[int],
+        owners: dict[_Key, _Def],
+        untrusted: dict[_Key, set[str]] | None = None,
         caller_params: bool = False,
     ) -> None:
         super().__init__()
         self._disabled_ranges = disabled_ranges
         self._method_ids = method_ids
+        self._owners = owners
+        self._key_of = {id(f): k for k, f in owners.items()}
+        self._untrusted = untrusted or {}
         self._caller_params = caller_params
+        self._classes: list[str] = []
         self.calls: list[ast.Call] = []
+        # parameters of a private helper that a call handed a caller-controlled value
+        self.marks: dict[_Key, set[str]] = {}
         # shortcut: cursor names are file-wide, not scoped; a reused name only widens matching.
         self._cursors: set[str] = set()
 
@@ -153,8 +194,57 @@ class _RawSqlVisitor(TaintVisitor):
         """Under ``trusting_opaque_values`` only an entry point's parameters stay opaque."""
         if not self._caller_params:
             return Taint.UNKNOWN
-        entry = self._is_entry_point(func) and name not in {"self", "cls"}
-        return Taint.UNKNOWN if entry else Taint.SAFE
+        if name in {"self", "cls"}:
+            return Taint.SAFE
+        key = self._key_of.get(id(func))
+        handed = key is not None and name in self._untrusted.get(key, ())
+        return Taint.UNKNOWN if handed or self._is_entry_point(func) else Taint.SAFE
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._classes.append(node.name)
+        super().visit_ClassDef(node)
+        self._classes.pop()
+
+    def _callee(self, node: ast.Call) -> tuple[_Key, int] | None:
+        """The function a `self._m(...)`, `cls._m(...)` or `helper(...)` call reaches."""
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            if isinstance(func.value, ast.Name) and func.value.id in {"self", "cls"}:
+                return ((self._classes[-1] if self._classes else "", func.attr), 1)
+            return None
+        return (("", func.id), 0) if isinstance(func, ast.Name) else None
+
+    def _note_call(self, node: ast.Call) -> None:
+        callee = self._callee(node)
+        target = self._owners.get(callee[0]) if callee else None
+        if callee is None or target is None:
+            return
+        key, skip = callee
+        args = target.args
+        names = [a.arg for a in (*args.posonlyargs, *args.args)][skip:]
+        handed: set[str] = set()
+        for i, arg in enumerate(node.args):
+            if self.taint(arg) == Taint.SAFE:
+                continue
+            if isinstance(arg, ast.Starred):
+                handed.update(names[i:])
+            elif i < len(names):
+                handed.add(names[i])
+            elif args.vararg is not None:
+                handed.add(args.vararg.arg)
+        for kw in node.keywords:
+            if self.taint(kw.value) == Taint.SAFE:
+                continue
+            if kw.arg is None:
+                handed.update(names)
+                if args.kwarg is not None:
+                    handed.add(args.kwarg.arg)
+            elif kw.arg in names or kw.arg in {a.arg for a in args.kwonlyargs}:
+                handed.add(kw.arg)
+            elif args.kwarg is not None:
+                handed.add(args.kwarg.arg)
+        if handed:
+            self.marks.setdefault(key, set()).update(handed)
 
     def _is_entry_point(self, func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         """Callable from outside the module: a route, or a public method (RPC reaches those)."""
@@ -163,6 +253,8 @@ class _RawSqlVisitor(TaintVisitor):
         return id(func) in self._method_ids and not func.name.startswith("_")
 
     def check_call(self, node: ast.Call) -> None:
+        if self._caller_params:
+            self._note_call(node)
         if not (_is_cursor_execute(node, self._cursors) and node.args):
             return
         sql_arg = node.args[0]

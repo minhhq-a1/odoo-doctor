@@ -262,7 +262,7 @@ def test_variable_rebound_without_the_parameter_is_no_longer_caller_controlled(
             def shop(self, search):
                 query = self._where_calc(search)
                 from_clause, where_clause, params = query.get_sql()
-                query = f"SELECT {self.rate} FROM {from_clause} WHERE {where_clause}"
+                query = f"SELECT {self._rate} FROM {from_clause} WHERE {where_clause}"
                 self.env.cr.execute(query, params)
         """
     assert _found(tmp_path, src) == [(6, "medium")]

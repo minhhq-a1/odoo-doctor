@@ -39,7 +39,20 @@ _CLOCK_CALLS = {"now", "today", "utcnow"}
 # `subselect()` the whole statement; only their arguments are text we pass in.
 _QUERY_CALLS = {"select", "subselect"}
 # Safe-by-construction SQL builders (Odoo `SQL`, psycopg2 `sql`, `quote_ident`).
-_SAFE_BUILDERS = {"Identifier", "Literal", "Composed", "quote_ident"}
+_SAFE_BUILDERS = {"Identifier", "Literal", "Composed", "Placeholder", "quote_ident"}
+# What a request carries: reading these is reading what the client sent.
+_REQUEST_INPUT = {
+    "params",
+    "httprequest",
+    "jsonrequest",
+    "cookies",
+    "session",
+    "get_json_data",
+    "get_http_params",
+}
+_REQUEST_NAMES = {"request", "http.request", "odoo.http.request"}
+# Attributes of a record that describe it, not the data in its fields.
+_RECORD_METADATA = {"env", "ids", "display_name", "pool"}
 # str methods that only reshape their receiver; arguments can still inject text.
 _STR_METHODS = {
     "strip",
@@ -93,6 +106,34 @@ def combine_add(left: Taint, right: Taint) -> Taint:
     return Taint.UNSAFE
 
 
+def _dotted(node: ast.expr) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _dotted(node.value)
+        return f"{parent}.{node.attr}" if parent else ""
+    return ""
+
+
+def _is_request_input(node: ast.expr) -> bool:
+    """`request.params`, `http.request.httprequest`, `request.get_json_data`."""
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr in _REQUEST_INPUT
+        and _dotted(node.value) in _REQUEST_NAMES
+    )
+
+
+def _reads_own_field(node: ast.Attribute) -> bool:
+    """`self.name`: a field of the record the method runs on (user-editable on a wizard)."""
+    return (
+        isinstance(node.value, ast.Name)
+        and node.value.id == "self"
+        and not node.attr.startswith("_")
+        and node.attr not in _RECORD_METADATA
+    )
+
+
 def _builder_name(func: ast.expr) -> str | None:
     if isinstance(func, ast.Name):
         return func.id
@@ -111,6 +152,13 @@ def taint_of(node: ast.expr, lookup: Lookup) -> Taint:
         # `_table` is set by the model's author; a record's `id` is an integer.
         if node.attr in {"_table", "id"}:
             return Taint.SAFE
+        if _is_request_input(node):
+            return Taint.UNKNOWN
+        if _trust_opaque.get():
+            if node.attr.startswith("_") or node.attr in _RECORD_METADATA:
+                return Taint.SAFE
+            if _reads_own_field(node):
+                return Taint.UNKNOWN
         return _opaque(lookup, node.value)
     if isinstance(node, ast.JoinedStr):
         parts = [v.value for v in node.values if isinstance(v, ast.FormattedValue)]
@@ -238,6 +286,8 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
     name = _builder_name(func)
     if name in _SAFE_BUILDERS:
         return Taint.SAFE
+    if _is_request_input(func):
+        return Taint.UNKNOWN
     if name == "get_sql" and isinstance(func, ast.Attribute):
         return Taint.SAFE
     if name in _CLOCK_CALLS and isinstance(func, ast.Attribute):
@@ -282,7 +332,26 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
         if any(s != Taint.SAFE for s in arg_states):
             return Taint.UNSAFE
         return receiver
+    if _trust_opaque.get():
+        if _reads_field_by_name(node, func):
+            return Taint.UNKNOWN
+        if func.attr.startswith("_"):  # a method of the model: only its arguments count
+            return _opaque(lookup, *_call_inputs(node))
     return _opaque(lookup, func.value, *_call_inputs(node))
+
+
+def _reads_field_by_name(node: ast.Call, func: ast.Attribute) -> bool:
+    """`self.mapped("name")`: the values of a public field of the record."""
+    return (
+        func.attr == "mapped"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "self"
+        and bool(node.args)
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+        and not node.args[0].value.startswith("_")
+        and node.args[0].value not in {"id", "ids", *_RECORD_METADATA}
+    )
 
 
 def _call_inputs(node: ast.Call) -> list[ast.expr]:
@@ -472,6 +541,12 @@ class TaintVisitor(ast.NodeVisitor):
         if not isinstance(node, ast.While):
             self.visit(node.iter)
             iter_state = self.taint(node.iter)
+            if (
+                _trust_opaque.get()
+                and isinstance(node.iter, ast.Name)
+                and node.iter.id == "self"
+            ):
+                iter_state = Taint.UNKNOWN  # `for rec in self`: rec.name is user data
             for target in ast.walk(node.target):
                 if isinstance(target, ast.Name):
                     self._set(
