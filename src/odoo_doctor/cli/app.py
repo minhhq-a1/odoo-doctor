@@ -223,6 +223,11 @@ def scan(
             err=True,
         )
         raise typer.Exit(code=3)
+    for flag, ref in (("--diff", diff), ("--score-delta", score_delta)):
+        # git would take `--output=<file>` or `-p` as an option, not as a ref.
+        if ref and ref.startswith("-"):
+            typer.echo(f"[ERROR] {flag}: '{ref}' is not a git ref.", err=True)
+            raise typer.Exit(code=3)
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
 
     # Load config
@@ -1119,15 +1124,23 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
         git_root = Path(root_result.stdout.strip()).resolve()
 
         result = run_git(
-            ["diff", "--no-ext-diff", "--no-textconv", "--name-only", base_branch],
+            [
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--name-only",
+                "-z",
+                base_branch,
+            ],
             git_root,
         )
         if result.returncode != 0:
             return None
+        # -z: NUL-separated and never quoted, so non-ASCII, tab and newline names survive.
         return {
-            str((git_root / line.strip()).resolve())
-            for line in result.stdout.splitlines()
-            if line.strip()
+            str((git_root / name).resolve())
+            for name in result.stdout.split("\0")
+            if name
         }
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None

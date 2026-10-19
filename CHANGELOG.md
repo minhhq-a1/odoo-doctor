@@ -45,6 +45,18 @@ All notable changes to Odoo Doctor are documented here.
   comment (the module table cell, the finding's code span and title could break out of the
   markdown table, list or code span). SARIF and the HTML report were already safe (JSON, hashed
   CSP, `textContent`).
+- `--diff` and `--score-delta` no longer hand the ref to git as a possible option. `--diff=--output=<file>`
+  made `git diff` write its output to that file (any path the user can write); a ref starting with `-`
+  is now refused with exit 3 and a message before git runs. A ref that git itself can resolve is
+  unchanged. `--end-of-options` is not used: it needs git 2.24 and the check above already leaves
+  nothing for git to read as an option.
+
+### Fixed
+
+- `scan --diff` missed changed files whose name has non-ASCII characters (`modèle.py`), a tab or a
+  newline: git prints such names quoted and escaped (`"mod\303\250le.py"`), which matched no file, so
+  their findings were silently left out of the diff scan. Changed files are now read with `-z`
+  (NUL-separated, never quoted).
 
 ## [0.11.0] — 2026-10-19
 
