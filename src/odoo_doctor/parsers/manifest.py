@@ -22,6 +22,13 @@ class ManifestData:
     raw: dict = field(default_factory=dict)
 
 
+def _str_list(value: object) -> list[str]:
+    """A manifest list of strings; anything else (None, 5, nested lists) is dropped."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [v for v in value if isinstance(v, str)]
+
+
 def parse_manifest(addon_path: Path) -> ManifestData | None:
     """Parse __manifest__.py from an addon directory. Returns None if missing/invalid."""
     manifest_file = addon_path / "__manifest__.py"
@@ -33,7 +40,7 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
         return None
     try:
         raw = ast.literal_eval(source)
-    except (SyntaxError, ValueError, RecursionError):
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
         return None
 
     if not isinstance(raw, dict):
@@ -46,8 +53,8 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
     return ManifestData(
         name=raw.get("name", addon_path.name),
         version=raw.get("version"),
-        depends=raw.get("depends", []),
-        data=raw.get("data", []),
+        depends=_str_list(raw.get("depends")),
+        data=_str_list(raw.get("data")),
         license=raw.get("license"),
         installable=raw.get("installable", True),
         assets=assets,

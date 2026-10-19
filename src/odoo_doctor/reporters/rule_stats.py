@@ -8,6 +8,7 @@ from io import StringIO
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from odoo_doctor.core.suppression_stats import MIN_SAMPLE, NOISY_RATIO
@@ -54,7 +55,7 @@ def render_rule_stats(rows: list[RuleNoise]) -> str:
     table.add_column("")
     for r in rows:
         table.add_row(
-            r.rule,
+            escape(r.rule),
             str(r.surfaced),
             str(r.inline),
             str(r.ignore_rule),

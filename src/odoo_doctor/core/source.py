@@ -43,7 +43,7 @@ def _parse(signature: _Signature) -> ast.Module | None:
         return None
     try:
         return ast.parse(source)
-    except (SyntaxError, ValueError):
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
         return None
 
 

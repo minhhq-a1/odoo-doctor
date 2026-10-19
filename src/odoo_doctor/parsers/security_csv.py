@@ -31,30 +31,35 @@ def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
         return []
 
     rules: list[AccessRule] = []
-    with open(file_path, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        for lineno, row in enumerate(reader, start=2):
-            raw_model_id = row.get("model_id:id", row.get("model_id/id", ""))
-            model_id_module = module_name
-            model_id = raw_model_id
-            if "." in raw_model_id:
-                model_id_module, model_id = raw_model_id.split(".", 1)
+    try:
+        # errors="replace": a Latin-1 byte in one cell must not hide the whole file
+        with open(file_path, newline="", encoding="utf-8-sig", errors="replace") as f:
+            for lineno, row in enumerate(csv.DictReader(f), start=2):
+                # a short row leaves its missing cells as None, a long one adds a None key
+                row = {k: v for k, v in row.items() if k is not None and v is not None}
+                raw_model_id = row.get("model_id:id", row.get("model_id/id", ""))
+                model_id_module = module_name
+                model_id = raw_model_id
+                if "." in raw_model_id:
+                    model_id_module, model_id = raw_model_id.split(".", 1)
 
-            rules.append(
-                AccessRule(
-                    id=row.get("id", ""),
-                    name=row.get("name", ""),
-                    model_external_id=model_id,
-                    model_external_id_module=model_id_module,
-                    group_id=row.get("group_id:id", row.get("group_id/id")) or None,
-                    perm_read=row.get("perm_read", "0") == "1",
-                    perm_write=row.get("perm_write", "0") == "1",
-                    perm_create=row.get("perm_create", "0") == "1",
-                    perm_unlink=row.get("perm_unlink", "0") == "1",
-                    file_path=str(file_path),
-                    line=lineno,
+                rules.append(
+                    AccessRule(
+                        id=row.get("id", ""),
+                        name=row.get("name", ""),
+                        model_external_id=model_id,
+                        model_external_id_module=model_id_module,
+                        group_id=row.get("group_id:id", row.get("group_id/id")) or None,
+                        perm_read=row.get("perm_read", "0") == "1",
+                        perm_write=row.get("perm_write", "0") == "1",
+                        perm_create=row.get("perm_create", "0") == "1",
+                        perm_unlink=row.get("perm_unlink", "0") == "1",
+                        file_path=str(file_path),
+                        line=lineno,
+                    )
                 )
-            )
+    except (OSError, csv.Error):
+        pass  # keep the rows read before the bad one
 
     return rules
 

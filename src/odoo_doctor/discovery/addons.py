@@ -55,7 +55,7 @@ def _try_add(
         return
     try:
         manifest = ast.literal_eval(source)
-    except (SyntaxError, ValueError, RecursionError):
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
         return
 
     if not isinstance(manifest, dict):

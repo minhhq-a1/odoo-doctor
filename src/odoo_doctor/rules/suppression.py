@@ -63,7 +63,7 @@ def scan_xml_suppressions(file_path: Path) -> Suppressions:
 
     try:
         tree = etree.parse(str(file_path))
-    except etree.XMLSyntaxError:
+    except (etree.XMLSyntaxError, OSError):
         return suppressions
 
     # Collect all comments: those inside root via iter, plus preceding siblings of root

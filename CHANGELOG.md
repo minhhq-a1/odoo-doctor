@@ -31,6 +31,14 @@ All notable changes to Odoo Doctor are documented here.
   `l10n_ch`, 7 `low` `sudo-without-comment`); on core 17 scanned as 19, 23 (including 6 `medium`
   `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged.
 
+### Fixed
+
+- One bad input file no longer aborts a scan. A manifest with an unhashable key or a non-list
+  `depends`/`data`, an XML file declared UTF-8 but holding other bytes, a Python file too deep for the
+  parser (`RecursionError`/`MemoryError`), and an `ir.model.access.csv` that is not UTF-8 or has short
+  rows are skipped (or read leniently) and the other files are still reported. Addon names, rule names
+  and paths containing `[` or `]` are escaped in the terminal report instead of being mangled.
+
 ## [0.10.2] — 2026-10-17
 
 ### Added

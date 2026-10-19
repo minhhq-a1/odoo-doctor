@@ -92,7 +92,7 @@ def fix_missing_required_field(diag: Diagnostic, text: str) -> str | None:
     """
     try:
         data = ast.literal_eval(text)
-    except (ValueError, SyntaxError):
+    except (ValueError, SyntaxError, TypeError, RecursionError):
         return None
     if not isinstance(data, dict):
         return None

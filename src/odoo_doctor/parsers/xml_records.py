@@ -129,7 +129,7 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
     """Extract all XML IDs from an Odoo data/view file."""
     try:
         tree = etree.parse(str(file_path))
-    except etree.XMLSyntaxError:
+    except (etree.XMLSyntaxError, OSError):
         return []
 
     root = tree.getroot()
@@ -198,7 +198,7 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
     """Extract view definitions (ir.ui.view records) with field/button references."""
     try:
         tree = etree.parse(str(file_path))
-    except etree.XMLSyntaxError:
+    except (etree.XMLSyntaxError, OSError):
         return []
 
     root = tree.getroot()

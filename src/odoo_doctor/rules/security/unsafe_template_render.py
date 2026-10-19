@@ -38,7 +38,7 @@ def check_unsafe_template_render(ctx: ModuleContext) -> list[Diagnostic]:
             continue
         try:
             tree = etree.parse(str(xml_path))
-        except etree.XMLSyntaxError:
+        except (etree.XMLSyntaxError, OSError):
             continue
 
         for elem in tree.getroot().iter():

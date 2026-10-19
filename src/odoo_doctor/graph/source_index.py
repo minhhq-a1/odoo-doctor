@@ -55,9 +55,12 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
         if not isinstance(_manifest, dict):
             continue
 
-        module_depends[module_name] = [
-            str(dep) for dep in _manifest.get("depends", []) or []
-        ]
+        depends = _manifest.get("depends")
+        module_depends[module_name] = (
+            [str(dep) for dep in depends if isinstance(dep, str)]
+            if isinstance(depends, (list, tuple))
+            else []
+        )
 
         # 1. Parse models
         for py_file in addon_dir.rglob("*.py"):

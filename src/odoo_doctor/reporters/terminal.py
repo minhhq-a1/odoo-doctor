@@ -59,7 +59,7 @@ def render_terminal(
     for module, score in scores.items():
         color = _LABEL_COLORS.get(score.label, "white")
         console.print(
-            f"\n[bold]{module}[/bold]  Score: [{color}]{score.overall:.1f}/100 ({score.label})[/{color}]"
+            f"\n[bold]{escape(module)}[/bold]  Score: [{color}]{score.overall:.1f}/100 ({score.label})[/{color}]"
         )
 
         if score.categories:
@@ -79,8 +79,8 @@ def render_terminal(
             for rank, fp in enumerate(fixes, 1):
                 auto = " [dim]auto-fix[/dim]" if fp.fixable else ""
                 console.print(
-                    f"   {rank}. [bold]{fp.rule}[/bold] "
-                    f"{fp.file_path}:{fp.line}  "
+                    f"   {rank}. [bold]{escape(fp.rule)}[/bold] "
+                    f"{escape(fp.file_path)}:{fp.line}  "
                     f"[dim]->[/dim] {fp.projected_score:.1f}/100 "
                     f"[dim](+{fp.score_gain:.1f})[/dim]{auto}"
                 )
@@ -91,7 +91,9 @@ def render_terminal(
         by_module.setdefault(d.module, []).append(d)
 
     for module, diags in by_module.items():
-        console.print(f"\n[bold underline]Findings for {module}[/bold underline]")
+        console.print(
+            f"\n[bold underline]Findings for {escape(module)}[/bold underline]"
+        )
         sorted_diags = sorted(diags, key=lambda d: (d.tier, d.file_path, d.line))
         for d in sorted_diags:
             sev_color = "red" if d.severity == "error" else "yellow"
