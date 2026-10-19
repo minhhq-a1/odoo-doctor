@@ -37,6 +37,12 @@ Reading the numbers:
   is not seen; the `pylint` identity is `pylint --version` plus the pylint-odoo version read by the
   interpreter behind the `pylint` script (`unknown` when that cannot be found, e.g. a Windows launcher,
   and then upgrading pylint-odoo alone is not seen).
+- Use `--cache` only on repositories you trust (running it in CI on your own repository is fine). The
+  cache file lives in the scanned tree (`.odoo_doctor_cache/scan_cache.json`) and its key is computable
+  by anyone who can read the tree, so a cache file committed by a repository's author can forge a hit
+  and make a scan report whatever findings and scores it holds. Odoo Doctor reads it only if it is a
+  regular file inside the repository, under 16 MiB (a larger one is ignored with a warning and rewritten),
+  but it cannot tell a forged entry from a real one.
 - For a pull request, `--diff <ref>` scans only the changed files, and `--module` limits a
   scan to the modules you name.
 - Timings depend on the machine and are a guide, not a guarantee; there is no performance

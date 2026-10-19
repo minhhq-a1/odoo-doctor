@@ -16,11 +16,26 @@ All notable changes to Odoo Doctor are documented here.
   it as environment variables. `--diff` follows the ref with `--` so a ref that is also a path is never read
   as a path.
 - `fix --fix` and discovery no longer follow a symlinked `__manifest__.py` (or any fixed file) out of the
-  scanned directory: it is skipped with one warning and never read as a manifest or written. An absolute
-  path in a manifest `data` list that points outside the addon is skipped too.
+  addon directory: a manifest that resolves outside its addon directory is skipped with one warning (the
+  whole addon is then skipped) and is never read as a manifest or written, so a manifest symlinked to a shared
+  file elsewhere in the same repository is skipped too, and `fix` then reports "Applied 0". An absolute path
+  in a manifest `data` list that points outside the addon is skipped as well. A hard link cannot be
+  detected: a manifest that is a hard link to a file outside the repository is still read and rewritten
+  by `fix`.
 - `scan --cache` no longer trusts `.odoo_doctor_cache/` in the scanned repo: a FIFO there hung the scan, and a
   symlinked cache file or directory let the cache write overwrite a file elsewhere. The cache is read only
-  if it is a regular file inside the repo and is written through a temporary file plus rename.
+  if it is a regular file inside the repo (and under 16 MiB, else ignored with a warning and rewritten) and
+  is written through a temporary file plus rename. This does not stop a forged hit: a
+  `.odoo_doctor_cache/scan_cache.json` committed to a repository carries a key its author can compute, so
+  use `--cache` only on repositories you trust (CI on your own repository is fine).
+- Repo-derived names (files, modules, versions, git's stderr) in the warning and error lines printed to
+  stderr and stdout (skipped-file warnings, `[FAIL] <module>`, rule-crash warnings, `--diff`, `--score-delta`,
+  `--history` and `--upgrade-report` messages, the `fix` diff header) go through the same sanitiser as the
+  terminal report: control characters are shown escaped and `::` gets a zero-width space, so a file named
+  `a<newline>::error::x.py` can no longer start a GitHub workflow command in a CI log.
+- A git older than 2.31 cannot be told to ignore a repository filter driver whose name contains `=`; git is
+  then skipped with one warning per run (not one per call), and `--score-delta` says so instead of
+  "Not a git repository".
 - Files are opened non-blocking and re-checked on the open descriptor, closing the gap between the file-type
   check and the read.
 - A scan no longer blocks or exhausts memory on a special or huge file in the scanned repo. A FIFO

@@ -33,6 +33,10 @@ odoo-doctor scan . --html report.html
 
 # 7. Upgrade readiness: how far is each module from Odoo 19?
 odoo-doctor scan . --odoo-version 19.0 --upgrade-report
+
+# 8. Reuse the last scan when nothing changed (`--cache`; only on repositories you trust:
+#    a cache file committed to the repo can forge a hit)
+odoo-doctor scan . --cache
 ```
 
 **Upgrade readiness.** `--upgrade-report` (with `--odoo-version <target>`) groups the Upgrade

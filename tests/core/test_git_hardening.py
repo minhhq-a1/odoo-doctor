@@ -230,3 +230,21 @@ def test_diff_ref_that_is_also_a_path_is_a_revision_or_fails(repo: Path):
     (repo / "HEAD").write_text("x")  # a file named like the ref
     assert _get_changed_files(repo, "HEAD~1") is not None
     assert _get_changed_files(repo, "my_addon") is None  # a path, not a revision
+
+
+def test_old_git_refusal_warns_once_and_score_delta_says_why(
+    repo: Path, tmp_path: Path, monkeypatch, capsys
+):
+    from odoo_doctor.core import git as gitmod
+
+    _git(repo, "config", "filter.a=b.clean", "x")
+    monkeypatch.setattr(gitmod, "_git_version", lambda: (2, 30))
+    monkeypatch.setattr(gitmod, "_refusal_warned", False)
+    gitmod.reset_git_cache()
+    for _ in range(3):
+        assert gitmod.refused(gitmod.run_git(["status"], repo))
+    assert capsys.readouterr().err.count("[WARN] git skipped") == 1
+    result = runner.invoke(app, ["scan", str(repo), "--score-delta", "HEAD~1"])
+    assert result.exit_code == 3
+    assert "older than 2.31" in result.stderr
+    assert "Not a git repository" not in result.stderr

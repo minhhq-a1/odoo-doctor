@@ -29,6 +29,7 @@ from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from odoo_doctor.core.source import (
+    MAX_FILE_BYTES,
     is_scannable,
     path_within,
     read_bytes,
@@ -245,6 +246,16 @@ class ScanCache:
     def load(self) -> None:
         # the cache lives in the scanned repo: a FIFO, a huge file or a symlink out of
         # the repo there is not read
+        try:
+            too_big = self._path.stat().st_size > MAX_FILE_BYTES
+        except OSError:
+            too_big = False
+        if too_big:  # said here, so the reason is not the generic "larger than" skip
+            warn_skipped(
+                self._path,
+                f"larger than {MAX_FILE_BYTES // 2**20} MiB: the cache is ignored and will be rewritten",
+            )
+            return
         raw = read_bytes(self._path, self.cache_dir.parent)
         if raw is None:
             return

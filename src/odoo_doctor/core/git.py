@@ -139,6 +139,19 @@ def _filter_overrides(cwd: str) -> tuple[tuple[str, str], ...]:
     return tuple(pairs)
 
 
+# What a caller can tell the user when run_git refuses (see run_git): returned as stderr.
+REFUSED = "refused"
+REFUSAL = (
+    "git is older than 2.31 and cannot be told to ignore a filter driver whose name "
+    "contains '=' that this repository defines; upgrade git"
+)
+_refusal_warned = False  # the warning prints once per process, not once per git call
+
+
+def refused(result: subprocess.CompletedProcess[str]) -> bool:
+    return result.returncode == 128 and result.stderr == REFUSED
+
+
 def reset_git_cache() -> None:
     _filter_overrides.cache_clear()
 
@@ -156,12 +169,11 @@ def run_git(
     if _git_version() < (2, 31):
         # no GIT_CONFIG_COUNT: `-c`, which cannot express a name containing `=`: refuse
         if any("=" in key for key, _ in overrides):
-            typer.echo(
-                "[WARN] git skipped: the repository defines a filter driver whose name "
-                "git < 2.31 cannot be told to ignore",
-                err=True,
-            )
-            return subprocess.CompletedProcess(["git", *args], 128, "", "refused")
+            global _refusal_warned
+            if not _refusal_warned:
+                _refusal_warned = True
+                typer.echo(f"[WARN] git skipped: {REFUSAL}", err=True)
+            return subprocess.CompletedProcess(["git", *args], 128, "", REFUSED)
         for key, value in overrides:
             command += ["-c", f"{key}={value}"]
         overrides = []

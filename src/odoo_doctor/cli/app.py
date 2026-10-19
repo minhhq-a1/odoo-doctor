@@ -17,12 +17,13 @@ from odoo_doctor.core.config import (
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
-from odoo_doctor.core.git import run_git
+from odoo_doctor.core.git import REFUSAL, refused, run_git
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scanner import collect_scores as _collect_scores
 from odoo_doctor.core.scanner import detect_scan_version, manifest_versions
 from odoo_doctor.core.suppression_stats import rule_noise
 from odoo_doctor.core.surfaces import filter_for_surface
+from odoo_doctor.core.text import safe_lines, safe_text
 from odoo_doctor.reporters.json_report import render_json
 from odoo_doctor.reporters.rule_stats import render_rule_stats, render_rule_stats_json
 from odoo_doctor.reporters.terminal import render_terminal
@@ -135,7 +136,7 @@ def _upgrade_report(
         m for m, v in declared.items() if m in modules and not has_migration_rules(v)
     )
     if modules and not forced and old:
-        shown = ", ".join(f"{m} ({declared[m]})" for m in old[:3])
+        shown = ", ".join(safe_text(f"{m} ({declared[m]})") for m in old[:3])
         more = f" and {len(old) - 3} more" if len(old) > 3 else ""
         typer.echo(
             f"[WARN] --upgrade-report: report may be empty: modules declare an Odoo "
@@ -145,7 +146,7 @@ def _upgrade_report(
         )
     elif modules and not has_migration_rules(target):
         typer.echo(
-            f"[WARN] --upgrade-report: Odoo version '{target}' has no migration rules, "
+            f"[WARN] --upgrade-report: Odoo version '{safe_text(target)}' has no migration rules, "
             "so the report is empty. Pass the target with --odoo-version (e.g. 19.0).",
             err=True,
         )
@@ -226,7 +227,9 @@ def scan(
     for flag, ref in (("--diff", diff), ("--score-delta", score_delta)):
         # git would take `--output=<file>` or `-p` as an option, not as a ref.
         if ref and ref.startswith("-"):
-            typer.echo(f"[ERROR] {flag}: '{ref}' is not a git ref.", err=True)
+            typer.echo(
+                f"[ERROR] {flag}: '{safe_text(ref)}' is not a git ref.", err=True
+            )
             raise typer.Exit(code=3)
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
 
@@ -259,7 +262,7 @@ def scan(
         changed_files = _get_changed_files(config_root, diff)
         if changed_files is None:
             typer.echo(
-                f"[ERROR] --diff: could not resolve changed files for ref '{diff}'. "
+                f"[ERROR] --diff: could not resolve changed files for ref '{safe_text(diff)}'. "
                 "Ensure this is a git repository and the ref exists.",
                 err=True,
             )
@@ -444,7 +447,7 @@ def scan(
             if output_format not in ("json", "github"):
                 for name, score in failed_modules:
                     typer.echo(
-                        f"[FAIL] {name}: score {score.overall:.1f} < min {effective_min}",
+                        f"[FAIL] {safe_text(name)}: score {score.overall:.1f} < min {effective_min}",
                         err=True,
                     )
             raise typer.Exit(code=2)
@@ -899,20 +902,23 @@ def history_show(
 
     records, skipped = load_history(Path(file))
     if skipped:
-        typer.echo(f"[WARN] skipped {skipped} unreadable line(s) in {file}", err=True)
+        typer.echo(
+            f"[WARN] skipped {skipped} unreadable line(s) in {safe_text(file)}",
+            err=True,
+        )
     if not records:
-        typer.echo(f"No history records in {file}.")
+        typer.echo(f"No history records in {safe_text(file)}.")
         return
 
     typer.echo(f"{'when (UTC)':26s}{'branch':16s}{'commit':10s}{'score':>7s}  schema")
     for r in tail(records, last):
         note = "*" if r.get("score_schema_inferred") else ""
         typer.echo(
-            f"{str(r.get('timestamp'))[:25]:26s}"
-            f"{str(r.get('branch') or '-')[:15]:16s}"
-            f"{str(r.get('commit') or '-')[:8]:10s}"
+            f"{safe_text(str(r.get('timestamp'))[:25]):26s}"
+            f"{safe_text(str(r.get('branch') or '-')[:15]):16s}"
+            f"{safe_text(str(r.get('commit') or '-')[:8]):10s}"
             f"{r['project']['overall']:>7.1f}  "
-            f"v{r.get('score_schema_version')}{note} {r['project'].get('label', '')}"
+            f"v{r.get('score_schema_version')}{note} {safe_text(r['project'].get('label', ''))}"
         )
     if any(r.get("score_schema_inferred") for r in tail(records, last)):
         typer.echo("* schema inferred from a pre-0.4.0 report (not comparable to v2)")
@@ -921,7 +927,7 @@ def history_show(
     regressions = detect_regressions(records, threshold)
     for reg in regressions:
         typer.echo(
-            f"[REGRESSION] {reg['scope']}: {reg['previous']:.1f} -> "
+            f"[REGRESSION] {safe_text(reg['scope'])}: {reg['previous']:.1f} -> "
             f"{reg['latest']:.1f} (-{reg['drop']:.1f})",
             err=True,
         )
@@ -959,7 +965,10 @@ def history_import(
         try:
             data = _json.loads(rp.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            typer.echo(f"[WARN] {report_file}: unreadable ({exc})", err=True)
+            typer.echo(
+                f"[WARN] {safe_text(report_file)}: unreadable ({safe_text(exc)})",
+                err=True,
+            )
             continue
         ts = forced_ts or datetime.fromtimestamp(
             rp.stat().st_mtime, tz=timezone.utc
@@ -970,7 +979,10 @@ def history_import(
             else None
         )
         if record is None:
-            typer.echo(f"[WARN] {report_file}: no scored modules, skipped", err=True)
+            typer.echo(
+                f"[WARN] {safe_text(report_file)}: no scored modules, skipped",
+                err=True,
+            )
             continue
         append_record(Path(file), record)
         imported += 1
@@ -992,6 +1004,9 @@ def _scan_base_ref(
     import tempfile
 
     root_result = run_git(["rev-parse", "--show-toplevel"], config_root)
+    if refused(root_result):
+        typer.echo(f"[ERROR] --score-delta: {REFUSAL}.", err=True)
+        raise typer.Exit(code=3)
     if root_result.returncode != 0:
         typer.echo("[ERROR] --score-delta: Not a git repository.", err=True)
         raise typer.Exit(code=3)
@@ -1006,10 +1021,10 @@ def _scan_base_ref(
         )
         if wt_add.returncode != 0:
             typer.echo(
-                f"[ERROR] --score-delta: Could not resolve base ref '{base_ref}'.",
+                f"[ERROR] --score-delta: Could not resolve base ref '{safe_text(base_ref)}'.",
                 err=True,
             )
-            typer.echo(wt_add.stderr, err=True)
+            typer.echo(safe_lines(wt_add.stderr), err=True)
             raise typer.Exit(code=3)
 
         # Map addon paths from config_root to tmpdir
@@ -1094,7 +1109,7 @@ def _warn_if_no_addons(addons_paths: list[Path], path_arg: str | None) -> None:
             "addons (each addon is a folder with a __manifest__.py)."
         )
     typer.echo(
-        f"[WARN] No Odoo addon found under: {shown}. The result covers no module. "
+        f"[WARN] No Odoo addon found under: {safe_text(shown)}. The result covers no module. "
         f"{hint}",
         err=True,
     )
@@ -1114,7 +1129,9 @@ def _echo_nested_addon_hint(addons_paths: list[Path]) -> None:
     lines = ["       Found addons deeper down. Try:"]
     for folder, count in found[:_NESTED_HINT_SHOWN]:
         noun = "addon" if count == 1 else "addons"
-        lines.append(f"         odoo-doctor scan {folder}   ({count} {noun})")
+        lines.append(
+            f"         odoo-doctor scan {safe_text(folder)}   ({count} {noun})"
+        )
     if len(found) > _NESTED_HINT_SHOWN:
         lines.append(f"         (+{len(found) - _NESTED_HINT_SHOWN} more folders)")
     typer.echo("\n".join(lines), err=True)

@@ -96,3 +96,21 @@ def test_normal_round_trip_still_works(tmp_path: Path):
     again = ScanCache(cache_dir)
     again.load()
     assert again.lookup("fp") == []
+
+
+def test_an_oversized_cache_file_is_ignored_with_an_explanation(
+    tmp_path: Path, monkeypatch, capsys
+):
+    from odoo_doctor.core import cache as cache_mod
+
+    cache_dir = tmp_path / "repo" / ".odoo_doctor_cache"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "scan_cache.json").write_text("x" * 100)
+    monkeypatch.setattr(cache_mod, "MAX_FILE_BYTES", 10)
+    cache = ScanCache(cache_dir)
+    cache.load()
+    err = capsys.readouterr().err
+    assert "ignored and will be rewritten" in err
+    cache.store("fp", [], {}, {}, "17.0")
+    cache.save()
+    assert json.loads((cache_dir / "scan_cache.json").read_text())["fp"] == "fp"
