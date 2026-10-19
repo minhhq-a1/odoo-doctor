@@ -45,10 +45,11 @@ def render_github_annotations(diagnostics: list[Diagnostic], repo_root: Path) ->
         except ValueError:
             rel_path = Path(d.file_path).name
 
+        file = _escape_property(rel_path)  # a repo-chosen name: may hold \n, ::, ,
         title = _escape_property(d.title)
         message = _escape_data(d.message + (f"\nDocs: {d.url}" if d.url else ""))
 
-        line_str = f"::{level} file={rel_path},line={d.line},col={d.column},title={title}::{message}"
+        line_str = f"::{level} file={file},line={d.line},col={d.column},title={title}::{message}"
         lines.append(line_str)
 
     return "\n".join(lines) + ("\n" if lines else "")

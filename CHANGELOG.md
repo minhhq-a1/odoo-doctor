@@ -35,6 +35,16 @@ All notable changes to Odoo Doctor are documented here.
   `odoo-doctor.toml`; rules the repo config had switched on are no longer reported.
   Ruff and Pylint-Odoo also open every Python file they find, so a FIFO named `*.py` hung them; when
   the addon holds a file that must not be opened, they now get the regular `.py` files one by one.
+- A file name in the scanned repo can no longer inject GitHub workflow commands. `--format github`
+  wrote the path into `file=` unescaped, so a name holding a newline and `::stop-commands::` or
+  `::error::` ended the annotation and started a command of its own (the title and message were
+  already escaped). The path now gets the same property escaping (`%`, `\r`, `\n`, `:`, `,`) as
+  the title. The same hostile names are also neutralised in the other places that echo a path
+  into a line-based channel: the terminal report (a newline could start a `::` line in a CI log, a
+  raw ESC could drive the terminal; control characters now print as `\n`, `\x1b`) and the PR
+  comment (the module table cell, the finding's code span and title could break out of the
+  markdown table, list or code span). SARIF and the HTML report were already safe (JSON, hashed
+  CSP, `textContent`).
 
 ## [0.11.0] — 2026-10-19
 

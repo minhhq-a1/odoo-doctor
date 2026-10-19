@@ -54,3 +54,34 @@ def test_post_pr_comment_handles_missing_gh(monkeypatch):
 
     # Should not raise
     post_pr_comment("body", "<!-- odoo-doctor -->")
+
+
+def test_hostile_names_cannot_break_out_of_the_markdown_structure():
+    from odoo_doctor.core.diagnostics import Diagnostic
+
+    d = Diagnostic(
+        module="m",
+        file_path="/r/a\n## injected `x|\n.py",
+        line=3,
+        column=1,
+        rule="r",
+        category="c",
+        severity="error",
+        tier="P1",
+        source="native",
+        confidence="high",
+        title="t\n## title",
+        message="m",
+        help="h",
+        odoo_version="17",
+    )
+    scores = {"mod|\n## cell": ScoreResult(50.0, "Needs work", [], [], 0)}
+    body = render_pr_comment_body([d], scores)
+    lines = body.splitlines()
+    assert not [
+        x for x in lines if x.startswith("## ") and x != "## Odoo Doctor Report"
+    ]
+    # the table keeps exactly one row per module, the finding exactly one line
+    assert len([x for x in lines if x.startswith("| mod")]) == 1
+    assert len([x for x in lines if x.startswith("- **ERROR**")]) == 1
+    assert sum(1 for x in lines if x.startswith("- ")) == 1

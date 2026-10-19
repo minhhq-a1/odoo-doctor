@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import re
 from io import StringIO
 from typing import TYPE_CHECKING
 
 from rich.console import Console
-from rich.markup import escape
+from rich.markup import escape as _rich_escape
 from rich.table import Table
 
 from odoo_doctor.core.scoring import score_label, secondary_scores
@@ -16,6 +17,19 @@ from odoo_doctor.core.suppression_stats import actionable_count
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
     from odoo_doctor.core.scoring import ScoreResult
+
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def escape(text: str) -> str:
+    """Rich-escape repo-derived text and show control characters as text.
+
+    A newline in a file name would otherwise start a line of its own (`::error::`
+    is a GitHub workflow command in a CI log) and a raw ESC could drive the terminal.
+    """
+    return _rich_escape(
+        _CONTROL.sub(lambda m: m.group().encode("unicode_escape").decode(), text)
+    )
 
 
 _LABEL_COLORS = {

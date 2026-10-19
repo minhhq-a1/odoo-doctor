@@ -196,3 +196,21 @@ def test_render_terminal_shows_a_difference_of_exactly_one_tenth():
     a = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
     b = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
     assert "Counting medium findings: 89.9" in render_terminal([], {"a": a, "b": b})
+
+
+def test_hostile_names_cannot_start_a_workflow_command_line():
+    """CI logs are parsed for lines starting with `::`; a newline in a repo-chosen
+    name must not be able to start one, nor may a raw ESC reach the terminal."""
+    hostile = "a\n::error::boom\x1b[2J.py"
+    d = _diag(
+        module="m\n::error::mod",
+        file_path=hostile,
+        title="t\n::error::title",
+        message="msg\n::error::msg",
+    )
+    score = ScoreResult(50.0, "Needs work", [], [d], 1)
+    out = render_terminal([d], {d.module: score})
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", out)  # rich's own styling
+    assert "\x1b" not in plain
+    assert not [line for line in plain.splitlines() if line.lstrip().startswith("::")]
+    assert "\\n::error::boom" in plain  # still visible, as text
