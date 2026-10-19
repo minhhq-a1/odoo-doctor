@@ -29,7 +29,8 @@ at a source checkout for full accuracy.
 The Odoo 18/19 migration rules are version-gated and only fire when the scanned
 `odoo_version` is at or above the gate: `view-tree-removed`, `removed-core-field-usage` and
 `chatter-div-removed` from 18.0; `search-view-group-attributes`, `act-window-target-inline`
-and `kanban-legacy-templates` from 19.0.
+and `kanban-legacy-templates` from 19.0. `scan --upgrade-report` summarises these findings per
+module; see [upgrade-report.md](upgrade-report.md).
 
 The Odoo version is read from the addons or set with `odoo_version` in `odoo-doctor.toml`
 or `--odoo-version`. A new Odoo major version is added by generating its stubs

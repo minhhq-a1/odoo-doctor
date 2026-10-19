@@ -126,6 +126,7 @@ def build_project_graph(
     odoo_version: str = "unknown",
     target_modules: list[str] | None = None,
     odoo_source_path: str | None = None,
+    force_version: bool = False,
 ) -> ProjectGraph:
     """Discover addons, parse all inputs, build shared resolver and per-module contexts."""
     addons = discover_addons(addon_paths, target_modules=target_modules)
@@ -148,7 +149,8 @@ def build_project_graph(
         mod_version = detect_odoo_version(
             manifest_version=manifest.version,
         )
-        if mod_version == "unknown":
+        # force_version (scan --upgrade-report --odoo-version): the target wins over the manifest.
+        if force_version or mod_version == "unknown":
             mod_version = odoo_version
 
         # Parse Python files

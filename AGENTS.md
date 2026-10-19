@@ -80,6 +80,7 @@ odoo-doctor rules docs --out docs/rules.md  # Regenerate rules docs (never hand-
 odoo-doctor rules stats [--path DIR] [--json]   # Which rules users suppress most
 odoo-doctor rules new <rule-name> [--out DIR]   # Scaffold a third-party rule pack
 odoo-doctor lsp                # Language server on stdio (needs the lsp extra)
+odoo-doctor scan . --odoo-version 19.0 --upgrade-report   # Upgrade readiness report (docs/upgrade-report.md)
 odoo-doctor scan . --history h.jsonl --badge badge.svg
 odoo-doctor history show h.jsonl --max-drop 3
 odoo-doctor scan . --html report.html   # Self-contained HTML report
@@ -246,6 +247,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
 | `src/odoo_doctor/core/scaffold.py` | Starter project for a third-party rule pack (`rules new`); generated rules import only `plugin_api` |
+| `src/odoo_doctor/core/upgrade.py` | Upgrade readiness report (`scan --upgrade-report`): groups Upgrade Safety findings by change, mechanical vs needs-review table, readiness score; JSON key `upgrade_report` only with the flag (see `docs/upgrade-report.md`) |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
 | `src/odoo_doctor/reporters/html_report.py` | HTML report (`scan --html`), assets in `reporters/html/`; `docs/html-report.md` |
 | `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
