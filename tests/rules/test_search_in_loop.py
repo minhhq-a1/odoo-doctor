@@ -263,3 +263,36 @@ def test_local_recordset_is_scoped_to_its_function(tmp_path: Path):
                     rec.search([("a", "=", rec.id)])
         """
     assert _lines(tmp_path, src) == []
+
+
+def _tiers(tmp_path: Path, src: str) -> list[tuple[int, str]]:
+    f = tmp_path / "m.py"
+    f.write_text(dedent(src))
+    return [(d.line, d.confidence) for d in check_search_in_loop(f, "m", "19.0")]
+
+
+def test_plain_receivers_stay_high_and_inferred_ones_are_medium(tmp_path: Path):
+    """Odoo's own addons query in loops over a local, a comprehension, a group: medium."""
+    src = """\
+        class A:
+            def f(self, vals):
+                for rec in self:
+                    self.env["x"].search([("a", "=", rec.id)])
+                    rec.env["x"].search_count([("a", "=", rec.id)])
+                    self.env["x"].search_read([("a", "=", rec.id)])
+                    self.env["x"]._read_group([("a", "=", rec.id)], ["a"])
+                recs = self.env["x"].search([])
+                for r in recs:
+                    r.search([("a", "=", r.id)])
+                    self.env["x"].search([("a", "=", r.id)])
+                [self.env["x"].search([("a", "=", v)]) for v in vals]
+        """
+    assert _tiers(tmp_path, src) == [
+        (4, "high"),
+        (5, "high"),
+        (6, "medium"),
+        (7, "medium"),
+        (10, "medium"),
+        (11, "high"),
+        (12, "medium"),
+    ]

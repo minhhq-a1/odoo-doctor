@@ -11,6 +11,9 @@ from odoo_doctor.core.source import parse_python
 from odoo_doctor.rules._ast_helpers import is_test_file, orm_calls_in_loops
 from odoo_doctor.rules.registry import rule
 
+# Queries that Odoo's own addons run per group or per company inside loops.
+_AGGREGATES = {"search_read", "search_fetch", "read_group", "_read_group"}
+
 # browse() only wraps ids in a recordset; it does not hit the database.
 _ORM_METHODS = {
     "search",
@@ -43,7 +46,7 @@ def check_search_in_loop(
     if tree is None:
         return []
 
-    for node, loop in orm_calls_in_loops(tree, _ORM_METHODS):
+    for node, loop, guessed in orm_calls_in_loops(tree, _ORM_METHODS):
         if isinstance(loop, ast.While) and _is_paged(node):
             continue
         method = node.func.attr
@@ -58,7 +61,7 @@ def check_search_in_loop(
                 severity="error",
                 tier="P1",
                 source="native",
-                confidence="high",
+                confidence="medium" if guessed or method in _AGGREGATES else "high",
                 title=f"ORM '{method}' called inside loop",
                 message=f"'{method}()' at line {node.lineno} is called inside a loop. Consider batching.",
                 help=f"Move the '{method}()' call outside the loop and batch the operation.",

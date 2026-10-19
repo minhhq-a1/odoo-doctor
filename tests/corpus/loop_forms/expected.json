@@ -2,16 +2,16 @@
   [
     "search-in-loop",
     "lf/models/job.py",
-    "high"
+    "medium"
   ],
   [
     "search-in-loop",
     "lf/models/job.py",
-    "high"
+    "medium"
   ],
   [
     "write-in-loop",
     "lf/models/job.py",
-    "high"
+    "medium"
   ]
 ]

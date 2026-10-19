@@ -579,7 +579,7 @@ company = self.env.company
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `create()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules of `search-in-loop` apply).
+**Detects**: `create()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules and confidence tiers of `search-in-loop` apply).
 
 **Why**: Each call triggers its own INSERT and recomputation round trip.
 
@@ -634,7 +634,7 @@ for partner in self.env['res.partner'].browse(partner_ids):
 
 **Fix**: Move the call out of the loop and batch the results.
 
-**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported. The receiver must be a recordset: `self`, an `env[...]` lookup, a loop variable over records and a local assigned from one (`recs = self.env['x'].search([])`), but not an attribute that `__init__` or the class body sets to a plain object (`self.client = Client()`).
+**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported. The receiver must be a recordset: `self`, an `env[...]` lookup, a loop variable over records and a local assigned from one (`recs = self.env['x'].search([])`), but not an attribute that `__init__` or the class body sets to a plain object (`self.client = Client()`). Medium confidence, not high: the receiver is a local (`recs.search(..)`, `Model = self.env['x']`), the loop is a comprehension, or the query is `search_read` / `search_fetch` / `read_group` (Odoo's own addons run those per company or per group); `self` / `env[...]` receivers in a `for` or `while` stay high.
 
 Bad:
 
@@ -654,7 +654,7 @@ by_id = {p.id: p for p in partners}
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `write()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules of `search-in-loop` apply).
+**Detects**: `write()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules and confidence tiers of `search-in-loop` apply).
 
 **Why**: Each call triggers its own UPDATE and recomputation round trip.
 

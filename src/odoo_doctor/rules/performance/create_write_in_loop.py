@@ -34,13 +34,13 @@ def _loop_diagnostics(
             severity="error",
             tier="P1",
             source="native",
-            confidence="high",
+            confidence="medium" if guessed else "high",
             title=f"ORM '{method_name}' called inside loop",
             message=f"'{method_name}()' at line {node.lineno} is called inside a loop. Consider batching.",
             help=f"Move the '{method_name}()' call outside the loop and batch the operation.",
             odoo_version=version,
         )
-        for node, _loop in orm_calls_in_loops(tree, {method_name})
+        for node, _loop, guessed in orm_calls_in_loops(tree, {method_name})
     ]
 
 

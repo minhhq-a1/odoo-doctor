@@ -223,8 +223,23 @@ def plain_self_attrs(cls: ast.ClassDef) -> set[str]:
     return attrs
 
 
+def _root_name(node: ast.AST) -> str | None:
+    while True:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, (ast.Attribute, ast.Subscript)):
+            node = node.value
+        elif isinstance(node, ast.Call):
+            node = node.func
+        else:
+            return None
+
+
 def _bind_loop_targets(
-    loop: LoopNode, orm_vars: set[str], plain: frozenset[str] | set[str]
+    loop: LoopNode,
+    orm_vars: set[str],
+    inferred: set[str],
+    plain: frozenset[str] | set[str],
 ) -> None:
     """The loop variable of a loop over records is itself a record."""
     if isinstance(loop, ast.While):
@@ -236,11 +251,17 @@ def _bind_loop_targets(
     )
     for target, it in pairs:
         if node_is_orm(it, orm_vars, plain):
-            orm_vars.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+            names = {n.id for n in ast.walk(target) if isinstance(n, ast.Name)}
+            orm_vars.update(names)
+            if _root_name(it) in inferred:
+                inferred.update(names)
 
 
 def _bind_assign(
-    node: ast.Assign, orm_vars: set[str], plain: frozenset[str] | set[str]
+    node: ast.Assign,
+    orm_vars: set[str],
+    inferred: set[str],
+    plain: frozenset[str] | set[str],
 ) -> None:
     """``recs = self.env['x'].search([])`` makes ``recs`` a recordset for what follows."""
     value = node.value
@@ -256,28 +277,35 @@ def _bind_assign(
         if isinstance(target, ast.Name):
             if is_records:
                 orm_vars.add(target.id)
+                inferred.add(target.id)
             else:
                 orm_vars.discard(target.id)
+                inferred.discard(target.id)
 
 
 def orm_calls_in_loops(
     tree: ast.AST, methods: set[str]
-) -> Iterator[tuple[ast.Call, LoopNode]]:
+) -> Iterator[tuple[ast.Call, LoopNode, bool]]:
     """ORM calls of the given method names that run once per iteration of a loop.
 
     Loops are ``for``, ``while`` and comprehensions. Names bound to records (loop
     variables over records, locals assigned from an ORM expression) are followed
-    within their block.
+    within their block. The flag says the finding rests on that inference (the receiver
+    is rooted at a local, or the loop is a comprehension) and not on a plain
+    ``self`` / ``env[...]`` receiver in a ``for`` / ``while``.
     """
 
     def walk(
-        node: ast.AST, orm_vars: set[str], plain: frozenset[str] | set[str]
-    ) -> Iterator[tuple[ast.Call, LoopNode]]:
-        orm_vars = set(orm_vars)
+        node: ast.AST,
+        orm_vars: set[str],
+        inferred: set[str],
+        plain: frozenset[str] | set[str],
+    ) -> Iterator[tuple[ast.Call, LoopNode, bool]]:
+        orm_vars, inferred = set(orm_vars), set(inferred)
         if isinstance(node, ast.ClassDef):
             plain = plain_self_attrs(node)
         if isinstance(node, LoopNode):
-            _bind_loop_targets(node, orm_vars, plain)
+            _bind_loop_targets(node, orm_vars, inferred, plain)
             if not is_bounded_loop(node):
                 for n in per_iteration_nodes(node):
                     if (
@@ -286,13 +314,16 @@ def orm_calls_in_loops(
                         and n.func.attr in methods
                         and receiver_is_orm(n, orm_vars, plain)
                     ):
-                        yield n, node
+                        guessed = isinstance(node, Comprehension) or (
+                            _root_name(n.func.value) in inferred
+                        )
+                        yield n, node, guessed
         for child in ast.iter_child_nodes(node):
-            yield from walk(child, orm_vars, plain)
+            yield from walk(child, orm_vars, inferred, plain)
             if isinstance(child, ast.Assign):
-                _bind_assign(child, orm_vars, plain)
+                _bind_assign(child, orm_vars, inferred, plain)
 
-    yield from walk(tree, set(), frozenset())
+    yield from walk(tree, set(), set(), frozenset())
 
 
 _MODEL_BASE_NAMES = {"Model", "TransientModel", "AbstractModel", "BaseModel"}

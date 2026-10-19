@@ -112,3 +112,25 @@ def test_write_on_a_local_recordset_is_a_write_per_record(tmp_path: Path):
                     rec.write({"a": 1})
         """
     assert _create_write(tmp_path, src) == [("write-in-loop", 5)]
+
+
+def test_inferred_receivers_are_medium(tmp_path: Path):
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, vals_list):
+                for rec in self:
+                    rec.write({"a": 1})
+                recs = self.env["x"].search([])
+                for r in recs:
+                    r.write({"a": 1})
+                [self.env["x"].create(v) for v in vals_list]
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.rule, d.line, d.confidence) for d in diags] == [
+        ("create-in-loop", 8, "medium"),
+        ("write-in-loop", 4, "high"),
+        ("write-in-loop", 7, "medium"),
+    ]
