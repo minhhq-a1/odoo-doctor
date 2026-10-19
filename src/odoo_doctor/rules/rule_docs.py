@@ -354,8 +354,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ---------------------------------------------------------- Performance
     "search-in-loop": RuleDoc(
-        detects="ORM queries (`search`, `search_count`, `read`) inside `for` or "
-        "`while` loops. `browse()` is not flagged: it only wraps ids and does "
+        detects="ORM queries (`search`, `search_count`, `read`, `search_read`, "
+        "`search_fetch`, `read_group`) inside `for` or `while` loops and "
+        "comprehensions. `browse()` is not flagged: it only wraps ids and does "
         "not query the database.",
         why="One query per iteration scales badly with record count.",
         fix="Move the call out of the loop and batch the results.",
@@ -368,19 +369,24 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "(`for rec in self.env[...].search(...)`) and its `else` clause run once. "
         "Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal "
         "tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are "
-        "not reported.",
+        "not reported. The receiver must be a recordset: `self`, an `env[...]` "
+        "lookup, a loop variable over records and a local assigned from one "
+        "(`recs = self.env['x'].search([])`), but not an attribute that `__init__` "
+        "or the class body sets to a plain object (`self.client = Client()`).",
     ),
     "create-in-loop": RuleDoc(
-        detects="`create()` called inside a loop (its iterable and `else` clause "
-        "excluded; chunked and constant-literal loops are skipped).",
+        detects="`create()` called inside a loop or comprehension (its iterable and "
+        "`else` clause excluded; chunked and constant-literal loops are skipped; "
+        "the receiver rules of `search-in-loop` apply).",
         why="Each call triggers its own INSERT and recomputation round trip.",
         fix="Collect the values and call `create()` once with a list.",
         bad="for vals in vals_list:\n    self.env['my.model'].create(vals)",
         good="self.env['my.model'].create(vals_list)",
     ),
     "write-in-loop": RuleDoc(
-        detects="`write()` called inside a loop (its iterable and `else` clause "
-        "excluded; chunked and constant-literal loops are skipped).",
+        detects="`write()` called inside a loop or comprehension (its iterable and "
+        "`else` clause excluded; chunked and constant-literal loops are skipped; "
+        "the receiver rules of `search-in-loop` apply).",
         why="Each call triggers its own UPDATE and recomputation round trip.",
         fix="Write once on the whole recordset when the values are identical.",
         bad="for rec in records:\n    rec.write({'state': 'done'})",
