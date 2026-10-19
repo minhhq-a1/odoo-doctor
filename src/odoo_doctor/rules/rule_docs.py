@@ -725,7 +725,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "view-attrs-states-removed": RuleDoc(
         detects='Elements with `attrs` or `states` (or an `<attribute name="attrs">` '
         "xpath edit) in the architecture of an `ir.ui.view` record, on Odoo 17 and "
-        "later. One finding per view. QWeb templates are not checked.",
+        "later. One finding per view. QWeb is not checked: a view of type `qweb`, a "
+        "kanban view's `<templates>` block, an element with a `t-*` directive and an "
+        "xpath into either. The `<field>` and `<button>` elements of the rest of a "
+        "kanban view are.",
         why='Odoo 17 and later refuse such a view ("Since 17.0, the attrs and states '
         'attributes are no longer used"), so the module cannot be installed or updated.',
         fix="Put the condition in the attribute itself: `invisible`, `readonly` or "

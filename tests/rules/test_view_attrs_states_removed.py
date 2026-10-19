@@ -122,3 +122,63 @@ def test_empty_attribute_edit_that_removes_states_is_not_flagged(tmp_path: Path)
             </xpath>
         </field></record></odoo>"""
     assert _diags(tmp_path, xml) == []
+
+
+KANBAN = """<odoo><record id="v" model="ir.ui.view">
+    <field name="model">x.a</field>
+    <field name="arch" type="xml"><kanban>
+        <field name="state"/>
+        {outside}
+        <templates>
+            <t t-name="card">
+                <div t-if="record.state.raw_value == 'draft'" attrs="{{'invisible': []}}">
+                    <button name="go" type="object" states="draft"/>
+                    <field name="name"/>
+                </div>
+            </t>
+        </templates>
+    </kanban></field></record></odoo>"""
+
+
+def test_kanban_outside_its_templates_is_checked(tmp_path: Path):
+    xml = KANBAN.format(outside='<field name="note" attrs="{\'invisible\': []}"/>')
+    (d,) = _diags(tmp_path, xml)
+    assert d.line == 5
+    assert "1 element(s)" in d.message
+
+
+def test_kanban_templates_are_qweb_and_not_flagged(tmp_path: Path):
+    assert _diags(tmp_path, KANBAN.format(outside="")) == []
+
+
+def test_kanban_button_with_states_outside_templates_is_flagged(tmp_path: Path):
+    xml = KANBAN.format(outside='<button name="x" type="object" states="draft"/>')
+    assert len(_diags(tmp_path, xml)) == 1
+
+
+def test_xpath_into_a_kanban_template_is_qweb(tmp_path: Path):
+    xml = """<odoo><record id="v" model="ir.ui.view">
+        <field name="model">x.a</field>
+        <field name="inherit_id" ref="x.kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//t[@t-name='card']" position="inside">
+                <div states="draft"/>
+            </xpath>
+            <xpath expr="//templates" position="inside">
+                <t t-name="extra"><div attrs="x"/></t>
+            </xpath>
+        </field></record></odoo>"""
+    assert _diags(tmp_path, xml) == []
+
+
+def test_qweb_branch_in_a_regular_view_is_skipped_but_the_rest_is_checked(
+    tmp_path: Path,
+):
+    xml = """<odoo><record id="v" model="ir.ui.view">
+        <field name="model">x.a</field>
+        <field name="arch" type="xml"><form>
+            <div t-if="x" states="draft"/>
+            <field name="a" attrs="{'invisible': []}"/>
+        </form></field></record></odoo>"""
+    (d,) = _diags(tmp_path, xml)
+    assert d.line == 5 and "1 element(s)" in d.message

@@ -22,23 +22,26 @@ def _is_qweb(record: etree._Element, arch: etree._Element) -> bool:
         if f.get("name") == "type" and (f.text or "").strip() == "qweb":
             return True
     root = next((c for c in arch if isinstance(c.tag, str)), None)
-    if root is None:
+    return root is None or root.tag == "t"
+
+
+def _is_qweb_part(el: etree._Element) -> bool:
+    """A kanban ``<templates>`` block, an element with a ``t-*`` directive, or an xpath
+    edit into one: QWeb, which Odoo does not validate for ``attrs`` / ``states``."""
+    if el.tag == "templates" or any(k.startswith("t-") for k in el.attrib):
         return True
-    if root.tag == "t":
-        return True
-    return any(
-        k.startswith("t-")
-        for el in arch.iter()
-        if isinstance(el.tag, str)
-        for k in el.attrib
-    )
+    expr = el.get("expr", "") if el.tag == "xpath" else ""
+    return "@t-" in expr or "templates" in expr
 
 
 def _offenders(arch: etree._Element) -> list[etree._Element]:
     found = []
-    for el in arch.iter():
-        if not isinstance(el.tag, str) or el is arch:
+    todo = [c for c in reversed(arch) if isinstance(c.tag, str)]
+    while todo:
+        el = todo.pop()
+        if _is_qweb_part(el):
             continue
+        todo.extend(c for c in reversed(el) if isinstance(c.tag, str))
         has_attr = any(a in el.attrib for a in _REMOVED_ATTRS)
         # An empty <attribute name="states"/> removes the attribute from the parent view
         # (the way to port a pre-17 view), so only a non-empty one sets it.
@@ -65,8 +68,9 @@ def check_view_attrs_states_removed(ctx: ModuleContext) -> list[Diagnostic]:
     """Flag ``attrs`` / ``states`` in the architecture of an ``ir.ui.view`` record.
 
     Odoo 17 and later refuse the view ("Since 17.0, the attrs and states attributes
-    are no longer used"), so the module cannot be installed or updated. QWeb templates
-    are not checked.
+    are no longer used"), so the module cannot be installed or updated. QWeb parts are
+    not checked: a type-qweb view, a kanban ``<templates>`` block, an element with a
+    ``t-*`` directive and an xpath into one. The rest of the view is.
     """
     diags: list[Diagnostic] = []
     for path in data_files(ctx):
