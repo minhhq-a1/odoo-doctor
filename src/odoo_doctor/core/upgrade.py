@@ -89,6 +89,8 @@ MECHANICAL_FIELDS = frozenset(
     | {("res.groups", "users")}
 )
 
+# Parses the title built in rules/upgrade_safety/removed_core_field_usage.py (emit()):
+# the upgrade report depends on its wording; change both together.
 _FIELD_TITLE = re.compile(r"^'(\w+)' no longer exists on (\S+) \(Odoo \d+\)$")
 
 

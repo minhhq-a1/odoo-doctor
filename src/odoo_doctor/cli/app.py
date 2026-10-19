@@ -19,7 +19,7 @@ from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
 from odoo_doctor.core.fixer import compute_fixes, default_fixers
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scanner import collect_scores as _collect_scores
-from odoo_doctor.core.scanner import detect_scan_version
+from odoo_doctor.core.scanner import detect_scan_version, manifest_versions
 from odoo_doctor.core.suppression_stats import rule_noise
 from odoo_doctor.core.surfaces import filter_for_surface
 from odoo_doctor.reporters.json_report import render_json
@@ -118,7 +118,9 @@ def _main(
     """Unified health scoring for Odoo custom addons."""
 
 
-def _upgrade_report(diags, modules, target, output_format) -> dict | None:
+def _upgrade_report(
+    diags, modules, target, output_format, forced, declared
+) -> dict | None:
     """Build the ``--upgrade-report`` payload (None for formats that ignore the flag)."""
     from odoo_doctor.core.upgrade import build_upgrade_report, has_migration_rules
 
@@ -128,7 +130,19 @@ def _upgrade_report(diags, modules, target, output_format) -> dict | None:
             err=True,
         )
         return None
-    if modules and not has_migration_rules(target):
+    old = sorted(
+        m for m, v in declared.items() if m in modules and not has_migration_rules(v)
+    )
+    if modules and not forced and old:
+        shown = ", ".join(f"{m} ({declared[m]})" for m in old[:3])
+        more = f" and {len(old) - 3} more" if len(old) > 3 else ""
+        typer.echo(
+            f"[WARN] --upgrade-report: report may be empty: modules declare an Odoo "
+            f"version below 18.0 in their manifest ({shown}{more}) and rules are gated "
+            "on it; pass --odoo-version 19.0 to evaluate them as 19.0.",
+            err=True,
+        )
+    elif modules and not has_migration_rules(target):
         typer.echo(
             f"[WARN] --upgrade-report: Odoo version '{target}' has no migration rules, "
             "so the report is empty. Pass the target with --odoo-version (e.g. 19.0).",
@@ -260,6 +274,11 @@ def scan(
         cache = ScanCache(config_root / ".odoo_doctor_cache")
         cache.load()
 
+    # --upgrade-report with an explicit target: every module is evaluated as that
+    # version, whatever its manifest says (a plain scan keeps the manifest gating).
+    forced = bool(
+        upgrade_report and odoo_version and output_format in ("terminal", "json")
+    )
     diags, scores = _collect_scores(
         addon_paths=addons_paths,
         cfg=cfg,
@@ -267,6 +286,7 @@ def scan(
         changed_files=changed_files,
         config_root=config_root,
         cache=cache,
+        force_version=forced,
     )
     if cache is not None:
         cache.save()
@@ -302,6 +322,8 @@ def scan(
             scanned_modules,
             detect_scan_version(addons_paths, cfg),
             output_format,
+            forced,
+            {} if forced else manifest_versions(addons_paths, cfg),
         )
 
     if not scores:

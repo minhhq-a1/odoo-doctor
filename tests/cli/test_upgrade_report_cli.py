@@ -224,3 +224,55 @@ def test_fully_baselined_project_keeps_target_and_modules(tmp_path: Path):
     assert up["target_version"] == "19.0"
     assert "clean" in up["modules"]
     assert "--odoo-version" not in err
+
+
+def _old_manifest_copy(tmp_path: Path) -> Path:
+    """The corpus addon with 19.0-style constructs but a 17.0.x manifest version."""
+    root = tmp_path / "case"
+    shutil.copytree(CORPUS, root)
+    (root / "odoo-doctor.toml").unlink()
+    manifest = root / "mg" / "__manifest__.py"
+    text = manifest.read_text()
+    assert "19.0" in text
+    manifest.write_text(text.replace("19.0", "17.0"))
+    return root
+
+
+def _plain(root: Path, *args: str) -> dict:
+    result = runner.invoke(app, ["scan", str(root), "--json", *args])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)
+
+
+def test_explicit_target_wins_over_a_17_manifest(tmp_path: Path):
+    root = _old_manifest_copy(tmp_path)
+    report = _json("--upgrade-report", "--odoo-version", "19.0", root=root)
+    up = report["upgrade_report"]
+    assert up["totals"]["findings"] == _upgrade_findings(report) > 0
+    assert up["modules"]["mg"]["score"] < 100
+
+
+def test_plain_scan_keeps_the_manifest_gating(tmp_path: Path):
+    root = _old_manifest_copy(tmp_path)
+    plain = _plain(root, "--odoo-version", "19.0")
+    assert _upgrade_findings(plain) == 0
+
+
+def test_without_a_target_a_17_manifest_warns_once(tmp_path: Path):
+    root = _old_manifest_copy(tmp_path)
+    result = runner.invoke(app, ["scan", str(root), "--json", "--upgrade-report"])
+    assert result.exit_code == 0
+    assert result.stderr.count("[WARN]") == 1
+    assert "mg (17.0)" in result.stderr and "--odoo-version 19.0" in result.stderr
+    assert json.loads(result.stdout)["upgrade_report"]["totals"]["findings"] == 0
+
+
+def test_cached_report_equals_live_report_with_a_forced_target(tmp_path: Path):
+    root = _old_manifest_copy(tmp_path)
+    args = ("--upgrade-report", "--odoo-version", "19.0", "--cache")
+    cold = _json(*args, root=root)
+    warm = _json(*args, root=root)
+    assert warm["upgrade_report"] == cold["upgrade_report"]
+    assert cold["upgrade_report"]["totals"]["findings"] > 0
+    # a plain cached scan must not reuse the forced entry
+    assert _upgrade_findings(_plain(root, "--odoo-version", "19.0", "--cache")) == 0

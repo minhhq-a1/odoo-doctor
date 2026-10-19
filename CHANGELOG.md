@@ -16,7 +16,11 @@ All notable changes to Odoo Doctor are documented here.
   ignore it; without the flag nothing changes. Guide: `docs/upgrade-report.md` (formula, labels, rule to
   migration-topic table). Measured on the Odoo 17.0 addons scanned as 19.0: 578 modules, 2816 Upgrade
   Safety findings in 1066 files, 1752 labelled mechanical and 1064 needing review; on a 19.0 project
-  (14 modules) 0 findings and every module at 100.
+  (14 modules) 0 findings and every module at 100. With `--odoo-version X` every module is evaluated as
+  targeting X regardless of its manifest version (the scan cache key includes this); a plain scan
+  still gates each module on its own manifest version (the explicit version only applies when the
+  manifest version is not a recognised `NN.0`), so without `--odoo-version` a module declaring `17.0.x`
+  shows an empty report and a stderr warning says so.
 
 ## [0.10.2] — 2026-10-17
 

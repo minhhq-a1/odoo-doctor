@@ -15,10 +15,12 @@ odoo-doctor scan . --odoo-version 19.0 --upgrade-report          # terminal
 odoo-doctor scan . --odoo-version 19.0 --upgrade-report --json   # data for CI and agents
 ```
 
-`--odoo-version` is the **target**. Without it the detected version is used, and because the
-migration rules start at 18.0 an addon set already detected as 17.0 or older prints a warning
-on stderr: the report is empty because no target version was given, not because the code is
-ready. `--odoo-version 19.0` alone keeps its old meaning (a normal scan as 19.0); the report
+`--odoo-version` is the **target**. With `--upgrade-report --odoo-version X` every module is
+evaluated as targeting X, whatever version its manifest declares. Without `--odoo-version`
+the rules are gated on each module's own manifest version, so a module that declares `17.0.x`
+shows an empty report; odoo-doctor then prints one warning on stderr naming up to three such
+modules and asking for `--odoo-version 19.0`: the report is empty because no target was given,
+not because the code is ready. `--odoo-version 19.0` alone keeps its old meaning (a normal scan as 19.0); the report
 is only added by the flag. SARIF, GitHub annotations and HTML ignore the flag (a note on
 stderr). Exit codes and every other output are unchanged.
 
@@ -146,6 +148,9 @@ number for comparing groups and modules, not hours.
   migrations and third-party modules are invisible.
 - The report covers only the Upgrade Safety rules odoo-doctor has (13 today). A change no
   rule knows is not counted: a score of 100 means "no known problem", not "will run on 19".
+- The explicit target overrides the manifest version only in report mode. A plain
+  `scan --odoo-version 19.0` still gates each module on its manifest version, so a `17.0.x`
+  module has no migration findings there; use `--upgrade-report` for that question.
 - Rules are version-gated (see [support.md](support.md)); the report is only meaningful for a
   target of 18.0 or later.
 - A scan restricted with `--module` does not see the other modules, so cross-module
