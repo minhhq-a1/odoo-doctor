@@ -31,7 +31,12 @@ Reading the numbers:
   the Odoo version, the ruleset, each third-party rule plugin (installed version and a hash of
   its rule module), the `ruff` and `pylint` versions and the odoo-doctor version. Any change rescans everything, so the
   cache helps repeated runs on an unchanged tree (re-running CI, switching reports), not
-  incremental edits.
+  incremental edits. Known limits of the key: `odoo_source_path` enters it as a path string only, so
+  after a `git pull` in an Odoo clone run once without `--cache`; a plugin's identity is its distribution
+  version plus a hash of the rule's own module file, so a change in another file of the plugin package
+  is not seen; the `pylint` identity is `pylint --version` plus the pylint-odoo version read by the
+  interpreter behind the `pylint` script (`unknown` when that cannot be found, e.g. a Windows launcher,
+  and then upgrading pylint-odoo alone is not seen).
 - For a pull request, `--diff <ref>` scans only the changed files, and `--module` limits a
   scan to the modules you name.
 - Timings depend on the machine and are a guide, not a guarantee; there is no performance

@@ -91,6 +91,13 @@ All notable changes to Odoo Doctor are documented here.
     changes with the hash seed, so a config with two or more `[adapters]` entries could miss on every
     run. It is now serialised in sorted order.
 
+  - The key also holds the pylint-odoo distribution version, read by the interpreter behind the `pylint`
+    executable (`pylint --version` does not name its plugins); `unknown` when that interpreter cannot be
+    found.
+  - Known limits of the key: `odoo_source_path` is in it as a path string only (run without `--cache`
+    after updating an Odoo clone); a plugin's identity is its distribution version and a hash of the
+    rule's own module file only, so another file of the plugin package is not hashed.
+
   `CACHE_VERSION` is now 4, so older cache files are rebuilt once.
 
 ## [0.11.0] — 2026-10-19
