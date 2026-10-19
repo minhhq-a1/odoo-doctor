@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 from io import StringIO
 from typing import TYPE_CHECKING
 
@@ -13,25 +12,16 @@ from rich.table import Table
 
 from odoo_doctor.core.scoring import score_label, secondary_scores
 from odoo_doctor.core.suppression_stats import actionable_count
+from odoo_doctor.core.text import safe_text
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
     from odoo_doctor.core.scoring import ScoreResult
 
-_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-
 
 def escape(text: str) -> str:
-    """Rich-escape repo-derived text and show control characters as text.
-
-    A newline in a file name would otherwise start a line of its own (`::error::`
-    is a GitHub workflow command in a CI log) and a raw ESC could drive the terminal.
-    Rich also word-wraps at 120 columns and a continuation line starts at column 0,
-    where a repo-chosen `::error::` word would be a command again, so every `::` gets a
-    zero-width space between the colons (invisible, the layout does not change).
-    """
-    shown = _CONTROL.sub(lambda m: m.group().encode("unicode_escape").decode(), text)
-    return _rich_escape(shown.replace("::", ":\u200b:"))
+    """Rich-escape repo-derived text after :func:`safe_text` (control characters, ``::``)."""
+    return _rich_escape(safe_text(text))
 
 
 _LABEL_COLORS = {

@@ -21,6 +21,8 @@ from pathlib import Path
 
 import typer
 
+from odoo_doctor.core.text import safe_text
+
 # Enough for the file being scanned plus the few neighbours parsers touch in turn.
 _CACHE_SIZE = 16
 
@@ -44,7 +46,7 @@ def warn_skipped(path: Path | str, reason: str, *, read_anyway: bool = False) ->
     _skipped.add(key)
     if len(_skipped) <= _WARN_CAP:
         what = f"{key}: {reason}" if read_anyway else f"skipped {key}: {reason}"
-        typer.echo(f"[WARN] {what}", err=True)
+        typer.echo(f"[WARN] {safe_text(what)}", err=True)
 
 
 # A scanned file larger than this is skipped with a warning; real addon sources are far smaller.

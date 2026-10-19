@@ -35,6 +35,7 @@ from odoo_doctor.core.source import (
     reset_skipped,
     scannable_files,
 )
+from odoo_doctor.core.text import safe_text
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
@@ -269,7 +270,7 @@ def collect_scores(
                 all_diags.extend(produced)
             except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                 typer.echo(
-                    f"[WARN] rule {meta.name} crashed on {ctx.name}: {exc}",
+                    f"[WARN] rule {safe_text(meta.name)} crashed on {safe_text(ctx.name)}: {safe_text(exc)}",
                     err=True,
                 )
 
@@ -302,7 +303,7 @@ def collect_scores(
                     by_rule[i].extend(func(py_file, ctx.name, ctx.odoo_version))
                 except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                     typer.echo(
-                        f"[WARN] rule {meta.name} crashed on {py_file.name}: {exc}",
+                        f"[WARN] rule {safe_text(meta.name)} crashed on {safe_text(py_file.name)}: {safe_text(exc)}",
                         err=True,
                     )
     for bucket in by_rule:
@@ -327,7 +328,7 @@ def collect_scores(
                 all_diags.extend(adapter.run(ctx.path, ctx.odoo_version))
             except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                 typer.echo(
-                    f"[WARN] {adapter.name} adapter crashed on {ctx.name}: {exc}",
+                    f"[WARN] {safe_text(adapter.name)} adapter crashed on {safe_text(ctx.name)}: {safe_text(exc)}",
                     err=True,
                 )
 

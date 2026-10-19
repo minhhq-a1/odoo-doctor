@@ -16,6 +16,7 @@ from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import is_scannable, path_within
+from odoo_doctor.core.text import safe_text
 
 Fixer = Callable[[Diagnostic, str], "str | None"]
 
@@ -51,7 +52,7 @@ class FixResult:
         chunks: list[str] = []
         for path, new_text in sorted(self.changed_files.items()):
             old_text = original.get(path, "")
-            display = _display_path(path, root)
+            display = safe_text(_display_path(path, root))
             diff = difflib.unified_diff(
                 old_text.splitlines(keepends=True),
                 new_text.splitlines(keepends=True),
