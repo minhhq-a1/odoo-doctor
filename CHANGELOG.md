@@ -171,18 +171,26 @@ All notable changes to Odoo Doctor are documented here.
 
   | class | core 19 | core17as19 (47) | what changed |
   |---|---|---|---|
-  | rule wrong, no longer reported | 3 | 23 | an operator checked against literal choices before use (`if op not in ('<', '='): return`); a record's `.id` and `Datetime.now()` in a string; `LIMIT %d` / `%i` / `%f` formatting; the clauses of an Odoo 14-17 `Query` (`get_sql()`, `select()`, `subselect()`) |
-  | core convention, now `medium` | 9 | 24 | SQL built from model metadata (`self._sequence_field`), ORM-built fragments (`self._get_seen_list_extra()`, `_select_companies_rates()`) or the parameter of a `_private` helper whose callers pass literals |
+  | rule wrong, no longer reported | 3 | 25 | an operator checked against literal choices before use (`if op not in ('<', '='): return`); a record's `.id` and `Datetime.now()` in a string; `LIMIT %d` / `%i` / `%f` formatting; the clauses of an Odoo 14-17 `Query` (`get_sql()`, `select()`, `subselect()`); `sql.Placeholder` |
+  | core convention, now `medium` | 9 | 22 | SQL built from model metadata (`self._sequence_field`), ORM-built fragments (`self._get_seen_list_extra()`, `_select_companies_rates()`) or the parameter of a `_private` helper whose callers pass literals |
   | true positive, `high` | 0 | 0 | |
 
-  `high` now means that a parameter of a public method (reachable by RPC) or of a route reaches the
-  SQL text, even if model metadata is interpolated next to it; everything else that is dynamic is
-  `medium` (listed, does not lower the score). Core 19: 12 `high` -> 0 `high` + 9 `medium` (3 gone);
-  core17as19: 47 `high` -> 0 `high` + 24 `medium` (23 gone). A private helper called by a route with user input
-  is not traced to its caller and is `medium`. The shared taint analysis (`rules/_taint.py`) also
-  follows `with ... as` targets and unpacking of a constant value, which `eval-usage` gets too.
-  Scores of 7 core 19 modules rise (`phone_validation` 64.4 -> 100.0, `product_margin` 64.4 -> 100.0,
-  `mass_mailing_sms` 59.8 -> 77.9); none falls.
+  `high` now means that the text of the query is built from something a caller outside the module
+  controls: a parameter (including `**kw` / `post`) of a public method (RPC reaches those) or of a route;
+  `request.params`, `request.httprequest`, `request.get_json_data()` and cookies; a public field of `self`
+  (`self.name`, `self.mapped('name')`, `for rec in self`: the fields of a wizard are typed in by the user);
+  and the same values passed on to a private helper of the same class or a module-level function of the
+  same file (up to 3 hops). It stays `high` even if model metadata is interpolated next to them.
+  Everything else that is dynamic is `medium`: model metadata and ORM-built fragments, `self.env.context`,
+  a private helper only literals reach, a module-level function no entry point calls, and the ORM hooks
+  with a leading underscore that the ORM feeds from RPC arguments (`_search`, `_read_group`,
+  `_name_search`, `_search_*`; an `order`, `groupby` or name typed by a client can reach them, a
+  documented limit). `medium` is listed but does not lower the score and does not trip the default
+  `--fail-on` policy (P0/P1 high confidence). Core 19: 12 `high` -> 0 `high` + 9 `medium` (3 gone);
+  core17as19: 47 `high` -> 0 `high` + 22 `medium` (25 gone); skw: no finding of the rule, as before.
+  The shared taint analysis (`rules/_taint.py`) also follows `with ... as` targets and unpacking of a
+  constant value, which `eval-usage` gets too. Scores of 7 core 19 modules rise (`phone_validation`
+  64.4 -> 100.0, `product_margin` 64.4 -> 100.0, `mass_mailing_sms` 59.8 -> 77.9); none falls.
 
 ### Fixed
 
