@@ -18,7 +18,10 @@ subclass :class:`TaintVisitor` and implement :meth:`check_call` to examine sinks
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import IntEnum
 
 
@@ -30,6 +33,11 @@ class Taint(IntEnum):
 
 # Calls whose result cannot carry injected text.
 _NUMERIC_CALLS = {"int", "float", "bool", "len", "abs", "round", "id", "ord", "hash"}
+# Calls that return a date or time: it prints as digits, never as SQL.
+_CLOCK_CALLS = {"now", "today", "utcnow"}
+# Odoo `Query` (14-17): `get_sql()` returns the generated clauses, `select()` and
+# `subselect()` the whole statement; only their arguments are text we pass in.
+_QUERY_CALLS = {"select", "subselect"}
 # Safe-by-construction SQL builders (Odoo `SQL`, psycopg2 `sql`, `quote_ident`).
 _SAFE_BUILDERS = {"Identifier", "Literal", "Composed", "quote_ident"}
 # str methods that only reshape their receiver; arguments can still inject text.
@@ -47,6 +55,31 @@ _STR_METHODS = {
 }
 
 Lookup = Callable[[str], Taint]
+
+_trust_opaque: ContextVar[bool] = ContextVar("odoo_doctor_trust_opaque", default=False)
+
+
+@contextmanager
+def trusting_opaque_values() -> Iterator[None]:
+    """Treat values the analysis cannot see into as constants, unless a variable fed them.
+
+    Inside this block an attribute read, a call result or a name that is not bound here is
+    ``UNKNOWN`` only when something it was built from is. What stays non-constant then comes
+    from the function parameters the visitor hook :meth:`TaintVisitor.param_taint` marks.
+    """
+    token = _trust_opaque.set(True)
+    try:
+        yield
+    finally:
+        _trust_opaque.reset(token)
+
+
+def _opaque(lookup: Lookup, *inputs: ast.expr) -> Taint:
+    """State of a value we cannot see into, built from `inputs`."""
+    if not _trust_opaque.get():
+        return Taint.UNKNOWN
+    unsafe = any(taint_of(i, lookup) != Taint.SAFE for i in inputs)
+    return Taint.UNKNOWN if unsafe else Taint.SAFE
 
 
 def _worst(*states: Taint) -> Taint:
@@ -75,9 +108,10 @@ def taint_of(node: ast.expr, lookup: Lookup) -> Taint:
     if isinstance(node, ast.Name):
         return lookup(node.id)
     if isinstance(node, ast.Attribute):
-        if node.attr == "_table":
+        # `_table` is set by the model's author; a record's `id` is an integer.
+        if node.attr in {"_table", "id"}:
             return Taint.SAFE
-        return Taint.UNKNOWN
+        return _opaque(lookup, node.value)
     if isinstance(node, ast.JoinedStr):
         parts = [v.value for v in node.values if isinstance(v, ast.FormattedValue)]
         if all(taint_of(p, lookup) == Taint.SAFE for p in parts):
@@ -103,7 +137,7 @@ def taint_of(node: ast.expr, lookup: Lookup) -> Taint:
         )
     if isinstance(node, (ast.Starred, ast.NamedExpr)):
         return taint_of(node.value, lookup)
-    return Taint.UNKNOWN
+    return _opaque(lookup)
 
 
 def _binop_taint(node: ast.BinOp, lookup: Lookup) -> Taint:
@@ -112,6 +146,10 @@ def _binop_taint(node: ast.BinOp, lookup: Lookup) -> Taint:
     if isinstance(node.op, ast.Mod):
         left = taint_of(node.left, lookup)
         args = node.right
+        if isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+            states = _percent_text_args(node.left.value, args, lookup)
+            if states is not None:
+                return Taint.UNSAFE if any(s != Taint.SAFE for s in states) else left
         if isinstance(args, (ast.Tuple, ast.List)):
             arg_states = [taint_of(e, lookup) for e in args.elts]
         elif isinstance(args, ast.Dict):
@@ -130,6 +168,48 @@ def _binop_taint(node: ast.BinOp, lookup: Lookup) -> Taint:
                 return taint_of(side, lookup)
         return _worst(taint_of(node.left, lookup), taint_of(node.right, lookup))
     return Taint.UNKNOWN
+
+
+# One `%` conversion of a printf-style template: `%s`, `%(key)d`, `%-5.2f`, `%%`.
+_PERCENT_SPEC = re.compile(
+    r"%(?:\((?P<key>[^)]*)\))?[#0\- +]*(?:\*|\d+)?(?:\.(?:\*|\d+))?[hlL]?(?P<conv>[a-zA-Z%])"
+)
+# `%d` of a string raises TypeError, so these conversions never write text.
+_NUMERIC_CONVERSIONS = set("diouxXeEfFgG")
+
+
+def _percent_text_args(
+    template: str, args: ast.expr, lookup: Lookup
+) -> list[Taint] | None:
+    """States of the arguments a `%` template renders as text.
+
+    Arguments bound to a numeric conversion are left out. None when the template
+    cannot be paired with its arguments (`*` widths, a count mismatch, `*args`).
+    """
+    specs = [m for m in _PERCENT_SPEC.finditer(template) if m.group("conv") != "%"]
+    if any("*" in m.group(0) for m in specs):
+        return None
+    keys = [m.group("key") for m in specs]
+    if specs and all(k is not None for k in keys) and isinstance(args, ast.Dict):
+        values = {
+            k.value: v
+            for k, v in zip(args.keys, args.values)
+            if isinstance(k, ast.Constant)
+        }
+        if any(k not in values for k in keys):
+            return None
+        bound = [values[k] for k in keys]  # type: ignore[index]
+    elif any(k is not None for k in keys):
+        return None
+    else:
+        bound = list(args.elts) if isinstance(args, ast.Tuple) else [args]
+        if len(bound) != len(specs) or any(isinstance(a, ast.Starred) for a in bound):
+            return None
+    return [
+        taint_of(arg, lookup)
+        for arg, spec in zip(bound, specs)
+        if spec.group("conv") not in _NUMERIC_CONVERSIONS
+    ]
 
 
 def _comprehension_taint(node: ast.expr, lookup: Lookup) -> Taint:
@@ -158,6 +238,13 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
     name = _builder_name(func)
     if name in _SAFE_BUILDERS:
         return Taint.SAFE
+    if name == "get_sql" and isinstance(func, ast.Attribute):
+        return Taint.SAFE
+    if name in _CLOCK_CALLS and isinstance(func, ast.Attribute):
+        return Taint.SAFE
+    if name in _QUERY_CALLS and isinstance(func, ast.Attribute):
+        if all(taint_of(a, lookup) == Taint.SAFE for a in _call_inputs(node)):
+            return Taint.SAFE
     if name == "SQL":
         # `SQL("... %s", x)` binds x; `SQL(f"...{x}")` just wraps an injected string.
         query = node.args[0] if node.args else None
@@ -172,9 +259,9 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
             return Taint.SAFE
         if func.id == "str" and node.args:
             return taint_of(node.args[0], lookup)
-        return Taint.UNKNOWN
+        return _opaque(lookup, *_call_inputs(node))
     if not isinstance(func, ast.Attribute):
-        return Taint.UNKNOWN
+        return _opaque(lookup, *_call_inputs(node))
 
     receiver = taint_of(func.value, lookup)
     arg_states = [taint_of(a, lookup) for a in node.args] + [
@@ -195,7 +282,28 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
         if any(s != Taint.SAFE for s in arg_states):
             return Taint.UNSAFE
         return receiver
-    return Taint.UNKNOWN
+    return _opaque(lookup, func.value, *_call_inputs(node))
+
+
+def _call_inputs(node: ast.Call) -> list[ast.expr]:
+    return [*node.args, *(kw.value for kw in node.keywords)]
+
+
+def _checked_choice(node: ast.If) -> str | None:
+    """`x` after ``if x not in ("<", "="): return/raise``: it is one of those constants."""
+    test = node.test
+    if not (
+        isinstance(test, ast.Compare)
+        and isinstance(test.left, ast.Name)
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], ast.NotIn)
+        and isinstance(test.comparators[0], (ast.Tuple, ast.List, ast.Set))
+        and all(isinstance(e, ast.Constant) for e in test.comparators[0].elts)
+        and not node.orelse
+        and isinstance(node.body[-1], (ast.Return, ast.Raise))
+    ):
+        return None
+    return test.left.id
 
 
 class TaintVisitor(ast.NodeVisitor):
@@ -210,6 +318,12 @@ class TaintVisitor(ast.NodeVisitor):
         for scope in reversed(self._scopes):
             if name in scope:
                 return scope[name]
+        return Taint.SAFE if _trust_opaque.get() else Taint.UNKNOWN
+
+    def param_taint(
+        self, func: ast.FunctionDef | ast.AsyncFunctionDef, name: str
+    ) -> Taint:
+        """Hook: state of parameter `name` of `func` (default: an opaque value)."""
         return Taint.UNKNOWN
 
     def taint(self, node: ast.expr) -> Taint:
@@ -271,10 +385,10 @@ class TaintVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         args = node.args
         params = [*args.posonlyargs, *args.args, *args.kwonlyargs]
-        scope = {a.arg: Taint.UNKNOWN for a in params}
+        scope = {a.arg: self.param_taint(node, a.arg) for a in params}
         for extra in (args.vararg, args.kwarg):
             if extra is not None:
-                scope[extra.arg] = Taint.UNKNOWN
+                scope[extra.arg] = self.param_taint(node, extra.arg)
         self._scopes.append(scope)
         for stmt in node.body:
             self.visit(stmt)
@@ -296,6 +410,11 @@ class TaintVisitor(ast.NodeVisitor):
             return [(target.id, self.taint(value) if value else Taint.UNKNOWN)]
         if not isinstance(target, (ast.Tuple, ast.List)):
             return []
+        if value is not None and self.taint(value) == Taint.SAFE:
+            # `a, b = <safe value>`: every part of a safe value is safe (`query.get_sql()`)
+            return [
+                (n.id, Taint.SAFE) for n in ast.walk(target) if isinstance(n, ast.Name)
+            ]
         elts = target.elts
         paired = (
             isinstance(value, (ast.Tuple, ast.List))
@@ -338,6 +457,9 @@ class TaintVisitor(ast.NodeVisitor):
     def visit_If(self, node: ast.If) -> None:
         self.visit(node.test)
         self._branches([node.body, node.orelse])
+        checked = _checked_choice(node)
+        if checked is not None:
+            self._set(checked, Taint.SAFE)
 
     def visit_Try(self, node: ast.Try) -> None:
         self._branches([node.body + node.orelse, *(h.body for h in node.handlers)])
@@ -368,7 +490,7 @@ class TaintVisitor(ast.NodeVisitor):
         for item in node.items:
             self.visit(item.context_expr)
             if item.optional_vars is not None:
-                self._bind(item.optional_vars, None)
+                self._bind(item.optional_vars, item.context_expr)
         for stmt in node.body:
             self.visit(stmt)
 

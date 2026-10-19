@@ -10,7 +10,7 @@ from pathlib import Path
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python, read_source
 from odoo_doctor.rules._ast_helpers import is_test_file, pylint_disabled_ranges
-from odoo_doctor.rules._taint import Taint, TaintVisitor
+from odoo_doctor.rules._taint import Taint, TaintVisitor, trusting_opaque_values
 from odoo_doctor.rules.registry import rule
 
 _CR_METHODS = {"execute", "executemany"}
@@ -50,15 +50,30 @@ def check_raw_sql_interpolation(
     if tree is None:
         return []
 
-    visitor = _RawSqlVisitor(
-        file_path,
-        module_name,
-        odoo_version,
-        pylint_disabled_ranges(read_source(file_path) or "", tree, ("sql-injection",))
-        + _input_free_hook_ranges(tree),
-    )
+    disabled = pylint_disabled_ranges(
+        read_source(file_path) or "", tree, ("sql-injection",)
+    ) + _input_free_hook_ranges(tree)
+    methods = _method_ids(tree)
+    visitor = _RawSqlVisitor(disabled, methods)
     visitor.visit(tree)
-    return visitor.diagnostics
+    if not visitor.calls:
+        return []
+    # Second pass: trust every value that is not an entry point's parameter. A call that
+    # is still dynamic then is built from something a caller outside the module controls.
+    with trusting_opaque_values():
+        caller = _RawSqlVisitor(disabled, methods, caller_params=True)
+        caller.visit(tree)
+    reached = {(c.lineno, c.col_offset) for c in caller.calls}
+    return [
+        _make_diagnostic(
+            call,
+            file_path,
+            module_name,
+            odoo_version,
+            "high" if (call.lineno, call.col_offset) in reached else "medium",
+        )
+        for call in visitor.calls
+    ]
 
 
 # ORM hooks that run at install/upgrade time (SQL views are created in `init`).
@@ -86,20 +101,35 @@ def _input_free_hook_ranges(tree: ast.AST) -> list[tuple[int, int]]:
     return ranges
 
 
+def _method_ids(tree: ast.AST) -> set[int]:
+    """`id()` of every function defined directly in a class body."""
+    return {
+        id(stmt)
+        for cls in ast.walk(tree)
+        if isinstance(cls, ast.ClassDef)
+        for stmt in cls.body
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _decorator_name(node: ast.expr) -> str:
+    return _dotted_name(node.func if isinstance(node, ast.Call) else node).rsplit(
+        ".", 1
+    )[-1]
+
+
 class _RawSqlVisitor(TaintVisitor):
     def __init__(
         self,
-        file_path: Path,
-        module_name: str,
-        odoo_version: str,
-        disabled_ranges: list[tuple[int, int]] | None = None,
+        disabled_ranges: list[tuple[int, int]],
+        method_ids: set[int],
+        caller_params: bool = False,
     ) -> None:
         super().__init__()
-        self._disabled_ranges = disabled_ranges or []
-        self.file_path = file_path
-        self.module_name = module_name
-        self.odoo_version = odoo_version
-        self.diagnostics: list[Diagnostic] = []
+        self._disabled_ranges = disabled_ranges
+        self._method_ids = method_ids
+        self._caller_params = caller_params
+        self.calls: list[ast.Call] = []
         # shortcut: cursor names are file-wide, not scoped; a reused name only widens matching.
         self._cursors: set[str] = set()
 
@@ -117,6 +147,21 @@ class _RawSqlVisitor(TaintVisitor):
             self._note_cursor(item.optional_vars, item.context_expr)
         super().visit_With(node)
 
+    def param_taint(
+        self, func: ast.FunctionDef | ast.AsyncFunctionDef, name: str
+    ) -> Taint:
+        """Under ``trusting_opaque_values`` only an entry point's parameters stay opaque."""
+        if not self._caller_params:
+            return Taint.UNKNOWN
+        entry = self._is_entry_point(func) and name not in {"self", "cls"}
+        return Taint.UNKNOWN if entry else Taint.SAFE
+
+    def _is_entry_point(self, func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+        """Callable from outside the module: a route, or a public method (RPC reaches those)."""
+        if any(_decorator_name(d) == "route" for d in func.decorator_list):
+            return True
+        return id(func) in self._method_ids and not func.name.startswith("_")
+
     def check_call(self, node: ast.Call) -> None:
         if not (_is_cursor_execute(node, self._cursors) and node.args):
             return
@@ -127,9 +172,7 @@ class _RawSqlVisitor(TaintVisitor):
             return
         if any(start <= node.lineno <= end for start, end in self._disabled_ranges):
             return
-        self.diagnostics.append(
-            _make_diagnostic(node, self.file_path, self.module_name, self.odoo_version)
-        )
+        self.calls.append(node)
 
 
 def _opens_cursor(node: ast.expr) -> bool:
@@ -180,9 +223,25 @@ def _dotted_name(node: ast.expr) -> str:
 
 
 def _make_diagnostic(
-    node: ast.Call, file_path: Path, module_name: str, odoo_version: str
+    node: ast.Call,
+    file_path: Path,
+    module_name: str,
+    odoo_version: str,
+    confidence: str,
 ) -> Diagnostic:
     method = node.func.attr if isinstance(node.func, ast.Attribute) else "execute"
+    if confidence == "high":
+        message = (
+            f"'{method}()' at line {node.lineno} uses dynamic SQL string construction "
+            "from a parameter a caller controls. Vulnerable to SQL injection."
+        )
+    else:
+        message = (
+            f"'{method}()' at line {node.lineno} builds its SQL by string interpolation "
+            "from model metadata, ORM-built fragments or a private helper's parameter "
+            "(the pattern Odoo's own addons use). Check that no interpolated value "
+            "can come from a user."
+        )
     return Diagnostic(
         module=module_name,
         file_path=str(file_path),
@@ -193,9 +252,9 @@ def _make_diagnostic(
         severity="error",
         tier="P0",
         source="native",
-        confidence="high",
+        confidence=confidence,
         title="SQL injection via string interpolation",
-        message=f"'{method}()' at line {node.lineno} uses dynamic SQL string construction. Vulnerable to SQL injection.",
+        message=message,
         help="Use parameterized queries: cr.execute('SELECT ... WHERE name = %s', (param,)).",
         odoo_version=odoo_version,
     )

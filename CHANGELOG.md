@@ -148,6 +148,27 @@ All notable changes to Odoo Doctor are documented here.
   `l10n_ch`, 7 `low` `sudo-without-comment`); on core 17 scanned as 19, 23 (including 6 `medium`
   `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged. The largest score drop seen is `project_timesheet_holidays` in Odoo core 19 (94.7 -> 89.9).
 
+### Changed
+
+- `raw-sql-string-interpolation` audited against Odoo 19 under the confidence policy (measured on
+  `20f5882e`; Odoo 17.0 `02d3a1d8` scanned as 19.0 for comparison; skw has no finding of the rule).
+  All 12 `high` hits on core 19 were read one by one; none is a proven injection:
+
+  | class | core 19 | core17as19 (47) | what changed |
+  |---|---|---|---|
+  | rule wrong, no longer reported | 3 | 23 | an operator checked against literal choices before use (`if op not in ('<', '='): return`); a record's `.id` and `Datetime.now()` in a string; `LIMIT %d` / `%i` / `%f` formatting; the clauses of an Odoo 14-17 `Query` (`get_sql()`, `select()`, `subselect()`) |
+  | core convention, now `medium` | 9 | 24 | SQL built from model metadata (`self._sequence_field`), ORM-built fragments (`self._get_seen_list_extra()`, `_select_companies_rates()`) or the parameter of a `_private` helper whose callers pass literals |
+  | true positive, `high` | 0 | 0 | |
+
+  `high` now means that a parameter of a public method (reachable by RPC) or of a route reaches the
+  SQL text, even if model metadata is interpolated next to it; everything else that is dynamic is
+  `medium` (listed, does not lower the score). Core 19: 12 `high` -> 0 `high` + 9 `medium` (3 gone);
+  core17as19: 47 `high` -> 0 `high` + 24 `medium` (23 gone). A private helper called by a route with user input
+  is not traced to its caller and is `medium`. The shared taint analysis (`rules/_taint.py`) also
+  follows `with ... as` targets and unpacking of a constant value, which `eval-usage` gets too.
+  Scores of 7 core 19 modules rise (`phone_validation` 64.4 -> 100.0, `product_margin` 64.4 -> 100.0,
+  `mass_mailing_sms` 59.8 -> 77.9); none falls.
+
 ### Fixed
 
 - Packaging: the `typer>=0.12` lower bound was wrong. Older Typer releases crash on current Click

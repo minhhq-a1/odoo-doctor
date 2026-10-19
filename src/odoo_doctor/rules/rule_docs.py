@@ -67,7 +67,21 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "request controls reaches them. Known limits: `SQL` is recognised by its "
         "name, so an import alias (`from odoo.tools import SQL as S`) is not followed, "
         "and a statement that starts with a SQL comment (`-- ...` or `/* ... */`) "
-        "defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics.",
+        "defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics. "
+        "Also not reported: `%d` / `%i` / `%f` formatting (a non-number raises, so "
+        '`"... LIMIT %d" % n` cannot inject), the clauses of an Odoo `Query` '
+        "(`query.get_sql()`, `query.select()` / `.subselect()` with constant arguments), "
+        "a record's `.id`, `Datetime.now()`-style calls, and a name checked with "
+        '`if op not in ("<", "="): return` (or `raise`) before it is used. '
+        "Confidence: `high` only when a parameter of a public method (RPC reaches those) "
+        "or of a route reaches the SQL text, whatever else is interpolated next to it. "
+        "SQL built from model metadata, ORM-built fragments (`self._where()`, "
+        "`self._sequence_field`) or the parameter of a `_private` helper or a module-level "
+        "function is `medium`: Odoo's own addons write dynamic SQL that way (Odoo 19: 0 "
+        "`high`, 9 `medium`), it is listed but does not lower the score. A public "
+        "method's parameter followed only by name through local variables, lists and "
+        "calls counts as reaching the SQL; a private helper called by a route with "
+        "user input is not traced to its caller.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "

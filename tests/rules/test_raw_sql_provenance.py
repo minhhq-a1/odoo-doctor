@@ -50,8 +50,8 @@ def test_numeric_percent_formats_cannot_inject(tmp_path: Path, sql: str):
 @pytest.mark.parametrize(
     "sql",
     [
-        '"SELECT id FROM t WHERE n = \'%s\' LIMIT %d" % (name, limit)',
-        '"SELECT id FROM t WHERE n = \'%s\'" % name',
+        "\"SELECT id FROM t WHERE n = '%s' LIMIT %d\" % (name, limit)",
+        "\"SELECT id FROM t WHERE n = '%s'\" % name",
         '"SELECT id FROM t LIMIT %s" % limit',
         '"SELECT id FROM t WHERE n = \'%(n)s\' LIMIT %(l)d" % {"n": name, "l": limit}',
     ],
@@ -113,12 +113,14 @@ def test_unpacking_an_unknown_call_stays_unknown(tmp_path: Path):
 @pytest.mark.parametrize(
     "guard",
     [
-        "if operator not in ('<', '=', '>'):\n            return []",
-        "if operator not in ['<', '=', '>']:\n            raise ValueError(operator)",
-        "if operator not in {'<', '=', '>'}:\n            return None",
+        "if operator not in ('<', '=', '>'):\n                    return []",
+        "if operator not in ['<', '=', '>']:\n                    raise ValueError(operator)",
+        "if operator not in {'<', '=', '>'}:\n                    return None",
     ],
 )
-def test_value_checked_against_literal_choices_is_a_constant(tmp_path: Path, guard: str):
+def test_value_checked_against_literal_choices_is_a_constant(
+    tmp_path: Path, guard: str
+):
     src = f"""\
         class M:
             def f(self, operator):
@@ -132,13 +134,13 @@ def test_value_checked_against_literal_choices_is_a_constant(tmp_path: Path, gua
     "guard",
     [
         # the check does not stop the function
-        "if operator not in ('<', '='):\n            _logger.warning(operator)",
+        "if operator not in ('<', '='):\n                    _logger.warning(operator)",
         # the choices are not constants
-        "if operator not in self._operators:\n            return []",
+        "if operator not in self._operators:\n                    return []",
         # `in` keeps the bad branch alive
-        "if operator in ('<', '='):\n            return []",
+        "if operator in ('<', '='):\n                    return []",
         # the name is rebound after the check
-        "if operator not in ('<', '='):\n            return []\n        operator = operator + other",
+        "if operator not in ('<', '='):\n                    return []\n                operator = operator + other",
     ],
 )
 def test_other_checks_prove_nothing(tmp_path: Path, guard: str):
@@ -249,3 +251,40 @@ def test_parameter_beside_model_metadata_is_still_high(tmp_path: Path):
 )
 def test_convention_pattern_is_medium(tmp_path: Path, src: str):
     assert [c for _, c in _found(tmp_path, src)] == ["medium"]
+
+
+def test_variable_rebound_without_the_parameter_is_no_longer_caller_controlled(
+    tmp_path: Path,
+):
+    """website_sale `shop`: `query` held a domain built from the route's input, then the SQL."""
+    src = """\
+        class C:
+            def shop(self, search):
+                query = self._where_calc(search)
+                from_clause, where_clause, params = query.get_sql()
+                query = f"SELECT {self.rate} FROM {from_clause} WHERE {where_clause}"
+                self.env.cr.execute(query, params)
+        """
+    assert _found(tmp_path, src) == [(6, "medium")]
+
+
+def test_parameter_passed_through_a_helper_into_sql_is_high(tmp_path: Path):
+    src = """\
+        class M:
+            def f(self, name):
+                where = self._clause(name)
+                self.env.cr.execute(f"SELECT 1 FROM t WHERE {where}")
+        """
+    assert _found(tmp_path, src) == [(4, "high")]
+
+
+def test_with_target_inherits_the_state_of_its_context_manager(tmp_path: Path):
+    """l10n_fr_fec: a cursor opened in `with` must not look like caller input."""
+    src = """\
+        class M:
+            def f(self):
+                with self.get_cursor() as cr:
+                    lang = self.env.with_env(cr).user.lang
+                    self.env.cr.execute(f"SELECT name->>'{lang}' FROM t")
+        """
+    assert _found(tmp_path, src) == [(5, "medium")]
