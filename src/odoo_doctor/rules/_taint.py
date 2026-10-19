@@ -160,7 +160,11 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
         return Taint.SAFE
     if name == "SQL":
         # `SQL("... %s", x)` binds x; `SQL(f"...{x}")` just wraps an injected string.
-        if node.args and taint_of(node.args[0], lookup) == Taint.UNSAFE:
+        query = node.args[0] if node.args else None
+        for kw in node.keywords:
+            if kw.arg == "query":  # SQL(query=f"...")
+                query = kw.value
+        if query is not None and taint_of(query, lookup) == Taint.UNSAFE:
             return Taint.UNSAFE
         return Taint.SAFE
     if isinstance(func, ast.Name):

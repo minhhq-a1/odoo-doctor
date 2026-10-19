@@ -30,6 +30,7 @@ def _lines(tmp_path: Path, src: str) -> list[int]:
         'SQL("SELECT 1 FROM t WHERE a = {}".format(x))',
         'SQL("SELECT 1 FROM t WHERE a = %s" % x)',
         'sql.SQL(f"SELECT 1 FROM t WHERE a = {x}")',
+        'SQL(query=f"SELECT 1 FROM t WHERE a = {x}")',
     ],
 )
 def test_sql_wrapper_around_dynamic_string_is_flagged(tmp_path: Path, expr: str):

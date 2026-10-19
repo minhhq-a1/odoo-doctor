@@ -72,7 +72,7 @@ class PylintOdooAdapter:
                         f"--rcfile={rcfile}",
                         "--load-plugins=pylint_odoo",
                         "--output-format=text",
-                        str(module_path),
+                        str(Path(module_path).resolve()),  # cwd is the scratch dir
                     ],
                     capture_output=True,
                     text=True,

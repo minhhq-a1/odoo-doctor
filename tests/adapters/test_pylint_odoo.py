@@ -160,6 +160,8 @@ def test_pylint_command_ignores_repo_config(tmp_path: Path, monkeypatch):
 
     monkeypatch.setenv("GH_TOKEN", "secret")
     monkeypatch.setenv("PYTHONPATH", str(repo))
+    monkeypatch.setenv("PYLINTRC", str(repo / ".pylintrc"))
+    monkeypatch.setenv("HOME", str(repo))
     monkeypatch.setattr(mod.shutil, "which", lambda _n: "/usr/bin/pylint")
     monkeypatch.setattr(mod.subprocess, "run", fake_run)
     monkeypatch.chdir(repo)
@@ -170,7 +172,9 @@ def test_pylint_command_ignores_repo_config(tmp_path: Path, monkeypatch):
     assert not Path(rc.split("=", 1)[1]).resolve().is_relative_to(repo.resolve())
     assert not Path(seen["kw"]["cwd"]).resolve().is_relative_to(repo.resolve())
     env = seen["kw"]["env"]
-    assert "GH_TOKEN" not in env and "PYTHONPATH" not in env
+    assert "GH_TOKEN" not in env and "PYTHONPATH" not in env and "PYLINTRC" not in env
+    assert not Path(env["HOME"]).resolve().is_relative_to(repo.resolve())
+    assert Path(seen["cmd"][-1]).is_absolute()
 
 
 def test_pylint_does_not_execute_repo_init_hook(tmp_path: Path, monkeypatch):

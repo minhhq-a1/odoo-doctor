@@ -18,18 +18,23 @@ All notable changes to Odoo Doctor are documented here.
   (`l10n_in`, 11 -> 12), on core 17 scanned as 19 four more (43 -> 47: `crm`, `web` domain controller,
   `website_sale`); the SKW project is unchanged. These are interpolations of ORM-built fragments or
   internal constants, the same shape as the 11 `high` findings core 19 already had.
+  `SQL(query=f"...")` is now examined like the positional form. Known limits, also in the rule docs: an
+  import alias of `SQL` (`from odoo.tools import SQL as S`) is not followed, and a statement that starts
+  with a SQL comment defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics.
 - The Pylint-Odoo adapter no longer lets the scanned repo run code. Pylint executes the `init-hook` of
   a `.pylintrc`, `pylintrc` or `pyproject.toml` it finds from its working directory, so scanning an
   untrusted repo (CI, editor language server) could run its code. Pylint now runs with an empty
   `--rcfile`, from a temporary directory, with a minimal environment (no tokens, no `PYTHONPATH`).
   Repo-level pylint configuration is ignored; the adapter is still switched on or off with
   `[adapters] pylint_odoo` in `odoo-doctor.toml`.
+  If you had disabled pylint messages in a repo `.pylintrc`, move them to `[ignore] rules` in
+  `odoo-doctor.toml`.
 - Python files whose name starts with `__` were never scanned: `__init__.py` (install hooks such as
   `post_init_hook` run with full access) and any file renamed `__foo.py` hid its findings. Only
   `__manifest__.py` is skipped now (in the scanner, the module graph and the Odoo-source index). New
   findings may appear: on Odoo core 19 the scan adds 11 (4 `high` loop rules in install hooks such as
   `l10n_ch`, 7 `low` `sudo-without-comment`); on core 17 scanned as 19, 23 (including 6 `medium`
-  `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged.
+  `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged. The largest score drop seen is `project_timesheet_holidays` in Odoo core 19 (94.7 -> 89.9).
 
 ### Fixed
 

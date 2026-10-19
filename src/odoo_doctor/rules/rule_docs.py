@@ -64,7 +64,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "fragment that reaches the query through a list or a branch is. Test code "
         "(`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` "
         "that take only `self` (where SQL views are created) are skipped: nothing a "
-        "request controls reaches them.",
+        "request controls reaches them. Known limits: `SQL` is recognised by its "
+        "name, so an import alias (`from odoo.tools import SQL as S`) is not followed, "
+        "and a statement that starts with a SQL comment (`-- ...` or `/* ... */`) "
+        "defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
