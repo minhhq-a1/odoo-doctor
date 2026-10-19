@@ -5,6 +5,7 @@ The fixtures are inert: a script that only creates a marker file under tmp_path.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -158,3 +159,74 @@ def test_hostile_clean_filter_does_not_run_for_git_info(repo: Path, tmp_path: Pa
     (repo / "my_addon" / "models.py").write_text("def f():\n    return 2\n")
     assert git_info(repo)["dirty"] is True
     assert not marker.exists()
+
+
+def test_filter_name_containing_equals_is_neutralised(repo: Path, tmp_path: Path):
+    """`-c filter.a=b.clean=` would split at the first `=`: the name must not matter."""
+    script, marker = _marker_script(tmp_path)
+    script.write_text(script.read_text() + "cat\n")
+    (repo / ".gitattributes").write_text("*.py filter=a=b\n")
+    _git(repo, "config", "filter.a=b.clean", str(script))
+    _git(repo, "config", "filter.a=b.smudge", str(script))
+    marker.unlink(missing_ok=True)
+    (repo / "my_addon" / "models.py").write_text("def f():\n    return 2\n")
+    assert git_info(repo)["dirty"] is True
+    assert not marker.exists()
+    _git(repo, "add", ".gitattributes")
+    _git(repo, "commit", "-qm", "attrs")
+    marker.unlink(missing_ok=True)
+    result = runner.invoke(app, ["scan", str(repo), "--score-delta", "HEAD"])
+    assert result.exit_code == 0, result.output
+    assert not marker.exists()
+
+
+def test_global_filter_driver_survives(tmp_path: Path, monkeypatch):
+    """Only the repo's own (local-scope) drivers are blanked: a global git-lfs stays."""
+    from odoo_doctor.core import git as gitmod
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".gitconfig").write_text('[filter "lfs"]\n\tsmudge = git-lfs smudge\n')
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("GIT_CONFIG_GLOBAL", raising=False)
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "filter.evil.clean", "x")
+    keys = [k for k, _ in gitmod._filter_overrides(repo)]
+    assert "filter.evil.clean" in keys and "filter.lfs.smudge" not in keys
+
+
+def test_non_utf8_config_value_does_not_crash(repo: Path):
+    config = repo / ".git" / "config"
+    config.write_bytes(
+        config.read_bytes() + b'[filter "x"]\n\tclean = \xff\xfe\n\tsmudge = \xff\n'
+    )
+    assert git_info(repo)["dirty"] is False
+
+
+def test_non_utf8_changed_file_name(repo: Path):
+    name = os.fsdecode(b"bad\xff.py")
+    try:
+        (repo / "my_addon" / name).write_text("x = 1\n")
+    except OSError:
+        pytest.skip("the filesystem refuses non-UTF-8 names")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "bad name")
+    (repo / "my_addon" / name).write_text("x = 2\n")
+    changed = _get_changed_files(repo, "HEAD")
+    assert changed == {str((repo / "my_addon" / name).resolve())}
+
+
+@pytest.mark.parametrize("ref", ["HEAD~1", "main~1..HEAD", "v1"])
+def test_diff_accepts_revisions_and_ranges(repo: Path, ref: str):
+    _git(repo, "tag", "v1", "HEAD~1")
+    assert _get_changed_files(repo, ref) == {
+        str((repo / "my_addon" / "models.py").resolve())
+    }
+
+
+def test_diff_ref_that_is_also_a_path_is_a_revision_or_fails(repo: Path):
+    (repo / "HEAD").write_text("x")  # a file named like the ref
+    assert _get_changed_files(repo, "HEAD~1") is not None
+    assert _get_changed_files(repo, "my_addon") is None  # a path, not a revision

@@ -219,7 +219,9 @@ def test_get_changed_files_empty_diff_returns_empty_set(tmp_path: Path, monkeypa
     )
 
     def fake_run(cmd, **kwargs):
-        if "config" in cmd:  # the helper's look-up of configured filter drivers
+        if (
+            "config" in cmd or "--version" in cmd
+        ):  # the helper's look-up of configured filter drivers
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
         return next(calls)
 

@@ -1131,6 +1131,7 @@ def _get_changed_files(repo_path: Path, base_branch: str) -> set[str] | None:
                 "--name-only",
                 "-z",
                 base_branch,
+                "--",  # the ref is a revision, never a path
             ],
             git_root,
         )

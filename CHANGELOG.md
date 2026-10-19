@@ -23,9 +23,11 @@ All notable changes to Odoo Doctor are documented here.
   (`core/git.py`) that sets `core.fsmonitor=false`, `core.hooksPath` to the null device, an empty
   `core.sshCommand`, `--no-optional-locks`, blanks every configured filter driver, passes
   `--no-ext-diff --no-textconv` to `diff`, and runs git with a minimal environment (no tokens, no
-  `GIT_*` variables, `GIT_TERMINAL_PROMPT=0`). Your own global git config still applies. Side effect: a
-  `--score-delta` base checkout holds git-lfs pointer files instead of the real content (filters are
-  off); scanned source is not affected.
+  `GIT_*` variables except `GIT_CONFIG_GLOBAL`, `GIT_TERMINAL_PROMPT=0`). Your own global and system git
+  config still applies, and so do your own filter drivers (git-lfs): only drivers the repository itself
+  defines are blanked, through `GIT_CONFIG_COUNT` (git 2.31 or newer; older git is refused with a warning when
+  a driver name holds `=`). git output is decoded leniently, so a non-UTF-8 config value or file name no
+  longer crashes a scan.
 - The Ruff adapter no longer takes its configuration from the scanned repo. A repo `ruff.toml` or
   `pyproject.toml` could set `cache-dir` (ruff then wrote there), `ignore` rules (hiding findings) or
   `extend` another file; and ruff's default cache wrote a `.ruff_cache` folder into the scanned repo.

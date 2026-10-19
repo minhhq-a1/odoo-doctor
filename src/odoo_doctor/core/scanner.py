@@ -19,6 +19,7 @@ from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
 from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.git import reset_git_cache
 from odoo_doctor.core.pipeline import (
     derive_capabilities,
     mark_score_eligibility,
@@ -203,6 +204,7 @@ def collect_scores(
     )
 
     reset_skipped()  # skipped-file warnings are per scan
+    reset_git_cache()
     fingerprint: str | None = None
     if cache is not None and changed_files is None:
         ruleset = tuple(
