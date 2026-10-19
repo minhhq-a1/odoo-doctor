@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable
 
 Fixer = Callable[[Diagnostic, str], "str | None"]
 
@@ -102,7 +103,10 @@ def compute_fixes(
     if read_text is None:
 
         def read_text(p):
-            return _resolve(p).read_text(encoding="utf-8")
+            target = _resolve(p)
+            if not is_scannable(target):
+                raise OSError(f"not a readable regular file: {target}")
+            return target.read_text(encoding="utf-8")
 
     # Group fixable, high-confidence diagnostics by file.
     by_file: dict[str, list[Diagnostic]] = {}

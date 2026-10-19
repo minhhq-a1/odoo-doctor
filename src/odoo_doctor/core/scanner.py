@@ -27,7 +27,13 @@ from odoo_doctor.core.pipeline import (
 )
 from odoo_doctor.core.roi import rank_fixes
 from odoo_doctor.core.scoring import CATEGORIES, score_diagnostics
-from odoo_doctor.core.source import clear_source_cache, flush_skipped, reset_skipped
+from odoo_doctor.core.source import (
+    clear_source_cache,
+    flush_skipped,
+    is_scannable,
+    reset_skipped,
+    scannable_files,
+)
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
@@ -260,7 +266,7 @@ def collect_scores(
         ]
         if not enabled:
             continue
-        for py_file in ctx.path.rglob("*.py"):
+        for py_file in scannable_files(ctx.path):
             if py_file.name == "__manifest__.py":
                 continue
             if (
@@ -324,7 +330,7 @@ def collect_scores(
     python_lines: dict[str, int] = {}
     for ctx in graph.modules.values():
         python_lines[ctx.name] = 0
-        for py_file in ctx.path.rglob("*.py"):
+        for py_file in scannable_files(ctx.path):
             suppressions |= scan_python_suppressions(py_file)
             try:
                 python_lines[ctx.name] += len(
@@ -334,7 +340,7 @@ def collect_scores(
                 pass
         for data_file in ctx.manifest.data:
             xml_path = ctx.path / data_file
-            if xml_path.suffix == ".xml" and xml_path.exists():
+            if xml_path.suffix == ".xml" and is_scannable(xml_path, ctx.path):
                 suppressions |= scan_xml_suppressions(xml_path)
 
     # Run pipeline

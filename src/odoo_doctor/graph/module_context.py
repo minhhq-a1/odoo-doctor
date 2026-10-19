@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from odoo_doctor.core.source import is_scannable, scannable_files
 from odoo_doctor.discovery.addons import discover_addons
 from odoo_doctor.discovery.odoo_version import detect_odoo_version
 from odoo_doctor.graph.resolver import SymbolResolver
@@ -156,7 +157,7 @@ def build_project_graph(
         # Parse Python files
         models: dict[str, ModelInfo] = {}
         controllers: list[ControllerInfo] = []
-        for py_file in addon.path.rglob("*.py"):
+        for py_file in scannable_files(addon.path):
             if py_file.name == "__manifest__.py":
                 continue
             for m in parse_models(py_file):
@@ -170,7 +171,7 @@ def build_project_graph(
         views: list[ViewInfo] = []
         for data_file in manifest.data:
             xml_path = addon.path / data_file
-            if xml_path.suffix == ".xml" and xml_path.exists():
+            if xml_path.suffix == ".xml" and is_scannable(xml_path, addon.path):
                 for rec in parse_xml_records(xml_path, module_name=addon.name):
                     xml_records.append(rec)
                     xml_ids.setdefault(rec.xml_id, rec)
@@ -179,7 +180,7 @@ def build_project_graph(
         # Parse security CSV
         access_rules: list[AccessRule] = []
         csv_path = addon.path / "security" / "ir.model.access.csv"
-        if csv_path.exists():
+        if is_scannable(csv_path, addon.path):
             access_rules = parse_access_csv(csv_path, module_name=addon.name)
 
         # Collect every declaration of a model that has a _name. Several modules may

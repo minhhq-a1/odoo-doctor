@@ -22,6 +22,7 @@ from pygls.uris import from_fs_path, to_fs_path
 from odoo_doctor import __version__
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable
 from odoo_doctor.lsp.actions import (
     DISABLE_RULE_COMMAND,
     code_actions_for,
@@ -219,7 +220,7 @@ def _workspace_folders(params: lsp.InitializeParams) -> list[Path]:
 
 def _read_disk(uri: str) -> str | None:
     path = to_fs_path(uri)
-    if path is None:
+    if path is None or not is_scannable(path):
         return None
     try:
         return Path(path).read_text(encoding="utf-8")

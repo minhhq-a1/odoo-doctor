@@ -6,6 +6,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- A scan no longer blocks or exhausts memory on a special or huge file in the scanned repo. A FIFO
+  named `*.py` (opening it blocks forever), a symlink to `/dev/zero` or to a FIFO, and a file over
+  16 MiB are now skipped with one `[WARN] skipped <file>: ...` line on stderr; only regular files
+  are read, the type being checked with `stat` before any `open`. A symlink (or `..` path) that
+  leaves the addon directory is skipped too. This covers Python, XML and CSV files, manifests,
+  inline suppressions, the scan-cache fingerprint, the Odoo source index, the language server and
+  `fix`. A symlink to a regular file inside the addon is still scanned.
+
 ## [0.11.0] — 2026-10-19
 
 ### Added

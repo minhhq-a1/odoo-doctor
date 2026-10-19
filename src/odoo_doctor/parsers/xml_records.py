@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from odoo_doctor.core.source import warn_skipped
+from odoo_doctor.core.source import is_scannable, warn_skipped
 
 
 @dataclass
@@ -129,6 +129,8 @@ def _written_fields(elem: etree._Element) -> frozenset[str] | None:
 
 def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
     """Extract all XML IDs from an Odoo data/view file."""
+    if not is_scannable(file_path):
+        return []
     try:
         tree = etree.parse(str(file_path))
     except etree.XMLSyntaxError:
@@ -201,6 +203,8 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
 
 def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
     """Extract view definitions (ir.ui.view records) with field/button references."""
+    if not is_scannable(file_path):
+        return []
     try:
         tree = etree.parse(str(file_path))
     except etree.XMLSyntaxError:

@@ -10,6 +10,7 @@ from pathlib import Path
 from lsprotocol import types as lsp
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable
 from odoo_doctor.rules.registry import default_registry
 
 SOURCE = "odoo-doctor"
@@ -106,6 +107,8 @@ def file_diagnostics(
 ) -> list[lsp.Diagnostic]:
     """LSP diagnostics for all findings in one file (reads the file for the ranges)."""
     try:
+        if not is_scannable(file_path):
+            raise OSError(file_path)
         text = Path(file_path).read_text(encoding="utf-8")
         lines = [line.rstrip("\r\n") for line in split_lines(text)]
     except (OSError, UnicodeDecodeError):

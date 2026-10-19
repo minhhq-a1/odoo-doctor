@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import ast
 import io
+import os
+import stat
 import tokenize
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
 
@@ -42,6 +45,52 @@ def warn_skipped(path: Path | str, reason: str, *, read_anyway: bool = False) ->
     if len(_skipped) <= _WARN_CAP:
         what = f"{key}: {reason}" if read_anyway else f"skipped {key}: {reason}"
         typer.echo(f"[WARN] {what}", err=True)
+
+
+# A scanned file larger than this is skipped with a warning; real addon sources are far smaller.
+MAX_FILE_BYTES = 16 * 1024 * 1024
+
+
+def is_scannable(path: Path | str, root: Path | str | None = None) -> bool:
+    """True when ``path`` is a regular file that is safe to open and read.
+
+    Looks at the type with ``os.stat`` *before* any ``open`` (opening a FIFO blocks
+    forever, ``/dev/zero`` never ends). A FIFO, device or socket, a file over
+    :data:`MAX_FILE_BYTES`, and (with ``root``) a symlink or ``..`` path that leaves
+    ``root`` are skipped with a :func:`warn_skipped` line. A directory or a missing or
+    broken path is skipped silently.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    if stat.S_ISDIR(st.st_mode):
+        return False
+    if not stat.S_ISREG(st.st_mode):
+        warn_skipped(path, "not a regular file")
+        return False
+    if st.st_size > MAX_FILE_BYTES:
+        warn_skipped(path, f"larger than {MAX_FILE_BYTES // 2**20} MiB")
+        return False
+    if root is not None and (os.path.islink(path) or ".." in Path(path).parts):
+        real_root = os.path.realpath(root)
+        try:
+            inside = (
+                os.path.commonpath([os.path.realpath(path), real_root]) == real_root
+            )
+        except ValueError:  # another drive (Windows)
+            inside = False
+        if not inside:
+            warn_skipped(path, "points outside the scanned directory")
+            return False
+    return True
+
+
+def scannable_files(root: Path, pattern: str = "*.py") -> Iterator[Path]:
+    """``root.rglob(pattern)`` limited to files :func:`is_scannable` accepts."""
+    for path in root.rglob(pattern):
+        if is_scannable(path, root):
+            yield path
 
 
 def flush_skipped() -> None:
@@ -115,19 +164,27 @@ def chain_too_long(source: str) -> bool:
 
 
 def _signature(path: Path) -> _Signature | None:
+    if not is_scannable(path):
+        return None
     try:
-        stat = path.stat()
+        st = path.stat()
     except OSError:
         return None
-    return (str(path), stat.st_mtime_ns, stat.st_size)
+    return (str(path), st.st_mtime_ns, st.st_size)
 
 
 @lru_cache(maxsize=_CACHE_SIZE)
 def _read(signature: _Signature) -> str | None:
     try:
-        return Path(signature[0]).read_text(encoding="utf-8", errors="replace")
+        # bounded even if the file grew or lies about its size since is_scannable
+        with open(signature[0], encoding="utf-8", errors="replace") as fh:
+            text = fh.read(MAX_FILE_BYTES + 1)
     except OSError:
         return None
+    if len(text) > MAX_FILE_BYTES:
+        warn_skipped(signature[0], f"larger than {MAX_FILE_BYTES // 2**20} MiB")
+        return None
+    return text
 
 
 @lru_cache(maxsize=_CACHE_SIZE)

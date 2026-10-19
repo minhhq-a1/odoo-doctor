@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable, scannable_files
 
 if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
@@ -28,7 +29,7 @@ def data_files(ctx: ModuleContext) -> list[Path]:
     seen, files = set(), []
     for name in names:
         path = ctx.path / name
-        if path.suffix == ".xml" and path.exists() and path not in seen:
+        if path.suffix == ".xml" and is_scannable(path, ctx.path) and path not in seen:
             seen.add(path)
             files.append(path)
     return files
@@ -37,7 +38,7 @@ def data_files(ctx: ModuleContext) -> list[Path]:
 def python_files(ctx: ModuleContext) -> list[Path]:
     """The module's Python source, without tests, migration scripts and static assets."""
     files = []
-    for path in sorted(ctx.path.rglob("*.py")):
+    for path in sorted(scannable_files(ctx.path)):
         below = path.relative_to(ctx.path).parts[:-1]
         if _SKIPPED_DIRS & set(below):
             continue
@@ -46,6 +47,8 @@ def python_files(ctx: ModuleContext) -> list[Path]:
 
 
 def parse_xml(path: Path) -> etree._ElementTree | None:
+    if not is_scannable(path):
+        return None
     try:
         return etree.parse(str(path))
     except (etree.XMLSyntaxError, OSError):

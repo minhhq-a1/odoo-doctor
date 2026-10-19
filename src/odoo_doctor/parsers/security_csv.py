@@ -8,7 +8,7 @@ import io
 from dataclasses import dataclass
 from pathlib import Path
 
-from odoo_doctor.core.source import warn_skipped
+from odoo_doctor.core.source import is_scannable, warn_skipped
 
 
 @dataclass
@@ -30,7 +30,7 @@ class AccessRule:
 
 def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
     """Parse an ir.model.access.csv file into AccessRule objects."""
-    if not file_path.exists():
+    if not is_scannable(file_path):
         return []
 
     rules: list[AccessRule] = []

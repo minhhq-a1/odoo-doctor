@@ -18,6 +18,8 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
+from odoo_doctor.core.source import is_scannable
+
 # Bump when the serialized Diagnostic payload schema changes. A mismatch makes
 # any older on-disk cache miss cleanly instead of raising on Diagnostic(**old).
 CACHE_VERSION = 3  # v2 adds suppression_stats, v3 adds python_lines
@@ -61,7 +63,9 @@ def project_fingerprint(
         if not root.exists():
             continue
         files = sorted(
-            p for p in root.rglob("*") if p.is_file() and p.suffix in _SCANNED_SUFFIXES
+            p
+            for p in root.rglob("*")
+            if p.suffix in _SCANNED_SUFFIXES and is_scannable(p)
         )
         for p in files:
             key = str(p.resolve())
