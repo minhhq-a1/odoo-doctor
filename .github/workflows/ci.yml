@@ -32,10 +32,31 @@ jobs:
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest
 
       - name: Run ruff
-        run: python -m ruff check src tests
+        run: python -m ruff check src tests scripts
 
       - name: Check formatting
-        run: python -m ruff format --check src tests
+        run: python -m ruff format --check src tests scripts
+
+  # The declared lower bounds are a promise; install exactly those (direct dependencies and
+  # the dev extra) on the oldest Python to keep them honest.
+  lowest-versions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Install the lowest supported dependency versions
+        run: |
+          python -m pip install --upgrade pip uv
+          uv pip install --system --resolution lowest-direct -e ".[dev]"
+
+      - name: Run tests
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest
 
   vscode-extension:
     runs-on: ${{ matrix.os }}

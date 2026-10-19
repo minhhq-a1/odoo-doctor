@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import csv
+import io
 from dataclasses import dataclass
 from pathlib import Path
+
+from odoo_doctor.core.source import warn_skipped
 
 
 @dataclass
@@ -31,9 +34,24 @@ def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
         return []
 
     rules: list[AccessRule] = []
-    with open(file_path, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        for lineno, row in enumerate(reader, start=2):
+    try:
+        raw = file_path.read_bytes()
+    except OSError:
+        return []
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        # a Latin-1 byte in one cell must not hide the whole file
+        warn_skipped(
+            file_path, "not UTF-8, read with replacement characters", read_anyway=True
+        )
+        text = raw.decode("utf-8-sig", errors="replace")
+    try:
+        for lineno, row in enumerate(
+            csv.DictReader(io.StringIO(text, newline="")), start=2
+        ):
+            # a short row leaves its missing cells as None, a long one adds a None key
+            row = {k: v for k, v in row.items() if k is not None and v is not None}
             raw_model_id = row.get("model_id:id", row.get("model_id/id", ""))
             model_id_module = module_name
             model_id = raw_model_id
@@ -55,6 +73,8 @@ def parse_access_csv(file_path: Path, module_name: str) -> list[AccessRule]:
                     line=lineno,
                 )
             )
+    except csv.Error as exc:
+        warn_skipped(file_path, f"malformed CSV after line {len(rules) + 1} ({exc})")
 
     return rules
 

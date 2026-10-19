@@ -11,13 +11,107 @@ rule on it), so memory stays flat however large the repository is.
 from __future__ import annotations
 
 import ast
+import io
+import tokenize
 from functools import lru_cache
 from pathlib import Path
+
+import typer
 
 # Enough for the file being scanned plus the few neighbours parsers touch in turn.
 _CACHE_SIZE = 16
 
 _Signature = tuple[str, int, int]
+
+# Skipped-input warnings: one stderr line per file (never stdout, the LSP speaks on it),
+# at most _WARN_CAP lines per scan, then one summary line from flush_skipped().
+_WARN_CAP = 20
+_skipped: set[str] = set()
+
+
+def warn_skipped(path: Path | str, reason: str, *, read_anyway: bool = False) -> None:
+    """Say once per scan, on stderr, that a file was skipped (or only partly read) and why.
+
+    Nothing is parsed on a ``--cache`` hit, so the warnings appear once per change of
+    the project; run without ``--cache`` to see them again.
+    """
+    key = str(path)
+    if key in _skipped:
+        return
+    _skipped.add(key)
+    if len(_skipped) <= _WARN_CAP:
+        what = f"{key}: {reason}" if read_anyway else f"skipped {key}: {reason}"
+        typer.echo(f"[WARN] {what}", err=True)
+
+
+def flush_skipped() -> None:
+    """End of a scan: summarise the warnings the cap held back."""
+    extra = len(_skipped) - _WARN_CAP
+    if extra > 0:
+        typer.echo(f"[WARN] ... and {extra} more skipped", err=True)
+
+
+def reset_skipped() -> None:
+    """Start of a scan (the CLI and the LSP's repeated scans share one process)."""
+    _skipped.clear()
+
+
+# shortcut: best effort, NOT a proof. CPython's AST conversion recurses once per link of a
+# left-nested chain (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`, `f(1)(2)...`, also inside
+# brackets). 3.10 segfaults at ~136k links (an uncatchable crash, measured for ~20 shapes);
+# 3.12+ raises RecursionError from ~10k, which _parse catches. A chain that long needs at
+# least ~270k chars, so only files of _GUARD_MIN_SIZE chars are tokenized, and one chain
+# (counted per bracket depth, reset by `, ; = :` at that depth) over _MAX_CHAIN links
+# (2.7x below the crash) is skipped. On Python < 3.12 an f-string is one STRING token, so
+# its operator characters are counted as a whole. Known residual risk: a shape this count
+# does not model (found by a new fuzz, an exotic token mix) can still crash 3.10.
+_GUARD_MIN_SIZE = 100_000
+_MAX_CHAIN = 50_000
+_CHAIN_OPS = frozenset(
+    ("+", "-", "*", "/", "//", "%", "@", "|", "&", "^", "<<", ">>", "**", ".")
+)
+_OPENERS = frozenset("([{")
+_CLOSERS = frozenset(")]}")
+_RESETS = frozenset((",", ";", "=", ":"))
+_FSTRING_OP_CHARS = "+-*/.([|&^%@<>"
+
+
+def chain_too_long(source: str) -> bool:
+    """True when one expression chains more than _MAX_CHAIN links (see above)."""
+    if len(source) < _GUARD_MIN_SIZE:
+        return False
+    depth = [0]  # chain links seen so far at each open bracket depth
+    prev = ""
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            kind, text = tok.type, tok.string
+            if kind == tokenize.NEWLINE:
+                depth = [0]
+            elif kind == tokenize.STRING:
+                head = text[:3].lower()
+                if (
+                    "f" in head.split('"')[0].split("'")[0]
+                    and sum(map(text.count, _FSTRING_OP_CHARS)) > _MAX_CHAIN
+                ):
+                    return True
+            elif kind == tokenize.OP:
+                if text in _OPENERS:
+                    if text != "{" and prev in (")", "]"):
+                        depth[-1] += 1  # f(..)(..) / a[..][..]: one more link
+                    depth.append(0)
+                elif text in _CLOSERS:
+                    if len(depth) > 1:
+                        depth.pop()
+                elif text in _RESETS:
+                    depth[-1] = 0
+                elif text in _CHAIN_OPS:
+                    depth[-1] += 1
+                if depth[-1] > _MAX_CHAIN:
+                    return True
+            prev = text
+    except (tokenize.TokenError, SyntaxError):
+        return False  # let ast.parse report it
+    return False
 
 
 def _signature(path: Path) -> _Signature | None:
@@ -41,9 +135,15 @@ def _parse(signature: _Signature) -> ast.Module | None:
     source = _read(signature)
     if source is None:
         return None
+    if chain_too_long(source):
+        warn_skipped(signature[0], "expression too long to parse safely")
+        return None
     try:
         return ast.parse(source)
-    except (SyntaxError, ValueError):
+    except SyntaxError:
+        return None  # a known-bad user file: stay quiet
+    except (ValueError, RecursionError, MemoryError) as exc:
+        warn_skipped(signature[0], f"cannot parse ({type(exc).__name__})")
         return None
 
 

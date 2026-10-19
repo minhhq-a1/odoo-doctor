@@ -33,7 +33,9 @@ def addons_found(root: Path) -> bool:
     """
     root = Path(root).resolve()
     cfg = load_config(root)
-    return bool(discover_addons([(root / p).resolve() for p in cfg.addons_paths]))
+    return bool(
+        discover_addons([(root / p).resolve() for p in cfg.addons_paths], warn=False)
+    )
 
 
 def scan_project(root: Path) -> dict[str, list[Diagnostic]]:

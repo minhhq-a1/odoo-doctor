@@ -22,6 +22,72 @@ All notable changes to Odoo Doctor are documented here.
   manifest version is not a recognised `NN.0`), so without `--odoo-version` a module declaring `17.0.x`
   shows an empty report and a stderr warning says so.
 
+### Security
+
+- `raw-sql-string-interpolation` had four gaps. (1) `SQL(f"...{x}")`, `SQL("..." + x)`,
+  `SQL("...".format(x))` and `SQL("..." % x)` were treated as safe; only `SQL("... %s", x)` with separate
+  parameters (or a constant) is safe now. (2) Cursors from `request.env.cr`, `request.cr`,
+  `registry.cursor()`, `self.pool.cursor()` (including `with ... as cur` and `cur = ...cursor()`) were not
+  recognised, so controllers were missed. (3) `.format()` into `DROP`, `ALTER`, `TRUNCATE`, `WITH`,
+  `GRANT`, `COPY` and other statements was ignored. (4) Taint was lost through tuple unpacking
+  (`a, b = x, y`) and the walrus operator. New findings may appear, all `high`: on Odoo core 19 one more
+  (`l10n_in`, 11 -> 12), on core 17 scanned as 19 four more (43 -> 47: `crm`, `web` domain controller,
+  `website_sale`); the SKW project is unchanged. These are interpolations of ORM-built fragments or
+  internal constants, the same shape as the 11 `high` findings core 19 already had.
+  `SQL(query=f"...")` is now examined like the positional form. Known limits, also in the rule docs: an
+  import alias of `SQL` (`from odoo.tools import SQL as S`) is not followed, and a statement that starts
+  with a SQL comment defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics.
+- The Pylint-Odoo adapter no longer lets the scanned repo run code. Pylint executes the `init-hook` of
+  a `.pylintrc`, `pylintrc` or `pyproject.toml` it finds from its working directory, so scanning an
+  untrusted repo (CI, editor language server) could run its code. Pylint now runs with an empty
+  `--rcfile`, from a temporary directory, with a minimal environment (no tokens, no `PYTHONPATH`).
+  Repo-level pylint configuration is ignored; the adapter is still switched on or off with
+  `[adapters] pylint_odoo` in `odoo-doctor.toml`.
+  If you had disabled pylint messages in a repo `.pylintrc`, move them to `[ignore] rules` in
+  `odoo-doctor.toml`.
+- Python files whose name starts with `__` were never scanned: `__init__.py` (install hooks such as
+  `post_init_hook` run with full access) and any file renamed `__foo.py` hid its findings. Only
+  `__manifest__.py` is skipped now (in the scanner, the module graph and the Odoo-source index). New
+  findings may appear: on Odoo core 19 the scan adds 11 (4 `high` loop rules in install hooks such as
+  `l10n_ch`, 7 `low` `sudo-without-comment`); on core 17 scanned as 19, 23 (including 6 `medium`
+  `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged. The largest score drop seen is `project_timesheet_holidays` in Odoo core 19 (94.7 -> 89.9).
+
+### Fixed
+
+- Packaging: the `typer>=0.12` lower bound was wrong. Older Typer releases crash on current Click
+  (`TypeError: Secondary flag is not valid for non-boolean flag`) or fail on `scan --help`; the
+  bound is now `typer>=0.16`. A CI job (`lowest-versions`) installs the lowest allowed versions
+  of every direct dependency on Python 3.10 and runs the test suite.
+- Publishing: `publish.yml` uploaded to PyPI without checking anything. It now runs the tests and
+  ruff, checks that the tag is `vX.Y.Z` and equals `pyproject.toml` and `odoo_doctor.__version__`
+  (`scripts/check_release_version.py`), and installs the built wheel in a clean virtual
+  environment to run `odoo-doctor --version` and a scan, before the upload. Run manually, the
+  workflow must be started from a tag.
+- The sdist no longer contains `editors/vscode/README.md` and `editors/vscode/LICENSE` (the
+  `include` patterns are anchored), and the empty `wheel.shared-data` table with its wrong
+  comment is gone. The wheel is unchanged.
+- One bad input file no longer aborts a scan. A manifest with an unhashable key or a non-list
+  `depends`/`data`, an XML file declared UTF-8 but holding other bytes, a Python file too deep for the
+  parser (`RecursionError`/`MemoryError`), and an `ir.model.access.csv` that is not UTF-8 or has short
+  rows are skipped (or read leniently) and the other files are still reported. Addon names, rule names
+  and paths containing `[` or `]` are escaped in the terminal report instead of being mangled.
+- A manifest `version` that is not a string, or `external_dependencies` of the wrong shape, no longer
+  aborts the scan (the value is ignored).
+- A skipped input is no longer silent: one `[WARN] skipped <file>: <reason>` line on stderr per file
+  (stdout is untouched, at most 20 lines per scan then `... and N more skipped`, exit codes unchanged) for
+  an unparseable manifest, XML that cannot be read, a non-UTF-8 `ir.model.access.csv`, and a Python file
+  the parser cannot handle. A plain `SyntaxError` in a user file stays quiet. Nothing is parsed on a
+  `--cache` hit, so the warnings appear once per change of the project; run without `--cache` to see
+  them again.
+- Python 3.10 crashed the interpreter (segmentation fault, nothing catchable) on a file holding one
+  expression chained over ~136,000 links (`1 + 1 + ...`, `a.b.b...`, `a[0][0]...`, `f(1,2)(3)...`,
+  `a[1:2][1:2]...`, the same inside brackets or in an f-string). The scanner now skips, with a warning, a
+  file of at least 100,000 characters that chains more than 50,000 links in one expression (Python
+  files, manifests, the Odoo-source index and the manifest fixers). This is a best-effort guard, not a
+  proof: it models the chain shapes measured on 3.10 (about 20) and a shape it does not model could
+  still crash 3.10; 3.12+ raises a catchable `RecursionError` instead. Non-regular files (FIFOs) are not
+  covered.
+
 ## [0.10.2] — 2026-10-17
 
 ### Added

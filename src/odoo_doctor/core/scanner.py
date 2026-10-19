@@ -27,7 +27,7 @@ from odoo_doctor.core.pipeline import (
 )
 from odoo_doctor.core.roi import rank_fixes
 from odoo_doctor.core.scoring import CATEGORIES, score_diagnostics
-from odoo_doctor.core.source import clear_source_cache
+from odoo_doctor.core.source import clear_source_cache, flush_skipped, reset_skipped
 from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
@@ -182,6 +182,7 @@ def collect_scores(
 
     from odoo_doctor.core.cache import project_fingerprint
 
+    reset_skipped()  # skipped-file warnings are per scan
     fingerprint: str | None = None
     if cache is not None and changed_files is None:
         ruleset = tuple(
@@ -260,7 +261,7 @@ def collect_scores(
         if not enabled:
             continue
         for py_file in ctx.path.rglob("*.py"):
-            if py_file.name.startswith("__"):
+            if py_file.name == "__manifest__.py":
                 continue
             if (
                 changed_files is not None
@@ -369,4 +370,5 @@ def collect_scores(
             python_lines.get(module_name, 0),
         )
 
+    flush_skipped()  # after every stage that can skip a file
     return diags, scores

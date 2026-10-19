@@ -1083,7 +1083,7 @@ def _warn_if_no_addons(addons_paths: list[Path], path_arg: str | None) -> None:
     """
     from odoo_doctor.discovery.addons import discover_addons
 
-    if discover_addons(addons_paths):
+    if discover_addons(addons_paths, warn=False):
         return
     shown = ", ".join(str(p) for p in addons_paths) or "(none)"
     if path_arg is not None:

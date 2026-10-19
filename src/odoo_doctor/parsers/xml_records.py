@@ -9,6 +9,8 @@ from pathlib import Path
 
 from lxml import etree
 
+from odoo_doctor.core.source import warn_skipped
+
 
 @dataclass
 class XmlIdInfo:
@@ -131,6 +133,9 @@ def parse_xml_records(file_path: Path, module_name: str) -> list[XmlIdInfo]:
         tree = etree.parse(str(file_path))
     except etree.XMLSyntaxError:
         return []
+    except OSError:
+        warn_skipped(file_path, "not readable as XML (encoding?)")
+        return []
 
     root = tree.getroot()
     records: list[XmlIdInfo] = []
@@ -199,6 +204,9 @@ def parse_views(file_path: Path, module_name: str) -> list[ViewInfo]:
     try:
         tree = etree.parse(str(file_path))
     except etree.XMLSyntaxError:
+        return []
+    except OSError:
+        warn_skipped(file_path, "not readable as XML (encoding?)")
         return []
 
     root = tree.getroot()

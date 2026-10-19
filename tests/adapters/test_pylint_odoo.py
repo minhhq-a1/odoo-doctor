@@ -129,3 +129,73 @@ def test_pylint_adapter_keeps_findings_on_nonzero_exit(monkeypatch, tmp_path: Pa
     diags = adapter.run(tmp_path, "17.0")
     assert len(diags) == 1
     assert diags[0].rule == "E8102"
+
+
+def _addon_with_hostile_pylintrc(root: Path) -> tuple[Path, Path]:
+    """An addon whose repo ships an inert init-hook that would write a marker."""
+    marker = root / "MARKER"
+    repo = root / "repo"
+    mod = repo / "m"
+    mod.mkdir(parents=True)
+    (mod / "__manifest__.py").write_text("{'name': 'm'}\n")
+    (mod / "__init__.py").write_text("")
+    hook = f"open({str(marker)!r}, 'w').write('x')"
+    (repo / ".pylintrc").write_text(f"[MAIN]\ninit-hook={hook}\n")
+    (repo / "pyproject.toml").write_text(f'[tool.pylint.main]\ninit-hook = "{hook}"\n')
+    return repo, marker
+
+
+def test_pylint_command_ignores_repo_config(tmp_path: Path, monkeypatch):
+    import odoo_doctor.adapters.pylint_odoo.adapter as mod
+
+    repo, _ = _addon_with_hostile_pylintrc(tmp_path)
+    seen: dict = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"], seen["kw"] = cmd, kw
+        seen["rc_existed"] = Path(
+            next(a for a in cmd if a.startswith("--rcfile=")).split("=", 1)[1]
+        ).is_file()
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setenv("GH_TOKEN", "secret")
+    monkeypatch.setenv("PYTHONPATH", str(repo))
+    monkeypatch.setenv("PYLINTRC", str(repo / ".pylintrc"))
+    monkeypatch.setenv("HOME", str(repo))
+    monkeypatch.setattr(mod.shutil, "which", lambda _n: "/usr/bin/pylint")
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    monkeypatch.chdir(repo)
+    PylintOdooAdapter().run(repo / "m", "17.0")
+
+    rc = next(a for a in seen["cmd"] if a.startswith("--rcfile="))
+    assert seen["rc_existed"]
+    assert not Path(rc.split("=", 1)[1]).resolve().is_relative_to(repo.resolve())
+    assert not Path(seen["kw"]["cwd"]).resolve().is_relative_to(repo.resolve())
+    env = seen["kw"]["env"]
+    assert "GH_TOKEN" not in env and "PYTHONPATH" not in env and "PYLINTRC" not in env
+    assert not Path(env["HOME"]).resolve().is_relative_to(repo.resolve())
+    assert Path(seen["cmd"][-1]).is_absolute()
+
+
+def test_pylint_does_not_execute_repo_init_hook(tmp_path: Path, monkeypatch):
+    import shutil
+
+    import pytest
+
+    exe = shutil.which("pylint")
+    probe = (
+        subprocess.run(
+            [exe, "--load-plugins=pylint_odoo", "--version"],
+            capture_output=True,
+            check=False,
+        )
+        if exe
+        else None
+    )
+    if probe is None or probe.returncode != 0:
+        pytest.skip("pylint with pylint_odoo is not installed")
+    repo, marker = _addon_with_hostile_pylintrc(tmp_path)
+    monkeypatch.chdir(repo)
+    diags = PylintOdooAdapter().run((repo / "m").resolve(), "17.0")
+    assert not marker.exists()
+    assert any(not d.rule.startswith("adapter-") for d in diags)

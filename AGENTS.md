@@ -194,7 +194,7 @@ chore(release): bump version to 0.3.0
 2. Update the `CHANGELOG.md` with release notes.
 3. Commit and merge to `main`.
 4. Create and push a new Git tag (e.g., `git tag v0.10.2 && git push origin v0.10.2`).
-5. Create a GitHub Release. The `.github/workflows/publish.yml` action will automatically build and publish the wheel to PyPI via Trusted Publishing.
+5. Create a GitHub Release. The `.github/workflows/publish.yml` action runs the tests, checks that the tag equals the package version, smoke-tests the wheel, and only then builds and publishes the wheel to PyPI via Trusted Publishing.
 6. Publish the VS Code extension (`MinhHong.odoo-doctor`, same version) from `main`: `cd editors/vscode && npm ci && npx vsce publish` with the publisher's token, or upload the `.vsix` from `npm run package` at https://marketplace.visualstudio.com/manage/publishers/MinhHong. This step is manual.
 
 ---

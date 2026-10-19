@@ -7,6 +7,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from odoo_doctor.core.source import chain_too_long, read_source
 from odoo_doctor.parsers.python_models import parse_models
 
 
@@ -47,21 +48,27 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
         module_name = addon_dir.name
         manifest_file = addon_dir / "__manifest__.py"
 
+        manifest_src = read_source(manifest_file)
+        if manifest_src is None or chain_too_long(manifest_src):
+            continue
         try:
-            _manifest = ast.literal_eval(manifest_file.read_text(encoding="utf-8"))
+            _manifest = ast.literal_eval(manifest_src)
         except Exception:  # noqa: BLE001, S112 - skip unparsable files
             continue
 
         if not isinstance(_manifest, dict):
             continue
 
-        module_depends[module_name] = [
-            str(dep) for dep in _manifest.get("depends", []) or []
-        ]
+        depends = _manifest.get("depends")
+        module_depends[module_name] = (
+            [str(dep) for dep in depends if isinstance(dep, str)]
+            if isinstance(depends, (list, tuple))
+            else []
+        )
 
         # 1. Parse models
         for py_file in addon_dir.rglob("*.py"):
-            if py_file.name.startswith("__"):
+            if py_file.name == "__manifest__.py":
                 continue
             try:
                 for m in parse_models(py_file):

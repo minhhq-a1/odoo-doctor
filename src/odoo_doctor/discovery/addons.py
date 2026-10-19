@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from odoo_doctor.core.source import read_source
+from odoo_doctor.core.source import chain_too_long, read_source, warn_skipped
 
 
 @dataclass
@@ -21,6 +21,7 @@ class AddonInfo:
 def discover_addons(
     addons_paths: list[Path],
     target_modules: list[str] | None = None,
+    warn: bool = True,
 ) -> list[AddonInfo]:
     """Find all installable addons under the given paths."""
     found: list[AddonInfo] = []
@@ -31,7 +32,7 @@ def discover_addons(
         # Check if base itself is an addon
         manifest_file = base / "__manifest__.py"
         if manifest_file.exists():
-            _try_add(base, manifest_file, target_modules, found)
+            _try_add(base, manifest_file, target_modules, found, warn)
             continue
         # Otherwise scan children
         for child in sorted(base.iterdir()):
@@ -39,7 +40,7 @@ def discover_addons(
                 continue
             mf = child / "__manifest__.py"
             if mf.exists():
-                _try_add(child, mf, target_modules, found)
+                _try_add(child, mf, target_modules, found, warn)
 
     return found
 
@@ -49,16 +50,27 @@ def _try_add(
     manifest_file: Path,
     target_modules: list[str] | None,
     out: list[AddonInfo],
+    warn: bool = True,
 ) -> None:
     source = read_source(manifest_file)
     if source is None:
         return
+    if chain_too_long(source):
+        if warn:
+            warn_skipped(manifest_file, "expression too long to parse safely")
+        return
     try:
         manifest = ast.literal_eval(source)
-    except (SyntaxError, ValueError, RecursionError):
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError) as exc:
+        if warn:
+            warn_skipped(
+                manifest_file, f"manifest cannot be parsed ({type(exc).__name__})"
+            )
         return
 
     if not isinstance(manifest, dict):
+        if warn:
+            warn_skipped(manifest_file, "manifest is not a dict")
         return
     if not manifest.get("installable", True):
         return

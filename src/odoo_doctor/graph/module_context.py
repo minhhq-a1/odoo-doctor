@@ -157,7 +157,7 @@ def build_project_graph(
         models: dict[str, ModelInfo] = {}
         controllers: list[ControllerInfo] = []
         for py_file in addon.path.rglob("*.py"):
-            if py_file.name.startswith("__"):
+            if py_file.name == "__manifest__.py":
                 continue
             for m in parse_models(py_file):
                 m.module = addon.name
