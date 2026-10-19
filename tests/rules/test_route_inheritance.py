@@ -267,3 +267,71 @@ def test_a_written_auth_stays_high_and_an_inherited_one_is_graded_lower(tmp_path
     )
     diags = check_public_controller_sudo_in_module(modules["child"])
     assert sorted(d.confidence for d in diags) == ["high", "medium"]
+
+
+def _addons(tmp_path: Path, codes: dict[str, str]):
+    """One addon per entry, each depending on the ones before it; ``controllers/main.py``."""
+    done: list[str] = []
+    for name, code in codes.items():
+        addon = tmp_path / name
+        (addon / "controllers").mkdir(parents=True)
+        (addon / "__manifest__.py").write_text(
+            repr({"name": name, "version": "19.0.1.0.0", "depends": list(done)})
+        )
+        (addon / "controllers" / "main.py").write_text(HEAD + dedent(code))
+        done.append(name)
+    return build_project_graph([tmp_path], odoo_version="19.0").modules
+
+
+OVERRIDE_UNSCANNED = """\
+    from odoo.addons.website_sale.controllers.main import WebsiteSale
+
+    class WebsiteSale(WebsiteSale):
+        @http.route()
+        def shop(self):
+            return request.env["x"].sudo().browse(1).name
+    """
+
+
+def test_same_named_overrides_of_an_unscanned_parent_stay_unknown(tmp_path: Path):
+    modules = _addons(tmp_path, {"one": OVERRIDE_UNSCANNED, "two": OVERRIDE_UNSCANNED})
+    for name in ("one", "two"):
+        (ctrl,) = modules[name].controllers
+        assert ctrl.auth == "unknown"
+        (diag,) = check_public_controller_sudo_in_module(modules[name])
+        assert diag.confidence == "medium"
+
+
+def test_a_cycle_of_two_classes_is_unknown_for_both(tmp_path: Path):
+    auth = _auth(
+        tmp_path,
+        """\
+        class A(B):
+            @http.route()
+            def index(self): ...
+
+        class B(A):
+            @http.route()
+            def index(self): ...
+        """,
+    )
+    assert auth == {"index": "unknown"}
+    f = tmp_path / "c.py"
+    assert [c.auth for c in parse_controllers(f)] == ["unknown", "unknown"]
+
+
+def test_same_named_overrides_of_a_scanned_public_root_stay_public(tmp_path: Path):
+    override = """\
+        from odoo.addons.root.controllers.main import Base
+
+        class Base(Base):
+            @http.route()
+            def pub(self):
+                return request.env["x"].sudo().browse(1).name
+        """
+    modules = _addons(tmp_path, {"root": BASE, "one": override, "two": override})
+    for name in ("one", "two"):
+        (ctrl,) = modules[name].controllers
+        assert ctrl.auth == "public"
+        (diag,) = check_public_controller_sudo_in_module(modules[name])
+        assert diag.confidence == "medium"  # inherited, not written on the route

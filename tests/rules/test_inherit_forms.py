@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import odoo_doctor.cli.app  # noqa: F401  (registers the rules)
+from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.parsers.python_models import parse_models
 from odoo_doctor.rules.xml.view_field_not_in_model import check_view_field_not_in_model
 from tests.rules._module import module_ctx, view
@@ -111,3 +112,79 @@ def test_parents_that_cannot_be_resolved_never_report_a_field_missing(
         + f"class C(models.Model):\n    _name = 'x.c'\n    _inherit = {inherit}\n"
     )
     assert _unknown_fields(tmp_path, code, ["ghost"], "x.c") == []
+
+
+BASE_MODEL = (
+    HEAD + "class B(models.Model):\n    _name = 'x.base'\n    name = fields.Char()\n"
+)
+
+
+def _project(tmp_path: Path, ext_model: str, fields: list[str]):
+    """Addon ``a`` defines x.base; addon ``b`` extends it from another module and
+    declares a view on x.base that uses ``fields``. Returns the unknown field names."""
+    arch = "<form>" + "".join(f'<field name="{f}"/>\n' for f in fields) + "</form>"
+    for name, depends, files in (
+        ("a", [], {"models/m.py": BASE_MODEL}),
+        (
+            "b",
+            ["a"],
+            {
+                "models/m.py": HEAD + ext_model,
+                "views/v.xml": view(arch, model="x.base"),
+            },
+        ),
+    ):
+        addon = tmp_path / name
+        for rel, text in files.items():
+            (addon / rel).parent.mkdir(parents=True, exist_ok=True)
+            (addon / rel).write_text(text)
+        (addon / "__manifest__.py").write_text(
+            repr(
+                {
+                    "name": name,
+                    "version": "17.0.1.0.0",
+                    "depends": depends,
+                    "data": ["views/v.xml"] if name == "b" else [],
+                }
+            )
+        )
+    ctx = build_project_graph([tmp_path], odoo_version="17.0").modules["b"]
+    return [d.title.split("'")[1] for d in check_view_field_not_in_model(ctx)]
+
+
+@pytest.mark.parametrize(
+    "inherit", ["['x.base', 'mail.thread']", "('x.base', 'mail.thread')"]
+)
+def test_a_mixin_added_by_an_extension_in_another_module_resolves(
+    tmp_path: Path, inherit: str
+):
+    ext = (
+        f"class E(models.Model):\n    _inherit = {inherit}\n    added = fields.Char()\n"
+    )
+    assert _project(tmp_path, ext, ["name", "added", "message_ids"]) == []
+
+
+def test_an_extension_with_a_computed_parent_list_leaves_the_model_unresolved(
+    tmp_path: Path,
+):
+    ext = (
+        "MIX = ['mail.thread']\n\n\n"
+        "class E(models.Model):\n    _inherit = ['x.base'] + MIX\n"
+        "    added = fields.Char()\n"
+    )
+    assert _project(tmp_path, ext, ["name", "added", "ghost"]) == []
+
+
+def test_an_extension_that_names_no_model_does_not_lose_its_fields(tmp_path: Path):
+    ext = (
+        "MIX = ['x.base']\n\n\n"
+        "class E(models.Model):\n    _inherit = MIX\n    added = fields.Char()\n"
+    )
+    assert _project(tmp_path, ext, ["name", "added"]) == []
+
+
+def test_a_field_that_nothing_declares_is_still_reported(tmp_path: Path):
+    ext = (
+        "class E(models.Model):\n    _inherit = ['x.base']\n    added = fields.Char()\n"
+    )
+    assert _project(tmp_path, ext, ["name", "added", "ghost"]) == ["ghost"]
