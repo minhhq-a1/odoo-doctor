@@ -78,7 +78,8 @@ def test_xml_declared_utf8_with_latin1_bytes(tmp_path: Path):
     )
     rules, warns = _scan(tmp_path)
     assert "eval-usage" in rules
-    assert len(warns) == 1 and "v.xml" in warns[0]
+    # lxml 5.0 (libxml2 of that wheel) tolerates the stray byte, newer lxml raises: warn at most once
+    assert len(warns) <= 1 and all("v.xml" in w for w in warns)
 
 
 def test_python_file_too_deep_for_the_parser(tmp_path: Path):
