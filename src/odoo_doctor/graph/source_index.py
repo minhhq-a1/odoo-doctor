@@ -61,7 +61,7 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
 
         # 1. Parse models
         for py_file in addon_dir.rglob("*.py"):
-            if py_file.name.startswith("__"):
+            if py_file.name == "__manifest__.py":
                 continue
             try:
                 for m in parse_models(py_file):

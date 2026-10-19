@@ -220,7 +220,7 @@ def collect_scores(
         if not enabled:
             continue
         for py_file in ctx.path.rglob("*.py"):
-            if py_file.name.startswith("__"):
+            if py_file.name == "__manifest__.py":
                 continue
             if (
                 changed_files is not None

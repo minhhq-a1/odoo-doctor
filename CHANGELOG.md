@@ -14,6 +14,12 @@ All notable changes to Odoo Doctor are documented here.
   `--rcfile`, from a temporary directory, with a minimal environment (no tokens, no `PYTHONPATH`).
   Repo-level pylint configuration is ignored; the adapter is still switched on or off with
   `[adapters] pylint_odoo` in `odoo-doctor.toml`.
+- Python files whose name starts with `__` were never scanned: `__init__.py` (install hooks such as
+  `post_init_hook` run with full access) and any file renamed `__foo.py` hid its findings. Only
+  `__manifest__.py` is skipped now (in the scanner, the module graph and the Odoo-source index). New
+  findings may appear: on Odoo core 19 the scan adds 11 (4 `high` loop rules in install hooks such as
+  `l10n_ch`, 7 `low` `sudo-without-comment`); on core 17 scanned as 19, 23 (including 6 `medium`
+  `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged.
 
 ## [0.10.2] — 2026-10-17
 
