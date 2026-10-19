@@ -8,6 +8,14 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Security
 
+- `fix --fix` and discovery no longer follow a symlinked `__manifest__.py` (or any fixed file) out of the
+  scanned directory: it is skipped with one warning and never read as a manifest or written. An absolute
+  path in a manifest `data` list that points outside the addon is skipped too.
+- `scan --cache` no longer trusts `.odoo_doctor_cache/` in the scanned repo: a FIFO there hung the scan, and a
+  symlinked cache file or directory let the cache write overwrite a file elsewhere. The cache is read only
+  if it is a regular file inside the repo and is written through a temporary file plus rename.
+- Files are opened non-blocking and re-checked on the open descriptor, closing the gap between the file-type
+  check and the read.
 - A scan no longer blocks or exhausts memory on a special or huge file in the scanned repo. A FIFO
   named `*.py` (opening it blocks forever), a symlink to `/dev/zero` or to a FIFO, and a file over
   16 MiB are now skipped with one `[WARN] skipped <file>: ...` line on stderr; only regular files

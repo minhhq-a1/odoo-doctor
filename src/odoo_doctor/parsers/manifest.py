@@ -42,7 +42,7 @@ def parse_manifest(addon_path: Path) -> ManifestData | None:
     if not manifest_file.exists():
         return None
 
-    source = read_source(manifest_file)
+    source = read_source(manifest_file, addon_path)
     if source is None:
         return None
     if chain_too_long(source):

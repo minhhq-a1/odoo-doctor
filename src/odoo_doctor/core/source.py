@@ -72,18 +72,30 @@ def is_scannable(path: Path | str, root: Path | str | None = None) -> bool:
     if st.st_size > MAX_FILE_BYTES:
         warn_skipped(path, f"larger than {MAX_FILE_BYTES // 2**20} MiB")
         return False
-    if root is not None and (os.path.islink(path) or ".." in Path(path).parts):
-        real_root = os.path.realpath(root)
-        try:
-            inside = (
-                os.path.commonpath([os.path.realpath(path), real_root]) == real_root
-            )
-        except ValueError:  # another drive (Windows)
-            inside = False
-        if not inside:
-            warn_skipped(path, "points outside the scanned directory")
-            return False
+    if root is not None and not path_within(path, root):
+        warn_skipped(path, "points outside the scanned directory")
+        return False
     return True
+
+
+def path_within(path: Path | str, root: Path | str) -> bool:
+    """True when ``path`` (symlinks resolved) lies inside ``root`` (symlinks resolved).
+
+    Lexically inside and no symlink or ``..`` involved is the cheap common case; an
+    absolute path outside ``root`` (``root / "/etc/x"``) takes the resolving branch.
+    """
+    try:
+        if (
+            not os.path.islink(path)
+            and ".." not in Path(path).parts
+            and os.path.commonpath([os.path.abspath(path), os.path.abspath(root)])
+            == os.path.abspath(root)
+        ):
+            return True
+        real_root = os.path.realpath(root)
+        return os.path.commonpath([os.path.realpath(path), real_root]) == real_root
+    except ValueError:  # another drive (Windows)
+        return False
 
 
 def scannable_files(root: Path, pattern: str = "*.py") -> Iterator[Path]:
@@ -181,8 +193,8 @@ def chain_too_long(source: str) -> bool:
     return False
 
 
-def _signature(path: Path) -> _Signature | None:
-    if not is_scannable(path):
+def _signature(path: Path, root: Path | None = None) -> _Signature | None:
+    if not is_scannable(path, root):
         return None
     try:
         st = path.stat()
@@ -191,11 +203,44 @@ def _signature(path: Path) -> _Signature | None:
     return (str(path), st.st_mtime_ns, st.st_size)
 
 
+def _open_regular(path: str) -> int | None:
+    """A read descriptor, or None when ``path`` is not (any longer) a regular file.
+
+    ``is_scannable`` and the read are two steps: a file swapped for a FIFO in between
+    would block ``open``. Opening non-blocking and checking ``fstat`` on the descriptor
+    closes that window.
+    """
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    if stat.S_ISREG(os.fstat(fd).st_mode):
+        return fd
+    os.close(fd)
+    warn_skipped(path, "not a regular file")
+    return None
+
+
+def read_bytes(path: Path | str, root: Path | str | None = None) -> bytes | None:
+    """The bytes of a regular file up to :data:`MAX_FILE_BYTES`, else None (never blocks)."""
+    if not is_scannable(path, root):
+        return None
+    try:
+        fd = _open_regular(str(path))
+        if fd is None:
+            return None
+        with os.fdopen(fd, "rb") as fh:
+            data = fh.read(MAX_FILE_BYTES + 1)
+    except OSError:
+        return None
+    return data if len(data) <= MAX_FILE_BYTES else None
+
+
 @lru_cache(maxsize=_CACHE_SIZE)
 def _read(signature: _Signature) -> str | None:
     try:
+        fd = _open_regular(signature[0])
+        if fd is None:
+            return None
         # bounded even if the file grew or lies about its size since is_scannable
-        with open(signature[0], encoding="utf-8", errors="replace") as fh:
+        with os.fdopen(fd, encoding="utf-8", errors="replace") as fh:
             text = fh.read(MAX_FILE_BYTES + 1)
     except OSError:
         return None
@@ -222,14 +267,15 @@ def _parse(signature: _Signature) -> ast.Module | None:
         return None
 
 
-def read_source(path: Path) -> str | None:
+def read_source(path: Path, root: Path | None = None) -> str | None:
     """Read a text file for static analysis without ever raising on content.
 
     Decodes as UTF-8 with undecodable bytes replaced (U+FFFD), so a non-UTF-8
     file never raises UnicodeDecodeError. Returns None only when the file
-    cannot be read at all (OSError), so callers skip it instead of aborting.
+    cannot be read at all (OSError), so callers skip it instead of aborting. With
+    ``root`` a path that resolves outside it (a symlinked manifest) is skipped too.
     """
-    signature = _signature(Path(path))
+    signature = _signature(Path(path), root)
     return None if signature is None else _read(signature)
 
 

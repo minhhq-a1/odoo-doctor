@@ -48,7 +48,7 @@ def build_source_index(source_path: Path | str | None) -> SourceIndex:
         module_name = addon_dir.name
         manifest_file = addon_dir / "__manifest__.py"
 
-        manifest_src = read_source(manifest_file)
+        manifest_src = read_source(manifest_file, addon_dir)
         if manifest_src is None or chain_too_long(manifest_src):
             continue
         try:

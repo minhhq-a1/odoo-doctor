@@ -495,7 +495,11 @@ def fix_cmd(
         meta.name for meta, _ in default_registry.get_rules() if meta.fixable
     }
     result, originals = compute_fixes(
-        diags, fixable_rules, default_fixers, root=config_root
+        diags,
+        fixable_rules,
+        default_fixers,
+        root=config_root,
+        allowed_roots=addons_paths,
     )
 
     if dry_run:

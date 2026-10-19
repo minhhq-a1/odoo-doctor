@@ -15,6 +15,7 @@ provable correctness (no stale cross-module findings).
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -27,7 +28,12 @@ from importlib.metadata import PackageNotFoundError, packages_distributions
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
-from odoo_doctor.core.source import is_scannable
+from odoo_doctor.core.source import (
+    is_scannable,
+    path_within,
+    read_bytes,
+    warn_skipped,
+)
 
 # Bump when the serialized Diagnostic payload schema changes. A mismatch makes
 # any older on-disk cache miss cleanly instead of raising on Diagnostic(**old).
@@ -203,9 +209,16 @@ class ScanCache:
         return self.cache_dir / _CACHE_FILE
 
     def load(self) -> None:
+        # the cache lives in the scanned repo: a FIFO, a huge file or a symlink out of
+        # the repo there is not read
+        raw = read_bytes(self._path, self.cache_dir.parent)
+        if raw is None:
+            return
         try:
-            data = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = json.loads(raw.decode("utf-8"))
+        except ValueError:  # includes UnicodeDecodeError
+            return
+        if not isinstance(data, dict):
             return
         if data.get("cache_version") != CACHE_VERSION:
             return  # schema changed -> ignore stale cache
@@ -218,20 +231,37 @@ class ScanCache:
     def save(self) -> None:
         if self._fp is None:
             return
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps(
-                {
-                    "cache_version": CACHE_VERSION,
-                    "fp": self._fp,
-                    "diagnostics": self._diagnostics or [],
-                    "suppression_stats": self._suppression_stats or {},
-                    "python_lines": self._python_lines or {},
-                    "version": self._version,
-                }
-            ),
-            encoding="utf-8",
+        payload = json.dumps(
+            {
+                "cache_version": CACHE_VERSION,
+                "fp": self._fp,
+                "diagnostics": self._diagnostics or [],
+                "suppression_stats": self._suppression_stats or {},
+                "python_lines": self._python_lines or {},
+                "version": self._version,
+            }
         )
+        # The cache lives in the scanned repo, which is untrusted: never write through a
+        # symlinked directory or file out of it. A temp file in the directory plus
+        # os.replace swaps the name itself, so a symlink at the target is replaced, not followed.
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            if not path_within(self.cache_dir, self.cache_dir.parent):
+                warn_skipped(
+                    self.cache_dir, "cache directory leaves the scanned directory"
+                )
+                return
+            fd, tmp = tempfile.mkstemp(dir=self.cache_dir, prefix=".scan_cache-")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(payload)
+                os.replace(tmp, self._path)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp)
+                raise
+        except OSError as exc:
+            warn_skipped(self.cache_dir, f"cache not written ({exc.strerror or exc})")
 
     def lookup(self, fingerprint: str) -> list | None:
         if self._fp == fingerprint:

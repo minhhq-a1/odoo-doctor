@@ -52,7 +52,7 @@ def _try_add(
     out: list[AddonInfo],
     warn: bool = True,
 ) -> None:
-    source = read_source(manifest_file)
+    source = read_source(manifest_file, addon_dir)
     if source is None:
         return
     if chain_too_long(source):

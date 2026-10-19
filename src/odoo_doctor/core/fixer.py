@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import is_scannable
+from odoo_doctor.core.source import is_scannable, path_within
 
 Fixer = Callable[[Diagnostic, str], "str | None"]
 
@@ -78,6 +78,7 @@ def compute_fixes(
     registry: FixerRegistry,
     root: Path | None = None,
     read_text: Callable[[str], str] | None = None,
+    allowed_roots: list[Path] | None = None,
 ) -> tuple[FixResult, dict[str, str]]:
     """Apply fixers for fixable, high-confidence diagnostics.
 
@@ -89,6 +90,9 @@ def compute_fixes(
     absolute). We therefore read/write via the path directly, but resolve it
     defensively against *root* so a future relative-path rule cannot silently
     write to the wrong place. *root* is also used only for diff display.
+
+    With *allowed_roots* (the scanned directories) a file that resolves outside all of
+    them (a symlink) is never read, fixed or written; it counts as skipped.
 
     Diagnostics are grouped by file and applied in order. Each fixer receives
     the running text for its file, enabling multiple fixes per file.
@@ -125,6 +129,11 @@ def compute_fixes(
     skipped = 0
 
     for path, diags in by_file.items():
+        if allowed_roots is not None and not any(
+            path_within(_resolve(path), r) for r in allowed_roots
+        ):
+            skipped += len(diags)
+            continue
         try:
             text = read_text(path)
         except OSError:
