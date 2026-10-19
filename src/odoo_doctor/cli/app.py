@@ -117,6 +117,26 @@ def _main(
     """Unified health scoring for Odoo custom addons."""
 
 
+def _upgrade_report(diags, scores, configured_version, output_format) -> dict | None:
+    """Build the ``--upgrade-report`` payload (None for formats that ignore the flag)."""
+    from odoo_doctor.core.upgrade import build_upgrade_report, has_migration_rules
+
+    if output_format not in ("terminal", "json"):
+        typer.echo(
+            "[INFO] --upgrade-report applies to terminal and json output only; ignored.",
+            err=True,
+        )
+        return None
+    target = configured_version or next((d.odoo_version for d in diags), "unknown")
+    if scores and not has_migration_rules(target):
+        typer.echo(
+            f"[WARN] --upgrade-report: Odoo version '{target}' has no migration rules, "
+            "so the report is empty. Pass the target with --odoo-version (e.g. 19.0).",
+            err=True,
+        )
+    return build_upgrade_report(diags, scores, target)
+
+
 @app.command()
 def scan(
     path: str | None = typer.Argument(
@@ -173,6 +193,11 @@ def scan(
         False,
         "--show-low",
         help="Terminal output: also list findings hidden by [surfaces.terminal] (low confidence by default)",
+    ),
+    upgrade_report: bool = typer.Option(
+        False,
+        "--upgrade-report",
+        help="Add an upgrade readiness report (terminal and JSON only); use with --odoo-version <target>",
     ),
 ) -> None:
     """Scan Odoo addons and report health score."""
@@ -269,11 +294,15 @@ def scan(
         lines = {m: s.python_lines for m, s in scores.items()}
         scores = _score_per_module(diags, cfg, version, stats=stats, lines=lines)
 
+    report = None
+    if upgrade_report:
+        report = _upgrade_report(diags, scores, cfg.odoo_version, output_format)
+
     if not scores:
         if html_path:
             typer.echo("No addons found; HTML report not written.", err=True)
         if output_format == "json":
-            typer.echo(render_json([], {}))
+            typer.echo(render_json([], {}, report))
         elif output_format == "github":
             typer.echo("")
         elif output_format == "sarif":
@@ -322,7 +351,7 @@ def scan(
 
     # Output
     if output_format == "json":
-        typer.echo(render_json(diags, scores))
+        typer.echo(render_json(diags, scores, report))
     elif output_format == "github":
         from odoo_doctor.reporters.github_annotations import render_github_annotations
 
@@ -347,6 +376,10 @@ def scan(
         terminal_cfg = cfg.surfaces.get("terminal", DEFAULT_TERMINAL_SURFACE)
         shown = diags if show_low else filter_for_surface(diags, terminal_cfg)
         typer.echo(render_terminal(shown, scores, hidden=len(diags) - len(shown)))
+        if report is not None:
+            from odoo_doctor.core.upgrade import render_upgrade_report
+
+            typer.echo(render_upgrade_report(report))
 
     # Fail on severity
     if fail_on:

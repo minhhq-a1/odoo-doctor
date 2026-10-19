@@ -97,9 +97,13 @@ def build_payload(
 def render_json(
     diagnostics: list[Diagnostic],
     scores: dict[str, ScoreResult],
+    upgrade_report: dict | None = None,
 ) -> str:
-    """Render scan results as JSON."""
-    return json.dumps(build_payload(diagnostics, scores), indent=2)
+    """Render scan results as JSON; ``upgrade_report`` adds the top-level key of that name."""
+    payload = build_payload(diagnostics, scores)
+    if upgrade_report is not None:
+        payload["upgrade_report"] = upgrade_report
+    return json.dumps(payload, indent=2)
 
 
 def _is_fixable(rule_name: str) -> bool:

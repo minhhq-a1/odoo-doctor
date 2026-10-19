@@ -24,6 +24,7 @@ from odoo_doctor.rules.registry import default_registry
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
+CORPUS = Path(__file__).parent / "corpus"
 runner = CliRunner()
 
 # --- rule IDs: never renamed, never reused for another rule -----------------
@@ -110,6 +111,7 @@ FROZEN_CLI = {
         "--odoo-version",
         "--score-delta",
         "--show-low",
+        "--upgrade-report",
         "--write-baseline",
     },
 }
@@ -296,6 +298,40 @@ def test_json_report_keys_are_stable():
     assert FROZEN_SUPPRESSION_COUNTS <= set(first_rule)
 
 
+FROZEN_UPGRADE_REPORT_KEYS = {
+    "readiness_schema_version",
+    "target_version",
+    "modules",
+    "totals",
+}
+FROZEN_UPGRADE_MODULE_KEYS = {"score", "groups", "totals"}
+FROZEN_UPGRADE_GROUP_KEYS = {
+    "group",
+    "rules",
+    "findings",
+    "files",
+    "effort",
+    "mechanical",
+    "needs_review",
+}
+
+
+def test_upgrade_report_is_opt_in_and_its_keys_are_stable():
+    plain = runner.invoke(app, ["scan", str(CORPUS / "migration_19"), "--json"])
+    assert "upgrade_report" not in json.loads(plain.stdout)
+    flagged = runner.invoke(
+        app, ["scan", str(CORPUS / "migration_19"), "--json", "--upgrade-report"]
+    )
+    assert flagged.exit_code == 0, flagged.output
+    report = json.loads(flagged.stdout)["upgrade_report"]
+    assert FROZEN_UPGRADE_REPORT_KEYS <= set(report)
+    assert report["readiness_schema_version"] == 1
+    module = next(iter(report["modules"].values()))
+    assert FROZEN_UPGRADE_MODULE_KEYS <= set(module)
+    assert FROZEN_UPGRADE_GROUP_KEYS <= set(module["groups"][0])
+    assert {"findings", "mechanical", "needs_review"} <= set(module["totals"])
+
+
 def test_rules_stats_json_keys_are_stable():
     result = runner.invoke(
         app, ["rules", "stats", "--path", str(FIXTURES / "bad_addon"), "--json"]
@@ -456,4 +492,9 @@ def test_doc_covers_every_rules_action_and_experimental_commands(stability_doc: 
 
 def test_doc_states_exit_codes_and_policy(stability_doc: str):
     for needle in ("Exit codes", "Deprecated", "plugin_api", "score_schema_version"):
+        assert needle in stability_doc, needle
+
+
+def test_doc_covers_the_upgrade_report(stability_doc: str):
+    for needle in ("--upgrade-report", "upgrade_report", "readiness_schema_version"):
         assert needle in stability_doc, needle

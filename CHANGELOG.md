@@ -6,6 +6,15 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `scan --upgrade-report` (with `--odoo-version <target>`): groups the Upgrade Safety findings by kind
+  of change, counts findings and files, estimates effort, labels each finding mechanical (a pure
+  rename, `high` confidence only; the fixer is planned) or needs review, and scores each module's
+  upgrade readiness 0-100. Terminal: printed after the normal output. `--json`: new top-level key
+  `upgrade_report` (`readiness_schema_version` 1), present only with the flag. SARIF/GitHub/HTML
+  ignore it; without the flag nothing changes.
+
 ## [0.10.2] — 2026-10-17
 
 ### Added
