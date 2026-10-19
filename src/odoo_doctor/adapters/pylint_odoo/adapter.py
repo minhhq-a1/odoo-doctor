@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -58,18 +60,27 @@ class PylintOdooAdapter:
             ]
 
         try:
-            result = subprocess.run(
-                [
-                    "pylint",
-                    "--load-plugins=pylint_odoo",
-                    "--output-format=text",
-                    str(module_path),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
+            # Pylint executes the `init-hook` of any rc/pyproject it discovers from the
+            # cwd, so the scanned repo must never be that source: pin an empty rcfile and
+            # run from a scratch dir with a secret-free environment.
+            with tempfile.TemporaryDirectory(prefix="odoo-doctor-pylint-") as scratch:
+                rcfile = Path(scratch) / "pylintrc"
+                rcfile.write_text("")
+                result = subprocess.run(
+                    [
+                        "pylint",
+                        f"--rcfile={rcfile}",
+                        "--load-plugins=pylint_odoo",
+                        "--output-format=text",
+                        str(module_path),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                    cwd=scratch,
+                    env=_safe_env(scratch),
+                )
         except subprocess.TimeoutExpired:
             return [
                 _adapter_warning(
@@ -166,6 +177,16 @@ class PylintOdooAdapter:
                 confidence=info.get("confidence", "high"),
             )
         return result
+
+
+_ENV_KEEP = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "COMSPEC", "PATHEXT")
+
+
+def _safe_env(scratch: str) -> dict[str, str]:
+    """Only what pylint needs to start: no tokens, no PYTHONPATH/PYTHONSTARTUP."""
+    env = {k: os.environ[k] for k in _ENV_KEEP if k in os.environ}
+    env.update(HOME=scratch, PYLINTHOME=scratch, TMPDIR=scratch, TEMP=scratch)
+    return env
 
 
 def _adapter_warning(

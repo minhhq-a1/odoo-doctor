@@ -6,6 +6,15 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- The Pylint-Odoo adapter no longer lets the scanned repo run code. Pylint executes the `init-hook` of
+  a `.pylintrc`, `pylintrc` or `pyproject.toml` it finds from its working directory, so scanning an
+  untrusted repo (CI, editor language server) could run its code. Pylint now runs with an empty
+  `--rcfile`, from a temporary directory, with a minimal environment (no tokens, no `PYTHONPATH`).
+  Repo-level pylint configuration is ignored; the adapter is still switched on or off with
+  `[adapters] pylint_odoo` in `odoo-doctor.toml`.
+
 ## [0.10.2] — 2026-10-17
 
 ### Added
