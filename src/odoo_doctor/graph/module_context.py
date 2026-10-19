@@ -126,6 +126,28 @@ def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
     return merged
 
 
+def _with_extension_parents(base: ModelInfo, extensions: list[ModelInfo]) -> ModelInfo:
+    """A copy of ``base`` that also lists the parents the extensions of other modules add.
+
+    ``_inherit = ['x.base', 'mail.thread']`` in a module that does not define ``x.base``
+    gives ``x.base`` the mixin's fields, and a parent that is not written out means the
+    model may have any field.
+    """
+    merged = replace(
+        base,
+        inherit=list(base.inherit),
+        inherits=dict(base.inherits),
+    )
+    for ext in extensions:
+        merged.inherit.extend(
+            i for i in ext.inherit if i != base.name and i not in merged.inherit
+        )
+        for name, target in ext.inherits.items():
+            merged.inherits.setdefault(name, target)
+        merged.inherit_unresolved |= ext.inherit_unresolved
+    return merged
+
+
 def build_project_graph(
     addon_paths: list[Path],
     odoo_version: str = "unknown",
@@ -142,6 +164,12 @@ def build_project_graph(
     module_data: dict[str, dict] = {}
     # Every class of every module, so a route override finds the route it overrides.
     controller_classes: list[ControllerClass] = []
+    # Classes with no `_name` that extend a model: their extra parents belong to that model
+    # even when another module defines it.
+    extensions: dict[str, list[ModelInfo]] = {}
+    # Fields and methods of classes that extend a model the parser cannot name
+    # (`_inherit = MIXINS`, no `_name`): they may belong to any model.
+    unattributed: set[str] = set()
     # Fields extended via _inherit on stub-known models (e.g. custom_note on sale.order)
     _inherit_extensions: dict[str, dict] = {}
     # Methods extended via _inherit on stub-known models (e.g. action_foo on sale.order)
@@ -168,6 +196,8 @@ def build_project_graph(
                 continue
             for m in parse_models(py_file):
                 m.module = addon.name
+                if m.name is None and not m.inherit:
+                    unattributed.update(m.fields, m.methods)
                 _add_model(models, m)
             for cls in parse_controller_classes(py_file):
                 controller_classes.append(cls)
@@ -197,6 +227,8 @@ def build_project_graph(
         for key, m in models.items():
             if m.name is not None:
                 declarations.setdefault(key, []).append(m)
+            elif m.inherit:
+                extensions.setdefault(key, []).append(m)
 
         # Track inherit-only extensions — we'll merge them after all modules are processed
         for key, m in models.items():
@@ -230,6 +262,9 @@ def build_project_graph(
     all_models = {
         name: _merge_declarations(decls) for name, decls in declarations.items()
     }
+    for key, exts in extensions.items():
+        if key in all_models:
+            all_models[key] = _with_extension_parents(all_models[key], exts)
 
     # Post-loop: record all fields added to stub-known models via _inherit in the repo.
     # We pass these as 'extended_fields' to the resolver so it can resolve them as FOUND
@@ -257,6 +292,7 @@ def build_project_graph(
         source_path=odoo_source_path,
         extended_fields=extended_fields,
         extended_methods=extended_methods,
+        unattributed_members=unattributed,
         module_dependencies={
             name: list(data["manifest"].depends) for name, data in module_data.items()
         },

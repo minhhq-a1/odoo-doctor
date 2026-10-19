@@ -219,19 +219,26 @@ def resolve_route_auth(classes: list[ControllerClass]) -> None:
     for cls in classes:
         by_name.setdefault(cls.name, []).append(cls)
     memo: dict[tuple[int, str], str | None] = {}
+    in_progress: set[tuple[int, str]] = set()
+    # What a class that is being resolved answers when it is reached again: no evidence.
+    # (Not "user", not "unknown": the other parents of the class that reaches it decide.)
+    cycle = object()
 
-    def effective(cls: ControllerClass, method: str) -> str:
+    def effective(cls: ControllerClass, method: str):
         info = cls.routes[method]
         if info.declared_auth is not None:
             return info.declared_auth
-        return inherited(cls, method) or "user"
+        found = inherited(cls, method)
+        return found if found is cycle else (found or "user")
 
-    def inherited(cls: ControllerClass, method: str) -> str | None:
+    def inherited(cls: ControllerClass, method: str):
         """Auth of the route ``method`` that ``cls`` overrides; None if it has no parent."""
         key = (id(cls), method)
         if key in memo:
             return memo[key]
-        memo[key] = None  # a cycle of same-named classes ends here
+        if key in in_progress:
+            return cycle
+        in_progress.add(key)
         found: str | None = None
         for base in cls.bases:
             parents = [c for c in by_name.get(base, []) if c is not cls]
@@ -240,13 +247,18 @@ def resolve_route_auth(classes: list[ControllerClass]) -> None:
             if not parents:
                 found = "unknown"
                 break
-            autos = {
+            seen = [
                 effective(p, method) if method in p.routes else inherited(p, method)
                 for p in parents
-            } - {None}
+            ]
+            autos = {a for a in seen if isinstance(a, str)}
             if autos:
                 found = autos.pop() if len(autos) == 1 else "unknown"
                 break
+            if cycle in seen:  # parents exist but none of them could tell
+                found = "unknown"
+                break
+        in_progress.discard(key)
         memo[key] = found
         return found
 
@@ -322,7 +334,11 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
 
 
 def _extract_inherit(node: ast.expr) -> tuple[list[str], bool]:
-    """The parents named by ``_inherit`` (string, list or tuple), and whether all are literal."""
+    """The parents named by ``_inherit`` (string, list or tuple), and whether all are literal.
+
+    A computed value (``['x.base'] + MIXINS``) still yields the names it spells out, with
+    ``False``: the first of them is the model an extension without ``_name`` extends.
+    """
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return [node.value], True
     if isinstance(node, (ast.List, ast.Tuple)):
@@ -332,6 +348,10 @@ def _extract_inherit(node: ast.expr) -> tuple[list[str], bool]:
             if isinstance(e, ast.Constant) and isinstance(e.value, str)
         ]
         return names, len(names) == len(node.elts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, _ = _extract_inherit(node.left)
+        right, _ = _extract_inherit(node.right)
+        return left + right, False
     return [], isinstance(node, ast.Constant) and node.value is None
 
 

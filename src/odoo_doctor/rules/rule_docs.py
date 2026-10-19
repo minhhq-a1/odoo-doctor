@@ -151,7 +151,15 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "auth is unknown. A `sudo()` in such a route is reported at medium (low after "
         "an access check), whether the inherited auth is public or unknown: Odoo's "
         "own addons override public routes and elevate in them as a convention. "
-        "State `auth=` on the route to grade it like any other.",
+        "State `auth=` on the route to grade it like any other. Parents are matched by "
+        "class NAME, in base order: an unrelated scanned `class Main(http.Controller)` "
+        "with `auth='user'` can capture a subclass that imports another addon's "
+        "`Main`, and several scanned classes of one name with different autos give "
+        "unknown. `[target_modules]` limits discovery, so a parent in a module that "
+        "is not a target is not found and the auth is unknown, as is a computed "
+        "`auth=CONST`. The grade of an explicit `auth='public'` with `sudo()` (high; "
+        "151 hits in Odoo 19 community, mostly conventions) is a pre-existing "
+        "choice; the inherited grade is deliberately medium.",
     ),
     "access-write-without-group": RuleDoc(
         detects="Rows in `ir.model.access.csv` with an empty `group_id:id` that grant "
@@ -198,7 +206,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "or group test, a check-style helper, or a `raise` that refuses the caller. "
         "Public routes (`auth='public'`, also inherited from the overridden route) "
         "and routes whose auth cannot be resolved are left to "
-        "`public-controller-sudo-risk`.",
+        "`public-controller-sudo-risk`. So the rule is silent on a bare override of "
+        "a parent route that is not scanned, or with a computed `auth=CONST`: the "
+        "tainted-parameter signal is lost there.",
         why="A public method is reachable with any record ids and arguments. Elevating "
         "with `sudo()` on what the caller picked lets them read or change records "
         "their rights and record rules would refuse (an IDOR).",
@@ -308,7 +318,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "`_inherits` are read as a string, a list or a tuple. A model with a parent "
         "that is not packaged (the mixins of a stub-known module, a model of an "
         "addon that is not scanned) or not written out (`_inherit = MIXINS`) may have "
-        "any field, so nothing is reported.",
+        "any field, so nothing is reported. Parents added to a model by an extension "
+        "in another module (`_inherit = ['x.base', 'mail.thread']`, no `_name`) "
+        "count. Fields and methods of an extension that names no model "
+        "(`_inherit = MIXINS`, no `_name`) are never reported missing.",
     ),
     "button-method-not-found": RuleDoc(
         detects='Buttons with `type="object"` calling a method that does not '

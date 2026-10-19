@@ -137,6 +137,7 @@ class SymbolResolver:
         source_path: str | None = None,
         extended_fields: dict[str, dict] | None = None,
         extended_methods: dict[str, dict] | None = None,
+        unattributed_members: set[str] | None = None,
         module_dependencies: dict[str, list[str]] | None = None,
         module_licenses: dict[str, str] | None = None,
         module_external_python: dict[str, set[str]] | None = None,
@@ -151,6 +152,9 @@ class SymbolResolver:
         # extended_methods: {model_name: {method_name: MethodInfo}} — symmetric with fields,
         # so an action_* button added to sale.order via _inherit resolves FOUND.
         self._extended_methods: dict[str, dict] = extended_methods or {}
+        # Names declared by classes that extend a model the parser could not name: absence
+        # of one of them from a model proves nothing.
+        self._unattributed = set(unattributed_members or ())
         self._source_index = build_source_index(source_path)
         self._rule_models: set[str] | None = None
         self._by_underscore: dict[str, list[str]] | None = None
@@ -250,7 +254,7 @@ class SymbolResolver:
                 return SymbolLookup(ResolveResult.FOUND, "stub")
 
         # 5. Provable absence: only when the model is genuinely complete.
-        if self._model_is_complete(model_name):
+        if field_name not in self._unattributed and self._model_is_complete(model_name):
             return SymbolLookup(ResolveResult.NOT_FOUND)
 
         # 6. Otherwise we cannot prove absence.
@@ -285,7 +289,9 @@ class SymbolResolver:
                 return SymbolLookup(ResolveResult.FOUND, "stub")
 
         # 4. Provable absence: only when the model is genuinely complete.
-        if self._model_is_complete(model_name):
+        if method_name not in self._unattributed and self._model_is_complete(
+            model_name
+        ):
             return SymbolLookup(ResolveResult.NOT_FOUND)
 
         # 5. Otherwise we cannot prove absence.

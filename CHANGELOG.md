@@ -97,7 +97,9 @@ All notable changes to Odoo Doctor are documented here.
   `pos_online_payment_self_order` `pos_order_pay_confirmation` reads one transaction after `super()` checked
   the access token). Hence no new `high` on core 19 (151 high stay, medium 68 -> 74, low 0 -> 1) or on core 17
   scanned as 19 (medium 57 -> 61, low 0 -> 2). `scripts/measure.py` shows no new `high` for any rule and no
-  change on the working repository.
+  change on the working repository. The grade of an explicit `auth='public'` with `sudo()` (`high`, 151 hits in
+  Odoo 19 community, mostly conventions like the above) is a pre-existing choice and is not touched here; the
+  inherited grade is deliberately `medium`.
 
 ### Fixed
 
@@ -106,7 +108,11 @@ All notable changes to Odoo Doctor are documented here.
   parser read only strings and lists, so the model looked complete. `_inherit` and `_inherits` are now read as
   a string, a list or a tuple (an extension written with a tuple adds its fields too), and a parent that is not
   written out (`_inherit = MIXINS`, `_inherit = _name`, `*args`, a computed entry) makes the model incomplete,
-  so no field is reported missing. On Odoo 17 scanned as 19, 9 false `high` findings go (all on the
+  so no field is reported missing. Parents that an extension in another module adds (`_inherit = ['x.base',
+  'mail.thread']` without `_name`, in a module that does not define `x.base`) now count for `x.base`: a view on
+  it using `message_ids` was still reported. An extension whose `_inherit` is computed (`['x.base'] + MIXINS`)
+  still names `x.base` and makes it unresolved; one that names no model (`_inherit = MIXINS`, no `_name`) used to
+  lose its fields, which are now never reported missing. On Odoo 17 scanned as 19, 9 false `high` findings go (all on the
   `ir.module.module` views of `website`, whose model is declared with `_inherit = _name`); none change on Odoo 19.
 - A route that omits `auth` (a bare `@http.route()` override, or `@http.route('/x', website=True)`) was
   recorded as `auth='user'`, although Odoo merges the parent route's routing into the override. Overridden
@@ -114,13 +120,21 @@ All notable changes to Odoo Doctor are documented here.
   from the route of the same name in the class's bases, found by class name through every scanned addon
   (several levels, an explicit `auth=` wins). A parent that is not among the scanned classes (an addon that is
   not scanned) or a computed `auth=` leaves it `unknown` rather than `user`; a route with no parent at all
-  still runs as `user`. Limit: only `auth` is inherited, not `csrf`, `type` or `methods`, and a parent is found
-  by class name, so an import alias (`import X as Y`) is an unresolved parent.
+  still runs as `user`. Several scanned classes of one name (two addons that each override `WebsiteSale`) no
+  longer make each other `user`: a class reached again while it is being resolved gives no evidence, and the
+  route is `unknown` when nothing else answers (a cycle `A(B)`/`B(A)` too). On Odoo 19 community this moves 6
+  routes from `unknown` to `public` (undeclared routes: public 20 -> 25, unknown 18 -> 13) and one public to
+  unknown (`website` `bundle`, behind two same-named `WebClient` classes). Limits: only `auth` is inherited,
+  not `csrf`, `type` or `methods`; a parent is found by class NAME, so an unrelated scanned
+  `class Main(http.Controller)` with `auth='user'` can capture a subclass that imports another addon's `Main`,
+  and an import alias (`import X as Y`) is an unresolved parent; `[target_modules]` limits discovery, so a
+  parent in a module that is not a target is not found (unknown).
 - `rpc-sudo-without-access-check` treated a class as a controller only when a base was literally named
   `Controller`, so routes of a `CustomerPortal` or `WebsiteSale` subclass were never looked at. A class with a
   `@http.route` method is now a controller whatever its base is called (a method needs a route to be reachable,
   so resolving the base would add nothing). The rule takes each route's auth from the same resolution; a route
-  whose auth is public or unknown is left to `public-controller-sudo-risk`. Measured: no new `high` on core;
+  whose auth is public or unknown is left to `public-controller-sudo-risk`, so the rule is silent on a bare
+  override of a parent route that is not scanned and on a computed `auth=CONST`. Measured: no new `high` on core;
   3 new `medium` on core 17 scanned as 19 and 4 on core 19 (the totals above, medium 6 -> 10 and 4 -> 7).
 - `scan --diff` missed changed files whose name has non-ASCII characters (`modèle.py`), a tab or a
   newline: git prints such names quoted and escaped (`"mod\303\250le.py"`), which matched no file, so
