@@ -8,6 +8,16 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Security
 
+- `raw-sql-string-interpolation` had four gaps. (1) `SQL(f"...{x}")`, `SQL("..." + x)`,
+  `SQL("...".format(x))` and `SQL("..." % x)` were treated as safe; only `SQL("... %s", x)` with separate
+  parameters (or a constant) is safe now. (2) Cursors from `request.env.cr`, `request.cr`,
+  `registry.cursor()`, `self.pool.cursor()` (including `with ... as cur` and `cur = ...cursor()`) were not
+  recognised, so controllers were missed. (3) `.format()` into `DROP`, `ALTER`, `TRUNCATE`, `WITH`,
+  `GRANT`, `COPY` and other statements was ignored. (4) Taint was lost through tuple unpacking
+  (`a, b = x, y`) and the walrus operator. New findings may appear, all `high`: on Odoo core 19 one more
+  (`l10n_in`, 11 -> 12), on core 17 scanned as 19 four more (43 -> 47: `crm`, `web` domain controller,
+  `website_sale`); the SKW project is unchanged. These are interpolations of ORM-built fragments or
+  internal constants, the same shape as the 11 `high` findings core 19 already had.
 - The Pylint-Odoo adapter no longer lets the scanned repo run code. Pylint executes the `init-hook` of
   a `.pylintrc`, `pylintrc` or `pyproject.toml` it finds from its working directory, so scanning an
   untrusted repo (CI, editor language server) could run its code. Pylint now runs with an empty

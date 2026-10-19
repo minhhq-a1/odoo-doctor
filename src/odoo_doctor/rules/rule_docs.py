@@ -37,8 +37,11 @@ def rule_doc_url(rule_name: str) -> str | None:
 RULE_DOCS: dict[str, RuleDoc] = {
     # ------------------------------------------------------------- Security
     "raw-sql-string-interpolation": RuleDoc(
-        detects="`cr.execute()` calls that build the query with f-strings, "
-        "`%`-formatting, `.format()` or concatenation.",
+        detects="`execute()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, "
+        "`registry.cursor()` / `self.pool.cursor()` and names bound to them) that build "
+        "the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with "
+        "f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. "
+        "Tuple unpacking and `:=` carry the state.",
         why="Interpolating values into SQL leads to SQL injection.",
         fix="Pass values as query parameters.",
         bad="self.env.cr.execute(f\"SELECT * FROM res_partner WHERE name = '{name}'\")",
@@ -54,8 +57,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "`# odoo-doctor: disable=raw-sql-string-interpolation` also works. "
         "The rule follows values through local variables, lists (`append`, "
         "`extend`, `+=`), `if`/`try`/loop branches and module constants: SQL "
-        "built only from constants, `int()` casts, `self._table`, `SQL(...)` or "
-        "`','.join(['%s'] * n)` placeholder lists is not reported, while a "
+        'built only from constants, `int()` casts, `self._table`, `SQL("... %s", x)` '
+        "(parameters passed separately) or `','.join(['%s'] * n)` placeholder lists is "
+        'not reported, while `SQL(f"...{x}")` (or `+`, `%`, `.format()` building the '
+        "SQL string) and a "
         "fragment that reaches the query through a list or a branch is. Test code "
         "(`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` "
         "that take only `self` (where SQL views are created) are skipped: nothing a "

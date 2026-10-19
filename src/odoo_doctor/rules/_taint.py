@@ -31,7 +31,7 @@ class Taint(IntEnum):
 # Calls whose result cannot carry injected text.
 _NUMERIC_CALLS = {"int", "float", "bool", "len", "abs", "round", "id", "ord", "hash"}
 # Safe-by-construction SQL builders (Odoo `SQL`, psycopg2 `sql`, `quote_ident`).
-_SAFE_BUILDERS = {"SQL", "Identifier", "Literal", "Composed", "quote_ident"}
+_SAFE_BUILDERS = {"Identifier", "Literal", "Composed", "quote_ident"}
 # str methods that only reshape their receiver; arguments can still inject text.
 _STR_METHODS = {
     "strip",
@@ -101,7 +101,7 @@ def taint_of(node: ast.expr, lookup: Lookup) -> Taint:
         return (
             Taint.SAFE if taint_of(node.value, lookup) == Taint.SAFE else Taint.UNKNOWN
         )
-    if isinstance(node, ast.Starred):
+    if isinstance(node, (ast.Starred, ast.NamedExpr)):
         return taint_of(node.value, lookup)
     return Taint.UNKNOWN
 
@@ -157,6 +157,11 @@ def _call_taint(node: ast.Call, lookup: Lookup) -> Taint:
     func = node.func
     name = _builder_name(func)
     if name in _SAFE_BUILDERS:
+        return Taint.SAFE
+    if name == "SQL":
+        # `SQL("... %s", x)` binds x; `SQL(f"...{x}")` just wraps an injected string.
+        if node.args and taint_of(node.args[0], lookup) == Taint.UNSAFE:
+            return Taint.UNSAFE
         return Taint.SAFE
     if isinstance(func, ast.Name):
         if func.id in _NUMERIC_CALLS:
@@ -279,14 +284,31 @@ class TaintVisitor(ast.NodeVisitor):
             self.visit(stmt)
         self._scopes.pop()
 
-    def _bind(self, target: ast.expr, value: ast.expr | None) -> None:
+    def _pairs(
+        self, target: ast.expr, value: ast.expr | None
+    ) -> list[tuple[str, Taint]]:
+        """(name, state) bindings of an assignment; a tuple target pairs up element-wise."""
         if isinstance(target, ast.Name):
-            self._set(
-                target.id, self.taint(value) if value is not None else Taint.UNKNOWN
-            )
-        elif isinstance(target, (ast.Tuple, ast.List)):
-            for elt in target.elts:
-                self._bind(elt, None)
+            return [(target.id, self.taint(value) if value else Taint.UNKNOWN)]
+        if not isinstance(target, (ast.Tuple, ast.List)):
+            return []
+        elts = target.elts
+        paired = (
+            isinstance(value, (ast.Tuple, ast.List))
+            and len(value.elts) == len(elts)
+            and not any(isinstance(e, ast.Starred) for e in (*elts, *value.elts))
+        )
+        values = value.elts if paired else [None] * len(elts)  # type: ignore[union-attr]
+        return [p for e, v in zip(elts, values) for p in self._pairs(e, v)]
+
+    def _bind(self, target: ast.expr, value: ast.expr | None) -> None:
+        # Resolve every right-hand side first so `a, b = b, a` swaps correctly.
+        for name, state in self._pairs(target, value):
+            self._set(name, state)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+        self.visit(node.value)
+        self._set(node.target.id, self.taint(node.value))
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self.visit(node.value)
