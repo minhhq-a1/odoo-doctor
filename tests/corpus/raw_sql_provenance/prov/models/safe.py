@@ -1,3 +1,5 @@
+from psycopg2 import sql
+
 from odoo import fields, models
 
 
@@ -29,3 +31,9 @@ class Safe(models.AbstractModel):
     def ids_and_clock(self, team):
         cond = f"team_id = {team.id} AND write_date > '{fields.Datetime.now()}'"
         self.env.cr.execute("SELECT id FROM crm_lead WHERE " + cond)
+
+    def composed(self, search):
+        query = sql.SQL("SELECT id FROM {table} WHERE name ILIKE {search}").format(
+            table=sql.Identifier(self._table), search=sql.Placeholder("search")
+        )
+        self.env.cr.execute(query, {"search": search})

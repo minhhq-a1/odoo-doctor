@@ -288,3 +288,215 @@ def test_with_target_inherits_the_state_of_its_context_manager(tmp_path: Path):
                     self.env.cr.execute(f"SELECT name->>'{lang}' FROM t")
         """
     assert _found(tmp_path, src) == [(5, "medium")]
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        "request.params['q']",
+        "request.params.get('q')",
+        "request.httprequest.args.get('q')",
+        "request.httprequest.form['q']",
+        "request.get_json_data()['q']",
+        "request.get_http_params()['q']",
+        "request.cookies.get('q')",
+        "request.session['q']",
+        "http.request.params.get('q')",
+        "odoo.http.request.params.get('q')",
+    ],
+)
+def test_request_input_is_caller_controlled(tmp_path: Path, read: str):
+    src = f"""\
+        class C:
+            def go(self):
+                term = {read}
+                request.env.cr.execute(f"SELECT 1 WHERE n = '{{term}}'")
+        """
+    assert _found(tmp_path, src) == [(4, "high")]
+
+
+def test_request_env_is_not_user_input(tmp_path: Path):
+    src = """\
+        class C:
+            def go(self):
+                request.env.cr.execute(f"SELECT 1 WHERE c = {request.env.company.id} {request.website}")
+        """
+    assert _found(tmp_path, src) == [(3, "medium")]
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        # route -> private helper
+        """\
+        class C:
+            @http.route("/x")
+            def go(self, term):
+                return self._q(term)
+
+            def _q(self, term):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{term}'")
+        """,
+        # public method, keyword argument
+        """\
+        class M:
+            def go(self, name):
+                return self._q(value=name)
+
+            def _q(self, value):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{value}'")
+        """,
+        # **kw handed over whole
+        """\
+        class C:
+            def go(self, **kw):
+                return self._q(kw)
+
+            def _q(self, kw):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{kw['x']}'")
+        """,
+        # two hops
+        """\
+        class M:
+            def go(self, name):
+                return self._a(name)
+
+            def _a(self, x):
+                return self._b(x)
+
+            def _b(self, y):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{y}'")
+        """,
+        # a module-level function of the same file
+        """\
+        class M:
+            def go(self, name):
+                return _run(self.env.cr, name)
+
+        def _run(cr, name):
+            cr.execute(f"SELECT 1 WHERE n = '{name}'")
+        """,
+        # classmethod receiver
+        """\
+        class M:
+            @classmethod
+            def go(cls, name):
+                return cls._q(name)
+
+            @classmethod
+            def _q(cls, name):
+                cls.env.cr.execute(f"SELECT 1 WHERE n = '{name}'")
+        """,
+    ],
+)
+def test_one_hop_through_private_helpers_is_high(tmp_path: Path, src: str):
+    assert [c for _, c in _found(tmp_path, src)] == ["high"]
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        # only literals reach the helper
+        """\
+        class M:
+            def go(self):
+                return self._q("active")
+
+            def _q(self, column):
+                self.env.cr.execute(f"UPDATE t SET {column} = 1")
+        """,
+        # the helper belongs to another class
+        """\
+        class A:
+            def go(self, name):
+                return self._q(name)
+
+        class B:
+            def _q(self, name):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{name}'")
+        """,
+        # an int cast breaks the chain
+        """\
+        class M:
+            def go(self, name):
+                return self._q(int(name))
+
+            def _q(self, n):
+                self.env.cr.execute(f"SELECT {self._cols} WHERE n = {n}")
+        """,
+    ],
+)
+def test_helper_without_caller_input_stays_medium(tmp_path: Path, src: str):
+    assert [c for _, c in _found(tmp_path, src)] == ["medium"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "self.name",
+        "self.partner_id.name",
+        "self.mapped('name')",
+        "','.join(self.mapped('name'))",
+    ],
+)
+def test_public_field_of_self_is_user_data(tmp_path: Path, value: str):
+    src = f"""\
+        class W:
+            def action_go(self):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{{{value}}}'")
+        """
+    assert _found(tmp_path, src) == [(3, "high")]
+
+
+def test_loop_over_self_reads_user_data(tmp_path: Path):
+    src = """\
+        class W:
+            def action_go(self):
+                for rec in self:
+                    self.env.cr.execute(f"SELECT 1 WHERE n = '{rec.name}'")
+        """
+    assert _found(tmp_path, src) == [(4, "high")]
+
+
+@pytest.mark.parametrize(
+    "value, confidence",
+    [
+        ("self._table", None),
+        ("self.id", None),
+        ("self.env.company.id", None),
+        ("self.env.context.get('x')", "medium"),
+        ("self.ids", "medium"),
+        ("self._fields['name'].name", "medium"),
+        ("self.display_name", "medium"),
+        ("self._sequence_field", "medium"),
+        ("self._where()", "medium"),
+    ],
+)
+def test_metadata_of_self_stays_trusted(tmp_path: Path, value: str, confidence):
+    src = f"""\
+        class W:
+            def action_go(self):
+                self.env.cr.execute(f"SELECT 1 WHERE n = '{{{value}}}'")
+        """
+    expected = [] if confidence is None else [(3, confidence)]
+    assert _found(tmp_path, src) == expected
+
+
+def test_loop_over_self_private_reads_are_metadata(tmp_path: Path):
+    src = """\
+        class W:
+            def action_go(self):
+                for rec in self:
+                    self.env.cr.execute(f"SELECT {rec._sequence_field} FROM {rec._table} {rec._where()}")
+        """
+    assert _found(tmp_path, src) == [(4, "medium")]
+
+
+def test_psycopg2_placeholder_is_a_safe_builder(tmp_path: Path):
+    src = """\
+        class M:
+            def f(self, search):
+                query = sql.SQL("SELECT 1 WHERE n ILIKE {s}").format(s=sql.Placeholder("search"))
+                self.env.cr.execute(query, {"search": search})
+        """
+    assert _found(tmp_path, src) == []

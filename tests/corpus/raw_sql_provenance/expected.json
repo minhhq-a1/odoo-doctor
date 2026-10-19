@@ -11,7 +11,37 @@
   ],
   [
     "raw-sql-string-interpolation",
-    "prov/models/convention.py",
+    "prov/controllers/request_input.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/controllers/request_input.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/controllers/request_input.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/controllers/request_input.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/controllers/request_input.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/controllers/request_input.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/controllers/request_input.py",
     "medium"
   ],
   [
@@ -31,6 +61,26 @@
   ],
   [
     "raw-sql-string-interpolation",
+    "prov/models/convention.py",
+    "medium"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/reachable.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/reachable.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/reachable.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
     "prov/models/reachable.py",
     "high"
   ],
@@ -53,5 +103,35 @@
     "raw-sql-string-interpolation",
     "prov/models/reachable.py",
     "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/reachable.py",
+    "medium"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/wizard.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/wizard.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/wizard.py",
+    "high"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/wizard.py",
+    "medium"
+  ],
+  [
+    "raw-sql-string-interpolation",
+    "prov/models/wizard.py",
+    "medium"
   ]
 ]
