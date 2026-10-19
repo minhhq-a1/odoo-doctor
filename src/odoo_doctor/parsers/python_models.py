@@ -67,12 +67,26 @@ class ModelInfo:
 class ControllerInfo:
     method_name: str
     route: str
+    # The auth the route runs with: the decorator's literal, else the parent route's (see
+    # ``resolve_route_auth``), else "user" (the default of a route with no parent). "unknown"
+    # when the decorator computes it or the parent route lies outside the scanned code.
     auth: str = "user"
+    # What the decorator says: the literal, "unknown" for a computed value, None when absent.
+    declared_auth: str | None = None
     uses_sudo: bool = False
     # A call that checks access (token comparison, signature, record access check).
     guarded: bool = False
     file_path: str = ""
     line: int = 0
+
+
+@dataclass
+class ControllerClass:
+    """A class that may carry routes, with the bases that route inheritance walks."""
+
+    name: str
+    bases: list[str] = field(default_factory=list)  # last component of each base
+    routes: dict[str, ControllerInfo] = field(default_factory=dict)  # by method name
 
 
 # --- Odoo base class names ---
@@ -141,38 +155,104 @@ def parse_models(file_path: Path) -> list[ModelInfo]:
     return models
 
 
-def parse_controllers(file_path: Path) -> list[ControllerInfo]:
-    """Parse all http.route controllers from a Python file."""
+def parse_controller_classes(file_path: Path) -> list[ControllerClass]:
+    """Every class of a file that has a base (and so may inherit routes), with its routes."""
     tree = parse_python(file_path)
     if tree is None:
         return []
     source = read_source(file_path) or ""
 
-    controllers: list[ControllerInfo] = []
+    classes: list[ControllerClass] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
+        if not isinstance(node, ast.ClassDef) or _is_odoo_model(node):
             continue
+        cls = ControllerClass(
+            name=node.name,
+            bases=[(_dotted_name(b) or "").rsplit(".", 1)[-1] for b in node.bases],
+        )
         for item in node.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             route_info = _extract_route(item)
             if route_info is None:
                 continue
-            route, auth = route_info
-            uses_sudo = _body_uses_sudo(item, source)
-            guarded = _body_checks_access(item)
-            controllers.append(
-                ControllerInfo(
-                    method_name=item.name,
-                    route=route,
-                    auth=auth,
-                    uses_sudo=uses_sudo,
-                    guarded=guarded,
-                    file_path=str(file_path),
-                    line=item.lineno,
-                )
+            route, declared = route_info
+            cls.routes[item.name] = ControllerInfo(
+                method_name=item.name,
+                route=route,
+                auth=declared or "user",
+                declared_auth=declared,
+                uses_sudo=_body_uses_sudo(item, source),
+                guarded=_body_checks_access(item),
+                file_path=str(file_path),
+                line=item.lineno,
             )
-    return controllers
+        if cls.routes or cls.bases:
+            classes.append(cls)
+    return classes
+
+
+def parse_controllers(file_path: Path) -> list[ControllerInfo]:
+    """Parse all http.route controllers from a Python file.
+
+    A route that declares no ``auth`` is resolved against the parents found in this file only;
+    the project graph resolves it across files and modules.
+    """
+    classes = parse_controller_classes(file_path)
+    resolve_route_auth(classes)
+    return [route for cls in classes for route in cls.routes.values()]
+
+
+_END_OF_CHAIN = {"Controller", "object"}
+
+
+def resolve_route_auth(classes: list[ControllerClass]) -> None:
+    """Give every route without ``auth`` the auth of the route it overrides.
+
+    Odoo merges the routing of an overridden handler into the override, so ``@route()`` or
+    ``@route('/x', website=True)`` keeps the parent's ``auth='public'``. Parents are found
+    by class name among ``classes``, in base order. A base that is not among them (a class
+    of an addon that is not scanned) may define the route, so the auth is "unknown"; a chain
+    that ends at ``http.Controller`` without a parent route runs with the default, "user".
+    """
+    by_name: dict[str, list[ControllerClass]] = {}
+    for cls in classes:
+        by_name.setdefault(cls.name, []).append(cls)
+    memo: dict[tuple[int, str], str | None] = {}
+
+    def effective(cls: ControllerClass, method: str) -> str:
+        info = cls.routes[method]
+        if info.declared_auth is not None:
+            return info.declared_auth
+        return inherited(cls, method) or "user"
+
+    def inherited(cls: ControllerClass, method: str) -> str | None:
+        """Auth of the route ``method`` that ``cls`` overrides; None if it has no parent."""
+        key = (id(cls), method)
+        if key in memo:
+            return memo[key]
+        memo[key] = None  # a cycle of same-named classes ends here
+        found: str | None = None
+        for base in cls.bases:
+            parents = [c for c in by_name.get(base, []) if c is not cls]
+            if not parents and base in _END_OF_CHAIN:
+                continue
+            if not parents:
+                found = "unknown"
+                break
+            autos = {
+                effective(p, method) if method in p.routes else inherited(p, method)
+                for p in parents
+            } - {None}
+            if autos:
+                found = autos.pop() if len(autos) == 1 else "unknown"
+                break
+        memo[key] = found
+        return found
+
+    for cls in classes:
+        for method, info in cls.routes.items():
+            info.auth = effective(cls, method)
 
 
 # --- Helpers ---
@@ -570,8 +650,8 @@ def _body_checks_access(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 def _extract_route(
     func: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> tuple[str, str] | None:
-    """Extract route and auth from @http.route decorator."""
+) -> tuple[str, str | None] | None:
+    """Route and declared auth of an @http.route decorator (auth None when not written)."""
     for dec in func.decorator_list:
         if not isinstance(dec, ast.Call):
             continue
@@ -579,12 +659,15 @@ def _extract_route(
         if dec_name not in ("http.route", "route"):
             continue
         route = ""
-        auth = "user"
+        auth: str | None = None
         if dec.args and isinstance(dec.args[0], ast.Constant):
             route = dec.args[0].value
         for kw in dec.keywords:
-            if kw.arg == "auth" and isinstance(kw.value, ast.Constant):
-                auth = kw.value.value
+            if kw.arg == "auth":
+                is_literal = isinstance(kw.value, ast.Constant) and isinstance(
+                    kw.value.value, str
+                )
+                auth = kw.value.value if is_literal else "unknown"  # type: ignore[attr-defined]
             elif kw.arg == "route" and isinstance(kw.value, ast.Constant):
                 route = kw.value.value
         return route, auth

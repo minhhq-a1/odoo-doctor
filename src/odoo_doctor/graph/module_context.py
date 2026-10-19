@@ -12,10 +12,12 @@ from odoo_doctor.discovery.odoo_version import detect_odoo_version
 from odoo_doctor.graph.resolver import SymbolResolver
 from odoo_doctor.parsers.manifest import ManifestData, parse_manifest
 from odoo_doctor.parsers.python_models import (
+    ControllerClass,
     ControllerInfo,
     ModelInfo,
-    parse_controllers,
+    parse_controller_classes,
     parse_models,
+    resolve_route_auth,
 )
 from odoo_doctor.parsers.security_csv import AccessRule, parse_access_csv
 from odoo_doctor.parsers.xml_records import (
@@ -138,6 +140,8 @@ def build_project_graph(
     declarations: dict[str, list[ModelInfo]] = {}
     all_xml_ids: dict[str, XmlIdInfo] = {}
     module_data: dict[str, dict] = {}
+    # Every class of every module, so a route override finds the route it overrides.
+    controller_classes: list[ControllerClass] = []
     # Fields extended via _inherit on stub-known models (e.g. custom_note on sale.order)
     _inherit_extensions: dict[str, dict] = {}
     # Methods extended via _inherit on stub-known models (e.g. action_foo on sale.order)
@@ -165,7 +169,9 @@ def build_project_graph(
             for m in parse_models(py_file):
                 m.module = addon.name
                 _add_model(models, m)
-            controllers.extend(parse_controllers(py_file))
+            for cls in parse_controller_classes(py_file):
+                controller_classes.append(cls)
+                controllers.extend(cls.routes.values())
 
         # Parse XML files
         xml_ids: dict[str, XmlIdInfo] = {}
@@ -218,6 +224,8 @@ def build_project_graph(
             "controllers": controllers,
             "access_rules": access_rules,
         }
+
+    resolve_route_auth(controller_classes)
 
     all_models = {
         name: _merge_declarations(decls) for name, decls in declarations.items()

@@ -251,7 +251,7 @@ Good:
 
 **Fix**: Require authentication, or restrict what the sudo call can reach and validate the input.
 
-**Note**: A route that also calls an access check (`consteq` on an access token, `_document_check_access`, a signature or `check_access*` call) is reported at medium confidence and does not affect the score; without one it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo().get_param('<constant>')` are not elevations. Public website routes legitimately use `sudo()`: about one in five routes of Odoo 19 community does, so review rather than ban.
+**Note**: A route that also calls an access check (`consteq` on an access token, `_document_check_access`, a signature or `check_access*` call) is reported at medium confidence and does not affect the score; without one it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo().get_param('<constant>')` are not elevations. Public website routes legitimately use `sudo()`: about one in five routes of Odoo 19 community does, so review rather than ban. A route that omits `auth` (a bare `@http.route()` override) keeps the auth of the route it overrides, found through the classes of the scanned addons; when the parent is not among them (`WebsiteSale`, `CustomerPortal` of an addon that is not scanned) the auth is unknown. A `sudo()` in such a route is reported at medium (low after an access check), whether the inherited auth is public or unknown: Odoo's own addons override public routes and elevate in them as a convention. State `auth=` on the route to grade it like any other.
 
 Bad:
 
@@ -302,7 +302,7 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: Public model methods (no leading underscore) and authenticated routes that call `.sudo()` on records or values chosen by their parameters, with no access check in the method: `check_access*`, `has_access`, a token or group test, a check-style helper, or a `raise` that refuses the caller. Public routes (`auth='public'`) are left to `public-controller-sudo-risk`.
+**Detects**: Public model methods (no leading underscore) and authenticated routes (of any controller class, whatever its base is called) that call `.sudo()` on records or values chosen by their parameters, with no access check in the method: `check_access*`, `has_access`, a token or group test, a check-style helper, or a `raise` that refuses the caller. Public routes (`auth='public'`, also inherited from the overridden route) and routes whose auth cannot be resolved are left to `public-controller-sudo-risk`.
 
 **Why**: A public method is reachable with any record ids and arguments. Elevating with `sudo()` on what the caller picked lets them read or change records their rights and record rules would refuse (an IDOR).
 
