@@ -66,8 +66,16 @@ def _in_scope_categories(
 def _config_repr(cfg: OdooDoctorConfig) -> str:
     """A stable string capturing config fields that affect results."""
     import dataclasses
+    import json
 
-    return repr(dataclasses.asdict(cfg)) if dataclasses.is_dataclass(cfg) else repr(cfg)
+    if not dataclasses.is_dataclass(cfg):
+        return repr(cfg)
+    # sorted keys and sets: repr() of a set follows the per-process hash seed
+    return json.dumps(
+        dataclasses.asdict(cfg),
+        sort_keys=True,
+        default=lambda o: sorted(o) if isinstance(o, (set, frozenset)) else repr(o),
+    )
 
 
 def _is_fixable_rule(rule_name: str) -> bool:
@@ -122,7 +130,9 @@ def _score_per_module(
     eligible = mark_score_eligibility(diags)
     in_scope = _in_scope_categories(version, cfg)
     scores: dict[str, object] = {}
-    modules = {d.module for d in diags} | set(extra_modules)
+    # *extra_modules* first (the scan's module order), then any other module with findings:
+    # a set here would order the report by the process's hash seed, not as the live scan does.
+    modules = dict.fromkeys([*extra_modules, *(d.module for d in diags)])
     for name in modules:
         mod_diags = [d for d in diags if d.module == name]
         mod_elig = [e for d, e in zip(diags, eligible) if d.module == name]
@@ -186,7 +196,11 @@ def collect_scores(
 ) -> tuple[list[Diagnostic], dict[str, object]]:
     from dataclasses import asdict
 
-    from odoo_doctor.core.cache import project_fingerprint
+    from odoo_doctor.core.cache import (
+        adapter_identities,
+        plugin_identities,
+        project_fingerprint,
+    )
 
     reset_skipped()  # skipped-file warnings are per scan
     fingerprint: str | None = None
@@ -200,9 +214,15 @@ def collect_scores(
             config_repr=_config_repr(cfg),
             version=f"{version}+forced" if force_version else version,
             ruleset=ruleset,
+            extra=(
+                *plugin_identities(default_registry.get_rules()),
+                *adapter_identities(cfg.adapters),
+            ),
         )
         hit = cache.lookup(fingerprint)
         if hit is not None:
+            # the version the live scan ended up with (detected from the manifests)
+            version = cache.lookup_version(fingerprint) or version
             diags = [Diagnostic(**d) for d in hit]
             stats = cache.lookup_stats(fingerprint)
             lines = cache.lookup_lines(fingerprint)
@@ -211,7 +231,7 @@ def collect_scores(
                 cfg,
                 version,
                 stats=stats,
-                extra_modules={*stats, *lines},
+                extra_modules=[*lines, *stats],
                 lines=lines,
             )
             return diags, scores
@@ -357,7 +377,9 @@ def collect_scores(
         stats = {}  # a --diff scan sees only some files: partial numbers would mislead
 
     if cache is not None and fingerprint is not None:
-        cache.store(fingerprint, [asdict(d) for d in diags], stats, python_lines)
+        cache.store(
+            fingerprint, [asdict(d) for d in diags], stats, python_lines, version
+        )
 
     # Determine in-scope categories
     in_scope = _in_scope_categories(version, cfg)

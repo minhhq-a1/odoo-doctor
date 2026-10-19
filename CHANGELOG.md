@@ -57,6 +57,24 @@ All notable changes to Odoo Doctor are documented here.
   newline: git prints such names quoted and escaped (`"mod\303\250le.py"`), which matched no file, so
   their findings were silently left out of the diff scan. Changed files are now read with `-z`
   (NUL-separated, never quoted).
+- `--cache` could answer differently from an uncached scan, or keep answering after an input changed:
+  - A cache hit scored with the Odoo version from the config (often `unknown`) instead of the one the
+    live scan detected from the manifests, so the in-scope categories, and with them the scores, could
+    differ for a ruleset with version- or capability-gated rules. The entry now stores that version.
+  - A hit listed modules in an order set by the process's hash seed, not the scan order, so `--json`
+    differed byte for byte between a live run and a hit. The order is now the scan's.
+  - The key held only `name@min_version` of each rule, so a plugin rule whose code changed kept
+    returning the old findings. It now also holds, for every rule that is not built in, the
+    distribution name and version that ships it (when installed) and a hash of the rule module's
+    source file.
+  - The key did not hold the version of `ruff` or `pylint`, so upgrading a linter kept the old
+    findings. It now holds the output of `<tool> --version` (run once per process; `unavailable` when
+    the tool is missing) for every enabled adapter. The enabled flags were already in the key.
+  - The config part of the key put a Python `set` (`explicit_adapters`) through `repr()`, whose order
+    changes with the hash seed, so a config with two or more `[adapters]` entries could miss on every
+    run. It is now serialised in sorted order.
+
+  `CACHE_VERSION` is now 4, so older cache files are rebuilt once.
 
 ## [0.11.0] — 2026-10-19
 

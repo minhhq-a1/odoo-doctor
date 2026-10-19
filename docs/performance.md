@@ -28,7 +28,8 @@ Reading the numbers:
 - Scanning is single-threaded and scales roughly with the amount of Python, XML and CSV
   parsed: about 115 ms per module on this tree.
 - The scan cache is all-or-nothing: it is a fingerprint of every scanned file, the config,
-  the Odoo version, the ruleset and the tool version. Any change rescans everything, so the
+  the Odoo version, the ruleset, each third-party rule plugin (installed version and a hash of
+  its rule module), the `ruff` and `pylint` versions and the odoo-doctor version. Any change rescans everything, so the
   cache helps repeated runs on an unchanged tree (re-running CI, switching reports), not
   incremental edits.
 - For a pull request, `--diff <ref>` scans only the changed files, and `--module` limits a
