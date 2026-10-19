@@ -174,8 +174,12 @@ def test_no_addons_with_the_flag(tmp_path: Path):
     assert up["modules"] == {} and up["totals"]["findings"] == 0
 
 
-def test_flag_is_listed_in_help():
-    assert "--upgrade-report" in runner.invoke(app, ["scan", "--help"]).stdout
+def test_flag_is_an_option_of_scan():
+    # Inspect the command instead of the --help text: rich colours and wraps the text by terminal.
+    import typer.main
+
+    scan = typer.main.get_command(app).commands["scan"]
+    assert "--upgrade-report" in {opt for param in scan.params for opt in param.opts}
 
 
 def _addon(root: Path, version: str) -> Path:
