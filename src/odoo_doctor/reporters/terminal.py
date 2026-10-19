@@ -26,10 +26,12 @@ def escape(text: str) -> str:
 
     A newline in a file name would otherwise start a line of its own (`::error::`
     is a GitHub workflow command in a CI log) and a raw ESC could drive the terminal.
+    Rich also word-wraps at 120 columns and a continuation line starts at column 0,
+    where a repo-chosen `::error::` word would be a command again, so every `::` gets a
+    zero-width space between the colons (invisible, the layout does not change).
     """
-    return _rich_escape(
-        _CONTROL.sub(lambda m: m.group().encode("unicode_escape").decode(), text)
-    )
+    shown = _CONTROL.sub(lambda m: m.group().encode("unicode_escape").decode(), text)
+    return _rich_escape(shown.replace("::", ":\u200b:"))
 
 
 _LABEL_COLORS = {

@@ -85,3 +85,28 @@ def test_hostile_names_cannot_break_out_of_the_markdown_structure():
     assert len([x for x in lines if x.startswith("| mod")]) == 1
     assert len([x for x in lines if x.startswith("- **ERROR**")]) == 1
     assert sum(1 for x in lines if x.startswith("- ")) == 1
+
+
+def test_an_at_mention_in_repo_text_does_not_notify():
+    from odoo_doctor.core.diagnostics import Diagnostic
+
+    d = Diagnostic(
+        module="@octocat",
+        file_path="a.py",
+        line=1,
+        column=0,
+        rule="r",
+        category="c",
+        severity="error",
+        tier="P1",
+        source="native",
+        confidence="high",
+        title="ping @octocat and @org/team",
+        message="m",
+        help="h",
+        odoo_version="17",
+    )
+    scores = {"@octocat": ScoreResult(90.0, "A", [], [], 0)}
+    body = render_pr_comment_body([d], scores)
+    assert "@octocat" not in body and "@org/team" not in body
+    assert "@\u200boctocat" in body

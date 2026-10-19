@@ -184,3 +184,25 @@ def test_hostile_title_and_message_fields_are_escaped():
     )
     out = render_github_annotations([d], Path("/repo"))
     assert out.count("\n") == 1
+
+
+def test_comma_colon_percent_and_newline_in_a_file_name_are_escaped_exactly():
+    d = Diagnostic(
+        module="m",
+        file_path="/repo/a,b%c:d\n::error::x.py",
+        line=3,
+        column=1,
+        rule="r",
+        category="c",
+        severity="error",
+        tier="P1",
+        source="native",
+        confidence="high",
+        title="t",
+        message="m",
+        help="h",
+        odoo_version="17",
+    )
+    assert render_github_annotations([d], Path("/repo")) == (
+        "::error file=a%2Cb%25c%3Ad%0A%3A%3Aerror%3A%3Ax.py,line=3,col=1,title=t::m\n"
+    )

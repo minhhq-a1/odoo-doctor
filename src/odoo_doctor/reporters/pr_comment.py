@@ -14,7 +14,8 @@ from odoo_doctor.core.surfaces import filter_for_surface
 def _md(text: str) -> str:
     """Repo-derived text on one line, without markdown or HTML structure of its own."""
     one_line = " ".join(text.split())
-    return re.sub(r"([\\`|<>\[\]])", r"\\\1", one_line)
+    # a zero-width space after `@` keeps a repo-chosen name from mentioning (notifying) anyone
+    return re.sub(r"([\\`|<>\[\]])", r"\\\1", one_line).replace("@", "@\u200b")
 
 
 def _code(text: str) -> str:

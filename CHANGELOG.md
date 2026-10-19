@@ -8,6 +8,13 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Security
 
+- The terminal report (the default format, which lands in CI logs) wrapped a repo-chosen `::error::`
+  word onto a line of its own, where GitHub treats it as a workflow command. Every `::` in repo-derived
+  text now has an invisible zero-width space between the colons. In the PR comment, `@name` in a module name
+  or finding title no longer mentions (notifies) anyone.
+- The GitHub Action passed its inputs (`diff-base`, `paths` ...) into the shell script text; they now reach
+  it as environment variables. `--diff` follows the ref with `--` so a ref that is also a path is never read
+  as a path.
 - `fix --fix` and discovery no longer follow a symlinked `__manifest__.py` (or any fixed file) out of the
   scanned directory: it is skipped with one warning and never read as a manifest or written. An absolute
   path in a manifest `data` list that points outside the addon is skipped too.

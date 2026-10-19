@@ -45,29 +45,37 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
+        # inputs reach the script as environment variables, never spliced into shell text
+        INPUT_ODOO_VERSION: ${{ inputs.odoo-version }}
+        INPUT_ADVISORY: ${{ inputs.advisory }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_DIFF_BASE: ${{ inputs.diff-base }}
+        INPUT_PR_COMMENT: ${{ inputs.pr-comment }}
+        INPUT_PATHS: ${{ inputs.paths }}
       run: |
         ARGS=()
-        if [ "${{ inputs.odoo-version }}" != "" ]; then
-          ARGS+=(--odoo-version "${{ inputs.odoo-version }}")
+        if [ "$INPUT_ODOO_VERSION" != "" ]; then
+          ARGS+=(--odoo-version "$INPUT_ODOO_VERSION")
         fi
-        if [ "${{ inputs.advisory }}" != "true" ] && [ "${{ inputs.fail-on }}" != "" ]; then
-          ARGS+=(--fail-on "${{ inputs.fail-on }}")
+        if [ "$INPUT_ADVISORY" != "true" ] && [ "$INPUT_FAIL_ON" != "" ]; then
+          ARGS+=(--fail-on "$INPUT_FAIL_ON")
         fi
-        if [ "${{ inputs.advisory }}" != "true" ] && [ "${{ inputs.min-score }}" != "" ]; then
-          ARGS+=(--min-score "${{ inputs.min-score }}")
+        if [ "$INPUT_ADVISORY" != "true" ] && [ "$INPUT_MIN_SCORE" != "" ]; then
+          ARGS+=(--min-score "$INPUT_MIN_SCORE")
         fi
-        DIFF_BASE="${{ inputs.diff-base }}"
+        DIFF_BASE="$INPUT_DIFF_BASE"
         if [ "$DIFF_BASE" != "" ]; then
           if git show-ref --verify --quiet "refs/remotes/origin/$DIFF_BASE"; then
             DIFF_BASE="origin/$DIFF_BASE"
           fi
           ARGS+=(--diff "$DIFF_BASE")
         fi
-        if [ "${{ inputs.pr-comment }}" == "true" ] && [ "$DIFF_BASE" != "" ]; then
+        if [ "$INPUT_PR_COMMENT" == "true" ] && [ "$DIFF_BASE" != "" ]; then
           ARGS+=(--score-delta "$DIFF_BASE")
         fi
-        if [ "${{ inputs.pr-comment }}" != "true" ]; then
+        if [ "$INPUT_PR_COMMENT" != "true" ]; then
           ARGS+=(--no-pr-comment)
         fi
-        
-        odoo-doctor scan "${{ inputs.paths }}" --format github "${ARGS[@]}"
+
+        odoo-doctor scan "$INPUT_PATHS" --format github "${ARGS[@]}"
