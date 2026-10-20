@@ -6,6 +6,23 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep distinct violations of one rule at the same location, including missing
+  manifest fields and dependencies; only matching titles are deduplicated.
+- Apply version/capability gates and category scope per module in mixed-version
+  projects. Cache entries retain module versions so cached scores match fresh scans.
+- Write portable v3 baselines using paths relative to the scan root. Existing v1/v2
+  baselines remain readable with their original identities; regenerate them to move
+  between checkout paths.
+- Invalidate scan caches for Ruff configuration changes, including ancestor and
+  recursive `extend` configs, linter availability/versions and configured Odoo source
+  changes. Plugins with arbitrary input dependencies bypass the built-in cache.
+- Use the same default P0/P1 high-confidence CI failure policy with absent, empty
+  and partial configurations.
+- Collect context-rule generators once so plugin findings are retained in full and
+  diff scans.
+
 ## [0.11.0] — 2026-10-19
 
 ### Added

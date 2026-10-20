@@ -88,13 +88,14 @@ def normalize_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
 
 
 def deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
-    """Group by (module, file_path, line, category, rule). Keep highest confidence,
+    """Group by (module, file_path, line, category, rule, title). Keep highest confidence,
     then prefer native source, then longest message.
     Two diagnostics with different rules are always distinct."""
-    groups: dict[tuple[str, str, int, str, str], list[Diagnostic]] = {}
+    groups: dict[tuple[str, str, int, str, str, str], list[Diagnostic]] = {}
     for d in diagnostics:
-        # Include rule in key so different rules at same location are kept
-        key = (d.module, d.file_path, d.line, d.category, d.rule)
+        # Manifest rules report distinct fields/dependencies on line 1. Their titles
+        # distinguish those violations; confidence/source/message may still differ.
+        key = (d.module, d.file_path, d.line, d.category, d.rule, d.title)
         groups.setdefault(key, []).append(d)
 
     result: list[Diagnostic] = []
@@ -237,12 +238,14 @@ def apply_version_gates(
     diagnostics: list[Diagnostic],
     active_rules: ActiveRules,
     detected_version: str,
+    module_versions: dict[str, str] | None = None,
 ) -> list[Diagnostic]:
     """Remove diagnostics whose rule requires a newer Odoo version."""
     result: list[Diagnostic] = []
     for d in diagnostics:
         min_ver = active_rules.get(d.rule)
-        if min_ver is None or _version_gte(detected_version, min_ver):
+        version = (module_versions or {}).get(d.module, detected_version)
+        if min_ver is None or _version_gte(version, min_ver):
             result.append(d)
     return result
 
@@ -251,17 +254,19 @@ def apply_capability_gates(
     diagnostics: list[Diagnostic],
     config: OdooDoctorConfig,
     detected_version: str,
+    module_versions: dict[str, str] | None = None,
 ) -> list[Diagnostic]:
     """Remove diagnostics whose rules are gated out by capabilities/versions."""
     from odoo_doctor.rules.registry import default_registry
 
-    derived_caps = derive_capabilities(detected_version, config.capabilities)
     result: list[Diagnostic] = []
     for d in diagnostics:
+        version = (module_versions or {}).get(d.module, detected_version)
+        derived_caps = derive_capabilities(version, config.capabilities)
         meta_func = default_registry.get(d.rule)
         if meta_func is not None:
             meta, _ = meta_func
-            if not rule_is_enabled(meta, detected_version, derived_caps):
+            if not rule_is_enabled(meta, version, derived_caps):
                 continue
         result.append(d)
     return result
@@ -291,6 +296,7 @@ def run_pipeline_with_stats(
     active_rules: ActiveRules,
     detected_version: str,
     base_path: Path | str | None = None,
+    module_versions: dict[str, str] | None = None,
 ) -> tuple[list[Diagnostic], list[bool], SuppressionStats]:
     """Run all 7 stages and also count what the user's own switches dropped.
 
@@ -325,8 +331,10 @@ def run_pipeline_with_stats(
     diags = kept
 
     def gate(items: list[Diagnostic]) -> list[Diagnostic]:
-        items = apply_version_gates(items, active_rules, detected_version)
-        return apply_capability_gates(items, config, detected_version)
+        items = apply_version_gates(
+            items, active_rules, detected_version, module_versions
+        )
+        return apply_capability_gates(items, config, detected_version, module_versions)
 
     diags = gate(diags)
     stats = build_stats(

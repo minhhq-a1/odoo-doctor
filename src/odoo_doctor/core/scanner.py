@@ -110,21 +110,24 @@ def _score_per_module(
     stats: dict | None = None,
     extra_modules=(),
     lines: dict | None = None,
+    module_versions: dict[str, str] | None = None,
 ) -> dict[str, object]:
     """Score every module that has findings, plus *extra_modules* (e.g. modules whose
     findings were all suppressed). *stats* is the full {module: {rule: counts}} map."""
     eligible = mark_score_eligibility(diags)
-    in_scope = _in_scope_categories(version, cfg)
     scores: dict[str, object] = {}
     modules = {d.module for d in diags} | set(extra_modules)
-    for name in modules:
+    for name in sorted(modules):
         mod_diags = [d for d in diags if d.module == name]
+        mod_version = (module_versions or {}).get(
+            name, mod_diags[0].odoo_version if mod_diags else version
+        )
         mod_elig = [e for d, e in zip(diags, eligible) if d.module == name]
         scores[name] = _score_module(
             mod_diags,
             mod_elig,
             cfg,
-            in_scope,
+            _in_scope_categories(mod_version, cfg),
             (stats or {}).get(name),
             (lines or {}).get(name, 0),
         )
@@ -184,16 +187,29 @@ def collect_scores(
 
     reset_skipped()  # skipped-file warnings are per scan
     fingerprint: str | None = None
-    if cache is not None and changed_files is None:
+    # Third-party rules may read arbitrary inputs; without a dependency contract
+    # their results cannot safely use the built-in project fingerprint.
+    if cache is not None and changed_files is None and not cfg.enable_plugins:
+        from odoo_doctor.adapters.cache import cache_dependencies
+
+        extra_files, adapter_identities = cache_dependencies(
+            addon_paths, config_root, cfg.adapters
+        )
         ruleset = tuple(
             f"{meta.name}@{meta.min_version}"
             for meta, _ in default_registry.get_rules()
         )
         fingerprint = project_fingerprint(
-            addon_paths=addon_paths,
+            addon_paths=[
+                *addon_paths,
+                *([Path(cfg.odoo_source_path)] if cfg.odoo_source_path else []),
+            ],
             config_repr=_config_repr(cfg),
             version=f"{version}+forced" if force_version else version,
             ruleset=ruleset,
+            extra_files=extra_files,
+            extra_identities=adapter_identities,
+            excluded_paths=[cache.cache_dir],
         )
         hit = cache.lookup(fingerprint)
         if hit is not None:
@@ -207,6 +223,7 @@ def collect_scores(
                 stats=stats,
                 extra_modules={*stats, *lines},
                 lines=lines,
+                module_versions=cache.lookup_versions(fingerprint),
             )
             return diags, scores
 
@@ -236,7 +253,7 @@ def collect_scores(
             if not rule_is_enabled(meta, ctx.odoo_version, derived_caps):
                 continue
             try:
-                produced = func(ctx)
+                produced = list(func(ctx))
                 context_diags.extend(produced)
                 all_diags.extend(produced)
             except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
@@ -346,15 +363,19 @@ def collect_scores(
         active_rules,
         version,
         base_path=config_root,
+        module_versions={name: ctx.odoo_version for name, ctx in graph.modules.items()},
     )
     if changed_files is not None:
         stats = {}  # a --diff scan sees only some files: partial numbers would mislead
 
     if cache is not None and fingerprint is not None:
-        cache.store(fingerprint, [asdict(d) for d in diags], stats, python_lines)
-
-    # Determine in-scope categories
-    in_scope = _in_scope_categories(version, cfg)
+        cache.store(
+            fingerprint,
+            [asdict(d) for d in diags],
+            stats,
+            python_lines,
+            {name: ctx.odoo_version for name, ctx in graph.modules.items()},
+        )
 
     # Score per module
     scores: dict[str, object] = {}
@@ -365,7 +386,7 @@ def collect_scores(
             mod_diags,
             mod_elig,
             cfg,
-            in_scope,
+            _in_scope_categories(graph.modules[module_name].odoo_version, cfg),
             stats.get(module_name),
             python_lines.get(module_name, 0),
         )

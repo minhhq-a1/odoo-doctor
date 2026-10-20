@@ -30,6 +30,29 @@ def test_fingerprint_changes_when_config_changes(tmp_path: Path):
     assert fp1 != fp2
 
 
+def test_fingerprint_changes_when_an_asset_appears(tmp_path: Path):
+    root = _addon(tmp_path)
+    before = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    (root / "m" / "widget.js").write_text("export const ready = true;\n")
+    after = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    assert after != before
+
+
+def test_fingerprint_keeps_asset_symlink_aliases(tmp_path: Path):
+    import pytest
+
+    root = _addon(tmp_path)
+    asset = root / "m" / "widget.js"
+    asset.write_text("export const ready = true;\n")
+    before = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    try:
+        (root / "m" / "alias.js").symlink_to(asset)
+    except OSError:
+        pytest.skip("symlinks not available")
+    after = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    assert after != before
+
+
 def test_fingerprint_changes_when_ruleset_changes(tmp_path: Path):
     root = _addon(tmp_path)
     fp1 = project_fingerprint([root], config_repr="c", version="17.0", ruleset=("a",))

@@ -121,7 +121,8 @@ Supported Python and Odoo versions and the release support policy are in
 
 Each category score starts at 100 and loses points per **high-confidence**
 finding, where each finding deducts `tier_impact × category_weight`
-(default weight 1.0; override via `[category_weights]`). The overall score
+(defaults: Security/Correctness 1.5, Performance/Data Integrity/Upgrade Safety 1.0,
+Module Hygiene 0.8, Maintainability/Frontend 0.5; override via `[category_weights]`). The overall score
 blends only **in-scope** categories (those with at least one active rule):
 
 ```
@@ -275,6 +276,11 @@ odoo-doctor scan . --write-baseline .odoo-doctor-baseline.json
 # Commit the baseline, then in CI:
 odoo-doctor scan . --baseline .odoo-doctor-baseline.json --fail-on warning
 ```
+
+New baselines use format v3 and identify findings by paths relative to the scan root,
+so the same baseline works in another checkout or CI runner. Use the same scan root
+layout when writing and applying it. Existing v1/v2 baselines are still accepted at
+their original checkout path; regenerate them with `--write-baseline` for portability.
 
 ### CI/PR Surfaces
 
