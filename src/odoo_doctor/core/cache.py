@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+import os
+from collections.abc import Iterable, Iterator
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
@@ -24,6 +25,11 @@ CACHE_VERSION = 4  # v4 retains each module's effective Odoo version
 
 _CACHE_FILE = "scan_cache.json"
 _SCANNED_SUFFIXES = {".py", ".pyi", ".xml", ".csv", ".toml", ".ipynb"}
+# Not scan inputs, and rewritten by tooling between scans (a running Odoo, pytest,
+# Finder, an editor): hashing them would turn every such write into a cache miss.
+_SKIP_DIRS = {".git", ".ruff_cache", ".mypy_cache", ".pytest_cache", "__pycache__"}
+_SKIP_FILES = {".DS_Store", "Thumbs.db"}
+_SKIP_SUFFIXES = {".pyc", ".pyo", ".swp", ".swo"}
 
 
 def _tool_version() -> str:
@@ -31,6 +37,37 @@ def _tool_version() -> str:
         return _pkg_version("odoo-doctor")
     except PackageNotFoundError:  # editable/source checkout without metadata
         return "0+unknown"
+
+
+def _walk_files(root: Path, excluded: set[str]) -> Iterator[tuple[str, str | None]]:
+    """Yield (absolute path, symlink target or None) for every input file under *root*.
+
+    One `scandir` pass: directories are resolved (to honour *excluded*), files are not,
+    which keeps the cache-hit path cheap on trees with tens of thousands of files.
+    """
+    pending = [str(root.absolute())]
+    while pending:
+        folder = pending.pop()
+        if excluded and os.path.realpath(folder) in excluded:
+            continue
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name not in _SKIP_DIRS:
+                            pending.append(entry.path)
+                    elif (
+                        entry.name not in _SKIP_FILES
+                        and os.path.splitext(entry.name)[1] not in _SKIP_SUFFIXES
+                        and entry.is_file()
+                    ):
+                        link = entry.is_symlink()
+                        yield (
+                            entry.path,
+                            (os.path.realpath(entry.path) if link else None),
+                        )
+        except OSError:
+            continue
 
 
 def project_fingerprint(
@@ -59,34 +96,21 @@ def project_fingerprint(
     for identity in extra_identities:
         h.update(f"dependency={identity}\0".encode())
 
-    # File contents across all roots, in a deterministic order.
-    extra_paths = {Path(p).resolve() for p in extra_files}
-    files_to_hash = set(extra_paths)
-    excluded = [Path(p).resolve() for p in excluded_paths]
+    # File contents across all roots, in a deterministic order. Value: the symlink
+    # target (None for regular files), so retargeting an alias changes the hash.
+    extras = {str(Path(p).resolve()) for p in extra_files}
+    files: dict[str, str | None] = dict.fromkeys(extras)
+    excluded = {str(Path(p).resolve()) for p in excluded_paths}
     for root in addon_paths:
-        root = Path(root)
-        if not root.exists():
-            continue
-        files_to_hash.update(
-            p.absolute()
-            for p in root.rglob("*")
-            if p.is_file()
-            and not any(
-                base == p.resolve() or base in p.resolve().parents for base in excluded
-            )
-            and not {".git", ".ruff_cache"}.intersection(p.relative_to(root).parts)
-        )
-    for p in sorted(files_to_hash):
-        h.update(str(p).encode("utf-8"))
-        h.update(b"\0")
-        h.update(str(p.resolve()).encode("utf-8"))
-        h.update(b"\0")
+        files.update(_walk_files(Path(root), excluded))
+    for path in sorted(files):
+        h.update(f"{path}\0{files[path] or path}\0".encode("utf-8", "surrogateescape"))
         # Every file's existence matters to manifest asset checks. Only inputs
         # consumed as source/config need their contents hashed as well.
-        if p.suffix not in _SCANNED_SUFFIXES and p not in extra_paths:
+        if path not in extras and os.path.splitext(path)[1] not in _SCANNED_SUFFIXES:
             continue
         try:
-            h.update(p.read_bytes())
+            h.update(Path(path).read_bytes())
         except OSError:
             h.update(b"<unreadable>")
         h.update(b"\0")
