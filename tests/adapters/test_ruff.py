@@ -207,9 +207,7 @@ def _addon_with_hostile_ruff_config(root: Path) -> tuple[Path, Path]:
     return repo, evil_cache
 
 
-def test_ruff_command_keeps_the_repo_config_but_not_the_cache(
-    tmp_path: Path, monkeypatch
-):
+def test_ruff_command_is_isolated_from_the_repo(tmp_path: Path, monkeypatch):
     import odoo_doctor.adapters.ruff.adapter as mod
 
     repo, _ = _addon_with_hostile_ruff_config(tmp_path)
@@ -228,9 +226,10 @@ def test_ruff_command_keeps_the_repo_config_but_not_the_cache(
     RuffAdapter().run(repo / "m", "17.0")
 
     cmd = seen["cmd"]
-    assert "--isolated" not in cmd and "--config" not in cmd  # repo config is honoured
-    assert "--no-cache" in cmd
-    assert Path(cmd[-1]).is_absolute()  # ruff finds the config from the linted path
+    assert "--isolated" in cmd and "--no-cache" in cmd
+    assert "--no-respect-gitignore" in cmd and "--config" not in cmd
+    assert Path(cmd[-1]).is_absolute()
+    assert seen["kw"]["stdin"] == subprocess.DEVNULL
     assert not Path(seen["kw"]["cwd"]).resolve().is_relative_to(repo.resolve())
     env = seen["kw"]["env"]
     assert "GH_TOKEN" not in env and "RUFF_CACHE_DIR" not in env
@@ -242,34 +241,77 @@ def _run_in(repo: Path, monkeypatch, cwd: Path) -> set[str]:
     return {d.rule for d in RuffAdapter().run(repo / "m", "17.0")}
 
 
-def test_ruff_honours_the_repo_config_but_writes_no_cache(tmp_path: Path, monkeypatch):
+def test_ruff_ignores_the_repo_config_and_writes_no_cache(
+    tmp_path: Path, monkeypatch, capsys
+):
     if shutil.which("ruff") is None:
         pytest.skip("ruff is not installed")
     repo, evil_cache = _addon_with_hostile_ruff_config(tmp_path)
     elsewhere = tmp_path / "cwd"
     elsewhere.mkdir()
-    assert "F401" not in _run_in(repo, monkeypatch, elsewhere)  # ruff.toml applied
+    assert "F401" in _run_in(repo, monkeypatch, elsewhere)  # ruff.toml not applied
+    assert "ruff configuration is ignored" in capsys.readouterr().err
     assert not evil_cache.exists()  # the repo's cache-dir was not honoured
     assert not list(repo.rglob(".ruff_cache"))
-    # pyproject.toml [tool.ruff] works the same, from any cwd
+    # pyproject.toml [tool.ruff] is ignored the same way, from any cwd
     (repo / "ruff.toml").unlink()
     (repo / "pyproject.toml").write_text('[tool.ruff.lint]\nignore = ["F401"]\n')
-    assert "F401" not in _run_in(repo, monkeypatch, elsewhere)
-    (repo / "pyproject.toml").write_text("")
     assert "F401" in _run_in(repo, monkeypatch, elsewhere)
 
 
-def test_ruff_required_version_mismatch_warns_instead_of_crashing(
+def test_ruff_ignores_a_config_that_tries_to_hide_everything(
     tmp_path: Path, monkeypatch
 ):
     if shutil.which("ruff") is None:
         pytest.skip("ruff is not installed")
     repo, _ = _addon_with_hostile_ruff_config(tmp_path)
-    (repo / "ruff.toml").write_text('required-version = ">=999"\n')
-    monkeypatch.chdir(tmp_path)
+    (repo / "ruff.toml").write_text(
+        'exclude = ["*"]\nextend-exclude = ["m"]\nline-length = 1\n'
+        '[lint]\nselect = []\nignore = ["ALL"]\n'
+        '[lint.per-file-ignores]\n"*" = ["ALL"]\n'
+    )
+    (repo / ".gitignore").write_text("m/models.py\n")
+    (repo / ".ignore").write_text("m/models.py\n")
+    assert "F401" in _run_in(repo, monkeypatch, tmp_path)  # models.py still linted
+
+
+def test_ruff_never_reads_an_extend_to_a_hostile_path(tmp_path: Path, monkeypatch):
+    if shutil.which("ruff") is None:
+        pytest.skip("ruff is not installed")
+    repo, _ = _addon_with_hostile_ruff_config(tmp_path)
+    (repo / "ruff.toml").write_text('extend = "/dev/zero"\n')
     diags = RuffAdapter().run(repo / "m", "17.0")
-    assert [d.rule for d in diags] == ["adapter-ruff-warning"]
-    assert "999" in diags[0].message
+    assert "F401" in {d.rule for d in diags}
+    assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no os.mkfifo")
+@pytest.mark.parametrize("kind", ["fifo", "dev-zero"])
+def test_ruff_does_not_hang_on_a_special_extend_target(
+    tmp_path: Path, capsys, kind: str
+):
+    import time
+
+    if shutil.which("ruff") is None:
+        pytest.skip("ruff is not installed")
+    repo = tmp_path / "repo"
+    (repo / "m").mkdir(parents=True)
+    (repo / "m" / "a.py").write_text("import os\n")
+    (repo / "ruff.toml").write_text('extend = "evil.toml"\n')
+    if kind == "fifo":
+        os.mkfifo(repo / "evil.toml")
+    else:
+        (repo / "evil.toml").symlink_to("/dev/zero")
+    adapter = RuffAdapter()
+    start = time.monotonic()
+    diags = adapter.run(repo / "m", "17.0")
+    adapter.run(repo / "m", "17.0")
+    assert time.monotonic() - start < 20
+    assert "F401" in {d.rule for d in diags}
+    assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
+    err = capsys.readouterr().err
+    assert err.count("ruff configuration is ignored") == 1  # said once, not per run
+    assert "ruff.toml" in err
 
 
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no os.mkfifo")
@@ -281,51 +323,5 @@ def test_ruff_does_not_hang_on_a_fifo_named_py(tmp_path: Path, monkeypatch):
     diags = RuffAdapter().run(
         repo / "m", "17.0"
     )  # blocks (60 s timeout warning) if broken
-    assert "B018" in {d.rule for d in diags}  # F401 is ignored by the repo config
+    assert "F401" in {d.rule for d in diags}
     assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
-
-
-def _run_with_timer(repo: Path):
-    import time
-
-    start = time.monotonic()
-    diags = RuffAdapter().run(repo / "m", "17.0")
-    return diags, time.monotonic() - start
-
-
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no os.mkfifo")
-@pytest.mark.parametrize("kind", ["fifo", "dev-zero"])
-def test_ruff_does_not_hang_on_a_special_extend_target(
-    tmp_path: Path, capsys, kind: str
-):
-    if shutil.which("ruff") is None:
-        pytest.skip("ruff is not installed")
-    repo = tmp_path / "repo"
-    (repo / "m").mkdir(parents=True)
-    (repo / "m" / "a.py").write_text("import os\n")
-    (repo / "ruff.toml").write_text('extend = "evil.toml"\n')
-    if kind == "fifo":
-        os.mkfifo(repo / "evil.toml")
-    else:
-        (repo / "evil.toml").symlink_to("/dev/zero")
-    diags, elapsed = _run_with_timer(repo)
-    _run_with_timer(repo)
-    assert elapsed < 20
-    assert "F401" in {d.rule for d in diags}  # other findings still reported
-    assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
-    err = capsys.readouterr().err
-    assert err.count("ruff configuration is ignored") == 1  # said once, not per run
-    assert "evil.toml" in err
-
-
-def test_ruff_still_honours_an_extend_to_a_regular_file(tmp_path: Path, capsys):
-    if shutil.which("ruff") is None:
-        pytest.skip("ruff is not installed")
-    repo = tmp_path / "repo"
-    (repo / "m").mkdir(parents=True)
-    (repo / "m" / "a.py").write_text("import os\n")
-    (repo / "ruff.toml").write_text('extend = "shared.toml"\n')
-    (repo / "shared.toml").write_text('[lint]\nignore = ["F401"]\n')
-    diags, _ = _run_with_timer(repo)
-    assert "F401" not in {d.rule for d in diags}
-    assert "ignored" not in capsys.readouterr().err

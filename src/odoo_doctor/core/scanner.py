@@ -122,7 +122,7 @@ def _lint_signature(
         closure[name] = None
         pending.extend(modules[name].depends)
     sigs = sorted((n, module_sigs.get(str(modules[n].path), "")) for n in closure)
-    return repr((sigs, config_sig))  # a linter also reads ruff.toml, .gitignore ...
+    return repr((sigs, config_sig))  # the linters' executables and versions
 
 
 def _is_native(func: object) -> bool:
@@ -271,9 +271,7 @@ def collect_scores(
     if cache is not None and changed_files is None and not cfg.enable_plugins:
         from odoo_doctor.adapters.cache import cache_dependencies
 
-        extra_files, adapter_files_identities = cache_dependencies(
-            addon_paths, config_root, cfg.adapters
-        )
+        adapter_files_identities = cache_dependencies(cfg.adapters)
         config_repr, fp_version, ruleset, extra = _identity_inputs(
             cfg, version, force_version
         )
@@ -286,7 +284,6 @@ def collect_scores(
             version=fp_version,
             ruleset=ruleset,
             extra=extra,
-            extra_files=extra_files,
             extra_identities=adapter_files_identities,
             excluded_paths=[cache.cache_dir],
         )
@@ -330,16 +327,10 @@ def collect_scores(
             if cfg.odoo_source_path
             else ""
         )
-        # linter configuration, ignore files and executables (the same inputs as --cache's
-        # key): stamped like the addons' files, missing files included
+        # linter executables and versions (the same inputs as --cache's key)
         from odoo_doctor.adapters.cache import cache_dependencies
 
-        dep_files, dep_identities = cache_dependencies(
-            addon_paths, config_root, cfg.adapters
-        )
-        config_sig = repr(
-            (sorted((str(p), stamper.file(p)) for p in dep_files), dep_identities)
-        )
+        config_sig = repr(cache_dependencies(cfg.adapters))
         project_key = repr((sorted(module_sigs.items()), index_sig, config_sig))
         # plugin rules (context ones too) may read anything: they run on every scan
         plugins = any(not _is_native(f) for _, f in default_registry.get_rules())

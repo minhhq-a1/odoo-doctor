@@ -6,6 +6,25 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- The Ruff adapter no longer applies the scanned repo's Ruff configuration. This reverses the change in
+  0.11.1 (PR #71) that made Ruff honour `ruff.toml`, `.ruff.toml` and `pyproject.toml` `[tool.ruff]`
+  (0.11.0 and earlier also read them): a repo could use that configuration (`ignore`, `exclude`,
+  `extend-exclude`, `per-file-ignores`, `extend`, `select = []`) to hide Ruff's findings from the
+  report and the score, and `extend` made Ruff open any path (a FIFO hung it). Ruff now runs with
+  `--isolated` (no configuration at all, Ruff's own default rule set), `--no-respect-gitignore` (a repo's
+  `.gitignore`, `.ignore` or `.git/info/exclude` hid files from Ruff otherwise), `--no-cache`, a scratch
+  working directory and `HOME`, no stdin and a secret-free environment. When the repo holds a Ruff
+  configuration, one `[INFO]` line on stderr says it is ignored. Filter Ruff findings with `[ignore] rules`
+  in `odoo-doctor.toml`. A `# noqa` or `# ruff: noqa` comment in a source file is still honoured by Ruff.
+  Rules a repo configuration had switched on (beyond Ruff's defaults) are not reported; findings it
+  had ignored are reported again.
+- The scan cache and the language server's reuse key no longer include Ruff configuration files, their
+  `extend` targets or ignore files (they are no longer inputs to Ruff); the Ruff and Pylint executables
+  and versions still are. The code that checked an `extend` chain for special files and fell back to
+  `--isolated` is removed, since Ruff is always isolated.
+
 ### Changed
 
 - `search-in-loop`, `create-in-loop` and `write-in-loop` are `high` only for the loop shape that is

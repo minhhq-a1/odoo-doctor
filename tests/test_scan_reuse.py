@@ -387,9 +387,12 @@ def test_stamper_sees_a_rewrite_with_the_same_size_and_mtime(tmp_path: Path):
 
 
 @pytest.mark.skipif(shutil.which("ruff") is None, reason="ruff is not installed")
-def test_ruff_configuration_changes_reach_a_reusing_scan(tmp_path: Path):
-    """Create, edit and delete of ruff.toml, and of the file it extends, change the linter's
-    findings in the very next reusing scan (not after a restart)."""
+def test_ruff_configuration_and_ignore_files_do_not_change_a_reusing_scan(
+    tmp_path: Path,
+):
+    """The repo's ruff.toml, the file it extends and .gitignore are not ruff inputs (ruff runs
+    --isolated --no-respect-gitignore): editing them keeps the findings, and a reusing scan
+    still equals one from scratch."""
     root = tmp_path.resolve()
     _project(root, ruff=True)
     m = root / "mod_c" / "models" / "m.py"
@@ -401,35 +404,10 @@ def test_ruff_configuration_changes_reach_a_reusing_scan(tmp_path: Path):
     reuse = ScanReuse()
     assert f401(_same(root, reuse))
     config = root / "ruff.toml"
-    config.write_text('[lint]\nignore = ["F401"]\n')  # create
-    assert not f401(_same(root, reuse))
-    config.write_text("[lint]\nselect = ['F']\n")  # edit
+    config.write_text('[lint]\nignore = ["F401"]\n')
     assert f401(_same(root, reuse))
-    shared = root / "shared.toml"
-    shared.write_text('[lint]\nignore = ["F401"]\n')
-    config.write_text('extend = "shared.toml"\n')  # edit to extend another file
-    assert not f401(_same(root, reuse))
-    shared.write_text("[lint]\n")  # edit the extend target
+    (root / "shared.toml").write_text('[lint]\nignore = ["F401"]\n')
+    config.write_text('extend = "shared.toml"\n')
     assert f401(_same(root, reuse))
-    config.unlink()  # delete
-    shared.unlink()
+    (root / ".gitignore").write_text("mod_c/models/m.py\n")
     assert f401(_same(root, reuse))
-    (root / ".gitignore").write_text(
-        "mod_c/models/m.py\n"
-    )  # ruff honours .gitignore too
-    _same(root, reuse)
-
-
-def test_ruff_config_candidates_include_nested_files_and_missing_ones(tmp_path: Path):
-    from odoo_doctor.adapters.cache import _ruff_configs
-
-    root = tmp_path.resolve()
-    (root / "a" / "deep").mkdir(parents=True)
-    for rel in ("a/ruff.toml", "a/deep/.gitignore", "a/deep/x.toml", "a/.ignore"):
-        (root / rel).write_text("")
-    found = _ruff_configs([root, root])  # the same folder twice: walked once
-    for rel in ("a/ruff.toml", "a/deep/.gitignore", "a/deep/x.toml", "a/.ignore"):
-        assert (root / rel).resolve() in found
-    assert (
-        root / "ruff.toml"
-    ).resolve() in found  # missing: creating it must invalidate

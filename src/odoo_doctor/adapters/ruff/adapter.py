@@ -12,6 +12,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import typer
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -20,9 +22,8 @@ else:
     except ImportError:
         import tomli as tomllib  # type: ignore[no-redef]
 
-from odoo_doctor.adapters.cache import ruff_config_problem
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import lint_targets, warn_skipped
+from odoo_doctor.core.source import lint_targets, read_bytes
 from odoo_doctor.core.text import safe_text
 
 
@@ -42,6 +43,7 @@ class RuffAdapter:
 
     def __init__(self) -> None:
         self._mapping = self._load_mapping()
+        self._noted: set[Path] = set()
 
     def is_available(self) -> bool:
         return shutil.which("ruff") is not None
@@ -63,27 +65,23 @@ class RuffAdapter:
         if not targets:
             return []
         by_file = targets != [module]
-        # ruff opens the config and every `extend` target itself: a FIFO there hangs it
-        problem = ruff_config_problem(module)
-        if problem is not None:
-            warn_skipped(
-                problem[0],
-                f"{problem[1]}: the repository's ruff configuration is ignored (--isolated)",
-            )
+        self._note_ignored_config(module)
         try:
-            # The repo's own ruff.toml / pyproject.toml [tool.ruff] is honoured (the team's
-            # rules), found by ruff from the linted paths, never from the cwd. Ruff cannot run
-            # code from config, but `cache-dir` could make it write elsewhere, so: --no-cache
-            # (also no .ruff_cache in the repo), a scratch cwd and HOME (no user-level config,
-            # nothing written to the repo) and a secret-free environment. Residual risk: a
-            # hostile config can disable or change ruff's own findings (not the native rules).
+            # The scanned repo's ruff configuration is never applied: a hostile ruff.toml /
+            # pyproject.toml could hide findings (`ignore`, `exclude`, `per-file-ignores`,
+            # `extend`), write elsewhere (`cache-dir`) or make ruff open a FIFO (`extend`).
+            # So: --isolated (no config at all, ruff's default rule set; also no user-level
+            # config), --no-respect-gitignore (.gitignore / .ignore / .git/info/exclude hide files
+            # from ruff otherwise), --no-cache (no .ruff_cache in the repo), a scratch cwd and
+            # HOME and a secret-free environment. Filter findings with `[ignore] rules`.
             with tempfile.TemporaryDirectory(prefix="odoo-doctor-ruff-") as scratch:
                 result = subprocess.run(
                     [
                         "ruff",
                         "check",
+                        "--isolated",
+                        "--no-respect-gitignore",
                         "--no-cache",
-                        *(["--isolated"] if problem is not None else []),
                         # ruff's default excludes (node_modules ...) for files listed one by one
                         *(["--force-exclude"] if by_file else []),
                         "--output-format=json",
@@ -153,11 +151,30 @@ class RuffAdapter:
                     odoo_version,
                     "process error",
                     f"Ruff exited with status {result.returncode} but produced no findings; "
-                    "the run may have failed (configuration or internal error"
+                    "the run may have failed (internal error"
                     f"{_cause(result.stderr)}).",
                 )
             ]
         return diags
+
+    def _note_ignored_config(self, module: Path) -> None:
+        """Say once per scan that the repo's ruff configuration is not applied."""
+        for parent in (module, *module.parents):
+            for name in ("ruff.toml", ".ruff.toml", "pyproject.toml"):
+                path = parent / name
+                raw = read_bytes(path)  # never opens a FIFO or a huge file
+                if raw is None or (
+                    name == "pyproject.toml" and b"[tool.ruff" not in raw
+                ):
+                    continue
+                if path not in self._noted:
+                    self._noted.add(path)
+                    typer.echo(
+                        f"[INFO] {safe_text(path)}: ruff configuration is ignored; "
+                        "Odoo Doctor runs ruff with its own settings (use [ignore] rules)",
+                        err=True,
+                    )
+                return
 
     def _parse_output(
         self, raw: list[dict], module_name: str, odoo_version: str
