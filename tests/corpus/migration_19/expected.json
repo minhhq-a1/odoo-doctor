@@ -15,6 +15,11 @@
     "high"
   ],
   [
+    "chatter-div-removed",
+    "mg/views/views.xml",
+    "medium"
+  ],
+  [
     "kanban-legacy-templates",
     "mg/views/views.xml",
     "high"

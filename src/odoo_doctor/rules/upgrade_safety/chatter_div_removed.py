@@ -17,7 +17,37 @@ from odoo_doctor.rules._module_files import (
 from odoo_doctor.rules.registry import rule
 
 if TYPE_CHECKING:
+    from lxml import etree
+
     from odoo_doctor.graph.module_context import ModuleContext
+
+# The fields Odoo 17 put in the div; <chatter/> brings all of them by itself.
+CHATTER_FIELDS = frozenset({"message_follower_ids", "activity_ids", "message_ids"})
+
+
+def is_plain_chatter_div(div: etree._Element, arch: etree._Element) -> bool:
+    """Can ``<chatter/>`` replace this div without losing anything or changing meaning?
+
+    Only the class, only the standard chatter fields inside (or nothing), and a place
+    where Odoo 18 and 19 themselves put ``<chatter/>``: directly under the root of the
+    arch, or in the body of an ``xpath`` of an inheriting view. Anything else is for a
+    person to look at.
+    """
+    root = next((c for c in arch if isinstance(c.tag, str)), None)
+    parent = div.getparent()
+    return (
+        dict(div.attrib) == {"class": div.get("class", "")}
+        and div.get("class", "").split() == ["oe_chatter"]
+        and (parent is root or (parent is not None and parent.tag == "xpath"))
+        and not (div.text or "").strip()
+        and all(
+            c.tag == "field"
+            and c.get("name") in CHATTER_FIELDS
+            and len(c) == 0
+            and not (c.tail or "").strip()
+            for c in div
+        )
+    )
 
 
 @rule(
@@ -35,6 +65,10 @@ def check_chatter_div_removed(ctx: ModuleContext) -> list[Diagnostic]:
     The form compiler of Odoo 17 selected ``div.oe_chatter``. Odoo 18 and 19 select only
     the ``chatter`` tag, so the div is rendered as a plain block and the form has no
     chatter. The view still loads, so nothing fails at install time.
+
+    ``high`` when every such div is plain (``is_plain_chatter_div``): ``fix --upgrade-to``
+    replaces it by ``<chatter/>``. A div with other attributes or content, or in an
+    unusual place, is ``medium``: the replacement would drop something.
     """
     diags: list[Diagnostic] = []
     for path in data_files(ctx):
@@ -50,6 +84,7 @@ def check_chatter_div_removed(ctx: ModuleContext) -> list[Diagnostic]:
             if not offenders:
                 continue
             rec_id = record.get("id", "<anonymous>")
+            plain = all(is_plain_chatter_div(e, arch) for e in offenders)
             diags.append(
                 make_diag(
                     ctx=ctx,
@@ -59,6 +94,7 @@ def check_chatter_div_removed(ctx: ModuleContext) -> list[Diagnostic]:
                     category="Upgrade Safety",
                     tier="P1",
                     severity="warning",
+                    confidence="high" if plain else "medium",
                     title=f"View '{rec_id}' uses div.oe_chatter",
                     message=(
                         f"View '{rec_id}' adds the chatter with <div class=\"oe_chatter\">. "

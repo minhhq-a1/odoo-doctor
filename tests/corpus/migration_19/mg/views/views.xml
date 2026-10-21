@@ -23,8 +23,21 @@
             <form>
                 <sheet><field name="name"/></sheet>
                 <div class="oe_chatter">
-                    <field name="name"/>
+                    <field name="message_follower_ids"/>
+                    <field name="message_ids"/>
                 </div>
+            </form>
+        </field>
+    </record>
+    <!-- medium: a div with custom content is not replaced blindly by <chatter/> -->
+    <record id="mg_thing_view_form_custom" model="ir.ui.view">
+        <field name="name">mg.thing.form.custom</field>
+        <field name="model">mg.thing</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet><field name="name"/></sheet>
+                <div class="oe_chatter"><field name="name"/></div>
             </form>
         </field>
     </record>

@@ -143,3 +143,19 @@ def rename_attr_value(tag_text: str, attr: str, old: str, new: str) -> str:
     q = m.group("q")
     replaced = f"{m.group('space')}{attr}{m.group('eq')}{q}{new}{q}"
     return tag_text[: m.start()] + replaced + tag_text[m.end() :]
+
+
+def get_attr(tag_text: str, attr: str) -> str | None:
+    """Raw (still escaped) value of ``attr`` in the tag text, or None."""
+    m = _find_attr(tag_text, attr)
+    return None if m is None else m.group("value")
+
+
+def set_attr_value(tag_text: str, attr: str, new: str) -> str:
+    """Replace the raw value of ``attr`` (keeps quotes and spacing); no-op if absent."""
+    m = _find_attr(tag_text, attr)
+    if m is None:
+        return tag_text
+    q = m.group("q")
+    replaced = f"{m.group('space')}{attr}{m.group('eq')}{q}{new}{q}"
+    return tag_text[: m.start()] + replaced + tag_text[m.end() :]

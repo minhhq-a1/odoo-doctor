@@ -13,8 +13,19 @@ All notable changes to Odoo Doctor are documented here.
   a traceback. After each fixer the engine checks that an `.xml` file still parses and a `.py` file still
   compiles, and drops a result that does not. Findings of one file are fixed from the last line to the first.
 
+### Changed
+
+- `chatter-div-removed` is `high` only when `<chatter/>` can replace the div without losing anything: the div has
+  only the class `oe_chatter`, holds only the standard chatter fields (or nothing) and sits directly under the root
+  of the view or in the body of an `xpath`. Any other div (an extra attribute, custom content, another parent) is
+  now `medium`: not scored and not mechanical in the upgrade report. Title and baseline identity are unchanged.
+  On Odoo 17 core, 73 of its 75 divs stay `high`.
+
 ### Internal
 
+- Migration fixers for `view-tree-removed`, `chatter-div-removed`, `search-view-group-attributes` and
+  `removed-core-field-usage` (`rules/upgrade_safety/fixers.py`) and `MECHANICAL_RENAMES` in `core/upgrade.py`. They
+  are registered as migration fixers but nothing imports them yet: `fix --upgrade-to` arrives in a later change.
 - Groundwork for the 0.12 migration fixers: `FixerRegistry` knows `migration` fixers (skipped unless the caller
   passes `include_migration`) and a per-finding `applies` predicate; `rules/upgrade_safety/_xml_text.py` finds
   tags and `<record>` spans in XML text. Nothing uses them yet.

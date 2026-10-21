@@ -55,12 +55,12 @@ def test_flag_only_adds_the_key():
 def test_totals_equal_the_upgrade_safety_findings_of_the_scan():
     report = _json("--upgrade-report")
     up = report["upgrade_report"]
-    assert up["totals"]["findings"] == _upgrade_findings(report) == 10
+    assert up["totals"]["findings"] == _upgrade_findings(report) == 11
     assert (
         sum(m["totals"]["findings"] for m in up["modules"].values())
         == up["totals"]["findings"]
     )
-    assert up["totals"]["mechanical"] + up["totals"]["needs_review"] == 10
+    assert up["totals"]["mechanical"] + up["totals"]["needs_review"] == 11
 
 
 def test_mixed_removed_field_entries_in_the_corpus():
@@ -70,6 +70,9 @@ def test_mixed_removed_field_entries_in_the_corpus():
     # res.groups.users is a rename; res.groups.category_id is not.
     assert (fields["mechanical"], fields["needs_review"]) == (1, 1)
     assert groups["Kanban legacy templates"]["mechanical"] == 0
+    chatter = groups["Chatter div replaced by <chatter/>"]
+    # a plain div is mechanical; a div with custom content (medium) needs a person
+    assert (chatter["mechanical"], chatter["needs_review"]) == (1, 1)
     assert groups["View type tree renamed to list"]["needs_review"] == 0
 
 

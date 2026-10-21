@@ -48,6 +48,47 @@ def test_extra_classes_and_groups_attribute(tmp_path: Path):
     assert len(_diags(tmp_path, view(arch))) == 1
 
 
+def _confidence(tmp_path: Path, arch: str) -> list[str]:
+    return [d.confidence for d in _diags(tmp_path, view(arch))]
+
+
+def test_plain_div_under_form_or_xpath_is_high(tmp_path: Path):
+    div = '<div class="oe_chatter"><field name="message_ids"/></div>'
+    assert _confidence(tmp_path, f"<form>{div}</form>") == ["high"]
+    assert _confidence(
+        tmp_path, f'<xpath expr="//sheet" position="after">{div}</xpath>'
+    ) == ["high"]
+    assert _confidence(tmp_path, '<form><div class="oe_chatter"/></form>') == ["high"]
+
+
+def test_div_with_other_attribute_content_or_parent_is_medium(tmp_path: Path):
+    plain = '<field name="message_ids"/>'
+    assert _confidence(
+        tmp_path, f'<form><div class="oe_chatter" invisible="1">{plain}</div></form>'
+    ) == ["medium"]
+    assert _confidence(
+        tmp_path, '<form><div class="oe_chatter"><span/></div></form>'
+    ) == ["medium"]
+    assert _confidence(
+        tmp_path, f'<form><div class="oe_chatter o_x">{plain}</div></form>'
+    ) == ["medium"]
+    assert _confidence(
+        tmp_path,
+        f'<form><field name="x"><div class="oe_chatter">{plain}</div></field></form>',
+    ) == ["medium"]
+    assert _confidence(
+        tmp_path, f'<form><group><div class="oe_chatter">{plain}</div></group></form>'
+    ) == ["medium"]
+
+
+def test_one_unsafe_div_makes_the_whole_finding_medium(tmp_path: Path):
+    arch = (
+        '<form><div class="oe_chatter"><field name="message_ids"/></div>'
+        '<div class="oe_chatter"><span/></div></form>'
+    )
+    assert _confidence(tmp_path, arch) == ["medium"]
+
+
 def test_similar_class_names_are_not_matched(tmp_path: Path):
     arch = '<form><div class="o_portal_chatter oe_chatter_box"/></form>'
     assert _diags(tmp_path, view(arch)) == []
