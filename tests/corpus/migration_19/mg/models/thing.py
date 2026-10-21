@@ -8,6 +8,9 @@ class MgThing(models.Model):
     name = fields.Char(string="Name", required=True)
     # A model of the module's own may name a field groups_id: not a reference to the old one.
     groups_id = fields.Many2many("res.groups")
+    # the chatter fields of mail.thread, declared here so the sample needs no dependency
+    message_ids = fields.One2many("mail.message", "res_id")
+    message_follower_ids = fields.One2many("mail.followers", "res_id")
 
     def open_list(self):
         return {

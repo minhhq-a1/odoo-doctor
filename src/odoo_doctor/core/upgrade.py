@@ -9,11 +9,11 @@ produced (any confidence), grouped by *kind of change* with the static table
 ``_GROUPS`` below. A rule not in the table lands in "Other upgrade findings".
 
 Mechanical or needs review. The label comes only from the static tables
-``MECHANICAL_RULES`` and ``MECHANICAL_FIELDS``, never from the finding's text, and
+``MECHANICAL_RULES`` and ``MECHANICAL_RENAMES``, never from the finding's text, and
 only a ``high`` confidence finding can be mechanical: ``fix`` applies only ``high``
 findings (``core.fixer.compute_fixes``). A finding is "mechanical" when the change
-is a rename that needs no decision. A fixer for these is planned (0.12); the
-report does not fix anything.
+is a rename that needs no decision. ``fix --upgrade-to`` fixes them
+(``rules/upgrade_safety/fixers.py``); the report itself fixes nothing.
 
 Readiness score (``readiness_schema_version`` 1), per module::
 
@@ -64,31 +64,27 @@ _GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 RULE_GROUPS: dict[str, str] = {r: g for g, rules in _GROUPS for r in rules}
 
-# Rules whose high-confidence findings are all labelled mechanical. For view-tree-removed
-# this is broader than what the 0.12 fixer is planned to cover (XPath steps named
-# `tree`, <field name="type">tree</field>, eval= view_mode strings): one finding covers a
-# whole view record, so these forms cannot be told apart. 0.12 must either extend the
-# fixer to them or narrow this label.
+# Rules whose high-confidence findings are all labelled mechanical: each has a migration
+# fixer that repairs every form its rule reports at high confidence (a rule demotes to
+# medium the forms the fixer would not repair, e.g. a chatter div with custom content).
 MECHANICAL_RULES = frozenset(
     {"view-tree-removed", "chatter-div-removed", "search-view-group-attributes"}
 )
-# removed-core-field-usage entries that are pure renames (model, field). The rest of
-# that rule's table (category_id, deprecated, mobile, ir.filters.user_id, detailed_type)
-# changes meaning or type and stays "needs review".
-MECHANICAL_FIELDS = frozenset(
-    {
-        (model, "groups_id")
-        for model in (
-            "res.users",
-            "ir.ui.view",
-            "ir.ui.menu",
-            "ir.actions.act_window",
-            "ir.actions.server",
-            "ir.actions.report",
-        )
-    }
-    | {("res.groups", "users")}
-)
+# removed-core-field-usage entries that are pure renames: (model, old field) -> new field.
+# The rest of that rule's table (category_id, deprecated, mobile, ir.filters.user_id,
+# detailed_type) changes meaning or type and stays "needs review". The migration fixer
+# (rules/upgrade_safety/fixers.py) renames exactly these, so the label and the fix agree.
+MECHANICAL_RENAMES: dict[tuple[str, str], str] = {
+    (model, "groups_id"): "group_ids"
+    for model in (
+        "res.users",
+        "ir.ui.view",
+        "ir.ui.menu",
+        "ir.actions.act_window",
+        "ir.actions.server",
+        "ir.actions.report",
+    )
+} | {("res.groups", "users"): "user_ids"}
 
 # Parses the title built in rules/upgrade_safety/removed_core_field_usage.py (emit()):
 # the upgrade report depends on its wording; change both together.
@@ -100,14 +96,20 @@ def has_migration_rules(version: str) -> bool:
     return head.isdigit() and int(head) >= FIRST_MIGRATION_MAJOR
 
 
-def _is_mechanical(d: Diagnostic) -> bool:
+def parse_field_title(title: str) -> tuple[str, str] | None:
+    """``(model, field)`` from the title of a removed-core-field-usage finding."""
+    m = _FIELD_TITLE.match(title)
+    return (m.group(2), m.group(1)) if m else None
+
+
+def is_mechanical(d: Diagnostic) -> bool:
+    """Does ``fix --upgrade-to`` fix this finding? (high confidence and in the static tables)"""
     if d.confidence != "high":
         return False
     if d.rule in MECHANICAL_RULES:
         return True
     if d.rule == "removed-core-field-usage":
-        m = _FIELD_TITLE.match(d.title)
-        return bool(m) and (m.group(2), m.group(1)) in MECHANICAL_FIELDS
+        return parse_field_title(d.title) in MECHANICAL_RENAMES
     return False
 
 
@@ -121,7 +123,7 @@ def readiness_score(diagnostics: Iterable[Diagnostic]) -> float:
 
 
 def _summarize(diags: list[Diagnostic]) -> dict:
-    mechanical = sum(_is_mechanical(d) for d in diags)
+    mechanical = sum(is_mechanical(d) for d in diags)
     return {
         "findings": len(diags),
         "files": len({d.file_path for d in diags}),

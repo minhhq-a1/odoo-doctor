@@ -6,7 +6,7 @@ import odoo_doctor.cli.app  # noqa: F401  (registers every rule)
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.roi import EFFORT_BY_RULE
 from odoo_doctor.core.upgrade import (
-    MECHANICAL_FIELDS,
+    MECHANICAL_RENAMES,
     MECHANICAL_RULES,
     READINESS_SCHEMA_VERSION,
     RULE_GROUPS,
@@ -72,8 +72,8 @@ def test_every_upgrade_safety_rule_has_a_group():
 
 
 def test_mechanical_table_matches_the_rules_own_tables():
-    for model, field in MECHANICAL_FIELDS:
-        assert field in _REMOVED_FIELDS[model], (model, field)
+    for (model, field), new in MECHANICAL_RENAMES.items():
+        assert _REMOVED_FIELDS[model][field][1] == new, (model, field)
     assert MECHANICAL_RULES <= set(RULE_GROUPS)
 
 
