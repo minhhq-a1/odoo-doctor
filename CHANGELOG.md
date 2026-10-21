@@ -16,7 +16,8 @@ All notable changes to Odoo Doctor are documented here.
   `--isolated` (no configuration at all, Ruff's own default rule set), `--no-respect-gitignore` (a repo's
   `.gitignore`, `.ignore` or `.git/info/exclude` hid files from Ruff otherwise), `--no-cache`, a scratch
   working directory and `HOME`, no stdin and a secret-free environment. When the repo holds a Ruff
-  configuration, one `[INFO]` line on stderr says it is ignored. Filter Ruff findings with `[ignore] rules`
+  configuration, one `[INFO]` line on stderr says it is ignored (once per configuration file per process,
+  so the language server says it once, not on every rescan). Filter Ruff findings with `[ignore] rules`
   in `odoo-doctor.toml`. A `# noqa` or `# ruff: noqa` comment in a source file is still honoured by Ruff.
   Rules a repo configuration had switched on (beyond Ruff's defaults) are not reported; findings it
   had ignored are reported again.
@@ -31,27 +32,37 @@ All notable changes to Odoo Doctor are documented here.
   provably wasted, no longer for every call on a plain `self` / `env[...]` receiver. A per-record query
   or write is how Odoo's own addons are written (core 19 holds 405 / 185 / 138 such findings that were
   `high`), so by the confidence policy those are now `medium`. `high` is kept for a call the loop cannot
-  change: a query that is a plain statement of a `for` body (not under `if` / `try` / `match`, in no
-  comprehension, `while`, nested loop or nested function, no `break` / `continue` / `return` in the body),
-  whose receiver and arguments use no loop variable or rebound name, in a loop that stores no attribute
-  or item and calls nothing but plain reads (`search*`, `read*`, `browse`, `mapped`, `filtered`, `get`,
-  `len` ... ; `create` / `write` / `unlink` / `flush*` / `invalidate*` / `message_post` / `action_*` or a
-  helper of the class keep it `medium`), so it can be hoisted; and a `write` / `create` that is the only
-  statement of a `for` body with values and context that do not use the loop (`for r in recs:
-  r.write(vals)` is `recs.write(vals)`). Blind spot: a helper the loop calls is not followed (it only
-  lowers the confidence), and a `write` / `create` is not checked for what the batched form would change
-  (order of effects, per-record `write` overrides). Finding titles are unchanged, so baselines stay valid.
-  The default `--fail-on` (P0/P1, high confidence) no longer fails on these loop findings. Golden
-  corpus case `loop_confidence` holds one file per shape, named for its tier; the `performance_loops` and
-  `loop_setup_not_flagged` cases now expect `medium`.
+  change: a query that is a plain statement of a `for` body (not under `if` / `try` / `match` /
+  `assert`, not past a short circuit such as `and` / `or` / `x if c else y` / `a < b < query`, in no
+  comprehension, `while` or nested function, no `break` / `continue` / `return` / `yield` in the body),
+  whose receiver and arguments use no loop variable or rebound name (assignment, `except ... as`, a
+  `match` capture, `import ... as`, `def` or `class`), in a loop that stores no attribute or item (also
+  inside a tuple target or as the `for` target: `rec.a, b = ...`, `for rec.state in ...`) and calls
+  nothing but plain reads (`search*`, `read*`, `browse`, `mapped`, `filtered`, `get`, `len` ... ;
+  `create` / `write` / `unlink` / `flush*` / `invalidate*` / `message_post` / `action_*` or a helper of
+  the class keep it `medium`), so it can be hoisted. A query that is a plain statement of an inner `for`
+  is reported against that inner loop (and names the outer loops rebind count too). A `write` /
+  `create` is `high` when it is the only statement of a `for` body, its values and context do not use
+  the loop and call nothing that may return another value on the next pass (`fields.Datetime.now()` /
+  `today()`, builtins, `_()` and `with_context` / `sudo` only; a sequence `next_by_code`, `uuid` /
+  `random`, `next()`, a helper or another ORM call keep it `medium`): `for r in recs: r.write(vals)` is
+  `recs.write(vals)`. Blind spot: a helper the loop calls is not followed (it only lowers the
+  confidence); calls are allowed by name, so a user-defined `get` / `format` that writes, or a name that
+  aliases one the loop mutates (`d = domain; d.append(..)`), is not seen; and a `write` / `create` is
+  not checked for what the batched form would change (order of effects, per-record `write` overrides).
+  Finding titles are unchanged, so baselines stay valid. The default `--fail-on` (P0/P1, high
+  confidence) no longer fails on these loop findings. Golden corpus case `loop_confidence` holds one
+  file per shape, named for its tier; the `performance_loops` and `loop_setup_not_flagged` cases now
+  expect `medium`.
   Measured with native rules only (`[adapters] ruff = false, pylint_odoo = false`),
-  `odoo-doctor scan <addons> --odoo-version 19.0 --json`, before = `90082f5` (0.11.1), after = this
-  change. Odoo core 19 addons (`high` / `medium`): `search-in-loop` 405 / 75 to 0 / 480,
-  `create-in-loop` 185 / 27 to 0 / 212, `write-in-loop` 138 / 43 to 1 / 180 (the one left is
-  `mrp_production.py`: `for production in self: production.write({...constants...})`); project score
-  93.3 to 95.1. On a private 14-module addon set the 10 `high` loop findings became `medium`
-  (create 2 to 0, search 7 to 0, write 1 to 0) and the score went 96.4 to 99.0. A whole core 19 scan took
-  about 95 s before and 93 s after.
+  `odoo-doctor scan <addons> --odoo-version 19.0 --json`, before = `4fcd49f` (main after 0.11.1),
+  after = this change; the finding sets are identical apart from confidence. Odoo core 19 addons
+  (`high` / `medium`): `search-in-loop` 405 / 75 to 0 / 480, `create-in-loop` 185 / 27 to 0 / 212,
+  `write-in-loop` 138 / 43 to 1 / 180 (the one left is `mrp_production.py`: `for production in self:
+  production.write({...})` whose values are constants and `fields.Datetime.now()`); project score 93.3
+  to 95.1. On a private 14-module addon set the 10 `high` loop findings became `medium` (create 2 to 0,
+  search 7 to 0, write 1 to 0) and the score went 96.4 to 99.0. A whole core 19 scan took about 88 s
+  before and after (the two scans ran side by side).
 
 ### Fixed
 

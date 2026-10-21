@@ -442,6 +442,34 @@ _CONTAINER_MUTATORS = {
 }
 
 
+# Calls a loop's `write` / `create` values may hold and still be the same on every pass:
+# `fields.Datetime.now()` / `today()` (one value per request for practical purposes),
+# builtins, translation and the context switches of the receiver chain.
+_SAME_EACH_PASS_CALLS = {
+    "now",
+    "today",
+    "_",
+    "len",
+    "str",
+    "int",
+    "float",
+    "bool",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "with_context",
+    "with_company",
+    "with_user",
+    "sudo",
+}
+
+
+def _call_name(call: ast.Call) -> str:
+    f = call.func
+    return f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+
+
 def _store_root(target: ast.AST) -> str | None:
     """Name at the root of an assignment target (``vals['a']`` -> ``vals``)."""
     while isinstance(target, (ast.Attribute, ast.Subscript, ast.Starred)):
@@ -449,9 +477,33 @@ def _store_root(target: ast.AST) -> str | None:
     return target.id if isinstance(target, ast.Name) else None
 
 
+def _is_store(n: ast.AST) -> bool:
+    """An attribute / item store or delete anywhere: an assignment target, also inside a
+    tuple or list target, a ``for`` / ``with`` / comprehension target."""
+    return isinstance(n, (ast.Attribute, ast.Subscript)) and isinstance(
+        n.ctx, (ast.Store, ast.Del)
+    )
+
+
+def _bound_names(n: ast.AST) -> set[str]:
+    """Names a statement binds other than through an ``ast.Name`` store: ``except .. as e``,
+    match captures, ``import .. as v``, ``def`` / ``class`` names."""
+    if isinstance(n, ast.ExceptHandler) and n.name:
+        return {n.name}
+    if isinstance(n, (ast.MatchAs, ast.MatchStar)) and n.name:
+        return {n.name}
+    if isinstance(n, ast.MatchMapping) and n.rest:
+        return {n.rest}
+    if isinstance(n, (ast.Import, ast.ImportFrom)):
+        return {(a.asname or a.name).split(".")[0] for a in n.names}
+    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return {n.name}
+    return set()
+
+
 def _names_changed_by_loop(loop: ast.For | ast.While) -> set[str]:
-    """Names the loop rebinds or mutates: its target, every name stored in it, the root of
-    ``x[k] = v`` / ``x.a = v`` and the receiver of ``x.append(...)``-like statements."""
+    """Names the loop rebinds or mutates: its target, every name stored or bound in it, the
+    root of ``x[k] = v`` / ``x.a = v`` and the receiver of ``x.append(...)``-like calls."""
     changed: set[str] = set()
     if isinstance(loop, ast.For):
         changed |= {n.id for n in ast.walk(loop.target) if isinstance(n, ast.Name)}
@@ -459,18 +511,17 @@ def _names_changed_by_loop(loop: ast.For | ast.While) -> set[str]:
         for n in ast.walk(stmt):
             if isinstance(n, ast.Name) and isinstance(n.ctx, (ast.Store, ast.Del)):
                 changed.add(n.id)
-            elif isinstance(n, (ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Delete)):
-                targets = (
-                    n.targets if isinstance(n, (ast.Assign, ast.Delete)) else [n.target]
-                )
-                changed |= {r for t in targets if (r := _store_root(t))}
+            elif _is_store(n):
+                changed.add(_store_root(n) or "")
             elif (
                 isinstance(n, ast.Call)
                 and isinstance(n.func, ast.Attribute)
                 and n.func.attr in _CONTAINER_MUTATORS
-                and (r := _store_root(n.func.value))
             ):
-                changed.add(r)
+                changed.add(_store_root(n.func.value) or "")
+            else:
+                changed |= _bound_names(n)
+    changed.discard("")
     return changed
 
 
@@ -489,6 +540,7 @@ _NOT_EVERY_ITERATION = (
     ast.AsyncFunctionDef,
     ast.ClassDef,
     ast.Match,
+    ast.Assert,  # its message runs only on failure, all of it not at all under -O
     *_COMPREHENSIONS,
     *([ast.TryStar] if hasattr(ast, "TryStar") else []),
 )
@@ -526,35 +578,40 @@ def _runs_every_iteration(node: ast.AST, call: ast.Call) -> bool:
         return True
     if isinstance(node, _NOT_EVERY_ITERATION):
         return False
-    return any(_runs_every_iteration(c, call) for c in ast.iter_child_nodes(node))
+    children = (
+        # `a < b < c`: `c` runs only when `a < b` holds
+        [node.left, node.comparators[0]]
+        if isinstance(node, ast.Compare)
+        else ast.iter_child_nodes(node)
+    )
+    return any(_runs_every_iteration(c, call) for c in children)
 
 
 def _leaves_early(loop: ast.For | ast.While) -> bool:
-    """A ``break`` / ``continue`` / ``return`` in the body: not every pass reaches the end."""
+    """A ``break`` / ``continue`` / ``return`` / ``yield`` in the body: not every pass
+    reaches the end (a generator may be closed at its ``yield``)."""
     return any(
-        isinstance(n, (ast.Break, ast.Continue, ast.Return))
+        isinstance(n, (ast.Break, ast.Continue, ast.Return, ast.Yield, ast.YieldFrom))
         for stmt in loop.body
         for n in ast.walk(stmt)
     )
 
 
 def _may_change_records(loop: ast.For | ast.While, call: ast.Call) -> bool:
-    """The body stores to an attribute / item (``rec.state = ..``, ``rec['a'] += 1``,
-    ``del rec.a``) or makes a call that is not a plain read. The *call* itself is not
-    counted; its arguments are."""
-    for stmt in loop.body:
+    """The loop stores to an attribute / item (``rec.state = ..``, ``rec['a'] += 1``,
+    ``a.x, b = ..``, ``for r.state in ..``, ``del rec.a``) or makes a call that is not a
+    plain read. The *call* itself is not counted; its arguments are."""
+    head = [loop.target] if isinstance(loop, ast.For) else []
+    for stmt in [*head, *loop.body]:
         for n in ast.walk(stmt):
-            if isinstance(n, (ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Delete)):
-                targets = (
-                    n.targets if isinstance(n, (ast.Assign, ast.Delete)) else [n.target]
-                )
-                if any(isinstance(t, (ast.Attribute, ast.Subscript)) for t in targets):
-                    return True
-            elif isinstance(n, ast.Call) and n is not call:
-                f = n.func
-                name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
-                if name not in _READ_ONLY_CALLS:
-                    return True
+            if _is_store(n):
+                return True
+            if (
+                isinstance(n, ast.Call)
+                and n is not call
+                and _call_name(n) not in _READ_ONLY_CALLS
+            ):
+                return True
     return False
 
 
@@ -587,21 +644,27 @@ def is_repeated_unchanged(call: ast.Call, loop: LoopNode, tree: ast.AST) -> bool
     reaches it. It is the one loop shape that is plainly wrong and cheap to prove.
 
     * A query (``search`` ...) is a direct statement of the ``for`` body (no ``if`` /
-      ``try`` / ``match`` / nested function around it, no ``break`` / ``continue`` /
-      ``return`` in the body), its receiver and arguments use neither a loop variable
-      nor a name the loops rebind, and the body changes no record: no attribute / item
-      store, no call other than a plain read (``_READ_ONLY_CALLS``). It can be hoisted
-      out of the loop.
-    * A ``write`` / ``create`` is the only statement of the body and its arguments (and
-      the context it is called with) do not use the loop either: ``for r in recs:
-      r.write(vals)`` is ``recs.write(vals)``.
+      ``try`` / ``match`` / ``assert`` / nested function around it, not past a short
+      circuit, no ``break`` / ``continue`` / ``return`` / ``yield`` in the body), its
+      receiver and arguments use neither a loop variable nor a name the loops rebind,
+      and the loop changes no record: no attribute / item store, no call other than a
+      plain read (``_READ_ONLY_CALLS``). It can be hoisted out of the loop. In a nested
+      loop the query is judged against the innermost loop that runs it; names the outer
+      loops rebind count too.
+    * A ``write`` / ``create`` is the only statement of the body, its arguments (and the
+      context it is called with) do not use the loop and call nothing that may return
+      another value on the next pass (only ``_SAME_EACH_PASS_CALLS``, such as
+      ``fields.Datetime.now()``): ``for r in recs: r.write(vals)`` is
+      ``recs.write(vals)``.
 
     Blind spot: a query is judged by the loop body alone. A helper the body calls is
     treated as a possible write (so the query stays medium), but nothing is known about
     what the helper does, and a write made by an earlier statement outside the loop, a
-    cron or another transaction is not seen. A ``write`` / ``create`` is not checked for
-    what the batched form would change (order of effects, per-record side effects of
-    ``write`` overrides), only for being the lone statement.
+    cron or another transaction is not seen. Calls are allowed by name only, so a
+    user-defined ``get`` / ``format`` that writes, or a name that aliases one the loop
+    mutates (``d = domain; d.append(..)``), is not seen either. A ``write`` / ``create``
+    is not checked for what the batched form would change (order of effects, per-record
+    side effects of ``write`` overrides), only for being the lone statement.
     """
     if not isinstance(loop, ast.For) or not isinstance(call.func, ast.Attribute):
         return False
@@ -611,9 +674,15 @@ def is_repeated_unchanged(call: ast.Call, loop: LoopNode, tree: ast.AST) -> bool
         return False  # a name bound inside the call leaks out of it
     if writes and not _only_statement(loop, call):
         return False
+    if writes and any(
+        isinstance(n, ast.Call) and _call_name(n) not in _SAME_EACH_PASS_CALLS
+        for n in ast.walk(call)
+        if n is not call
+    ):
+        return False  # `next_by_code()`, `uuid4()`, a helper ... differ on each pass
     if not any(_runs_every_iteration(stmt, call) for stmt in loop.body):
         return False
-    if not writes and (_leaves_early(loop) or _may_change_records(loop, call)):
+    if _leaves_early(loop) or (not writes and _may_change_records(loop, call)):
         return False
     changed: set[str] = set()
     for node in ast.walk(tree):

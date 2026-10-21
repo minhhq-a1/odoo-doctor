@@ -19,3 +19,6 @@ from . import medium_query_helper_call
 from . import medium_query_shadowed_loop_variable
 from . import medium_query_walrus
 from . import medium_query_in_nested_function
+from . import high_write_datetime_now
+from . import medium_write_sequence_value
+from . import medium_write_helper_value

@@ -486,3 +486,89 @@ def test_a_comprehension_variable_does_not_hide_a_use_of_the_loop_variable(
         (10, "medium"),
         (12, "medium"),
     ]
+
+
+def test_stores_in_tuple_and_loop_targets_change_records(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, pairs, states, rec):
+                for x in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    x.a, b = 1, 2
+                for x in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    [x["a"], b] = 1, 2
+                for x in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    for (b, x.a) in pairs:
+                        pass
+                for rec.state in states:
+                    self.env["x"].search([("a", "=", 1)])
+        """
+    assert _tiers(tmp_path, src) == [
+        (4, "medium"),
+        (7, "medium"),
+        (10, "medium"),
+        (14, "medium"),
+    ]
+
+
+def test_except_match_import_def_and_class_rebind_a_name(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, dom):
+                for x in self:
+                    self.env["x"].search(dom)
+                    try:
+                        pass
+                    except ValueError as dom:
+                        pass
+                for x in self:
+                    self.env["x"].search(dom)
+                    match x:
+                        case dom:
+                            pass
+                for x in self:
+                    self.env["x"].search(dom)
+                    import dom
+                for x in self:
+                    self.env["x"].search(dom)
+                    def dom():
+                        pass
+                for x in self:
+                    self.env["x"].search(dom)
+                    class dom:
+                        pass
+                for x in self:
+                    self.env["x"].search(dom)
+        """
+    assert _tiers(tmp_path, src) == [
+        (4, "medium"),
+        (10, "medium"),
+        (15, "medium"),
+        (18, "medium"),
+        (22, "medium"),
+        (26, "high"),
+    ]
+
+
+def test_short_circuit_compare_assert_and_yield_are_not_every_pass(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, limit):
+                for x in self:
+                    ok = 0 < limit < self.env["x"].search_count([])
+                for x in self:
+                    ok = 0 < self.env["x"].search_count([]) < limit
+                for x in self:
+                    assert limit, self.env["x"].search([])
+                for x in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    yield x
+        """
+    assert _tiers(tmp_path, src) == [
+        (4, "medium"),
+        (6, "high"),
+        (8, "medium"),
+        (10, "medium"),
+    ]

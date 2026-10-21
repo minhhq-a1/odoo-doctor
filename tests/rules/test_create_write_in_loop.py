@@ -201,3 +201,46 @@ def test_write_shadowing_walrus_and_early_exit_forms_are_medium(tmp_path: Path):
         (8, "medium"),
         (10, "medium"),
     ]
+
+
+def test_write_values_that_may_differ_on_each_pass_are_medium(tmp_path: Path):
+    """A value computed per pass (a sequence, a uuid, a helper, another ORM call) makes
+    each write different; only `fields.Datetime.now()`-like calls keep it high."""
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, it):
+                for rec in self:
+                    rec.write({"a": self.env["ir.sequence"].next_by_code("x")})
+                for rec in self:
+                    rec.write({"a": uuid.uuid4().hex})
+                for rec in self:
+                    rec.write({"a": random.random()})
+                for rec in self:
+                    rec.write({"a": next(it)})
+                for rec in self:
+                    rec.write({"a": self._value()})
+                for rec in self:
+                    rec.write({"a": self.env["y"].search([]).id})
+                for rec in self:
+                    rec.write({"a": fields.Datetime.now(), "b": _("x")})
+                for rec in self:
+                    self.env["x"].create({"a": fields.Date.today()})
+                for rec in self:
+                    self.env["x"].create({"a": self.env["y"].create({}).id})
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.rule, d.line, d.confidence) for d in diags] == [
+        ("create-in-loop", 18, "high"),
+        ("create-in-loop", 20, "medium"),
+        ("create-in-loop", 20, "medium"),
+        ("write-in-loop", 4, "medium"),
+        ("write-in-loop", 6, "medium"),
+        ("write-in-loop", 8, "medium"),
+        ("write-in-loop", 10, "medium"),
+        ("write-in-loop", 12, "medium"),
+        ("write-in-loop", 14, "medium"),
+        ("write-in-loop", 16, "high"),
+    ]

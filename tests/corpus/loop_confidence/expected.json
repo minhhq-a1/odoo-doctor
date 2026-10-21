@@ -81,6 +81,11 @@
   ],
   [
     "write-in-loop",
+    "lc/models/high_write_datetime_now.py",
+    "high"
+  ],
+  [
+    "write-in-loop",
     "lc/models/high_write_same_values.py",
     "high"
   ],
@@ -101,7 +106,17 @@
   ],
   [
     "write-in-loop",
+    "lc/models/medium_write_helper_value.py",
+    "medium"
+  ],
+  [
+    "write-in-loop",
     "lc/models/medium_write_per_record_values.py",
+    "medium"
+  ],
+  [
+    "write-in-loop",
+    "lc/models/medium_write_sequence_value.py",
     "medium"
   ]
 ]

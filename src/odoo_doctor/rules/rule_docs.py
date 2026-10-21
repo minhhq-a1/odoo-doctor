@@ -391,18 +391,26 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "Confidence is medium for a query that depends on the loop, which is how Odoo's "
         "own addons are written (hundreds of per-record queries in core 19). It is high "
         "only when the loop cannot change the query: a plain statement of a `for` body "
-        "(not under `if` / `try` / `match`, not in a comprehension, `while`, nested "
-        "loop or nested function, with no `break` / `continue` / `return` in the "
-        "body), `self` / `env[...]` receiver, `search` / `search_count` / `read`, "
-        "with a receiver and arguments that use no loop variable or name the loops "
-        "rebind. The body must also change no record: no attribute or item store "
-        "(`rec.state = ...`, `rec['a'] += 1`, `del rec.a`) and no call other than a "
-        "plain read (`search*`, `read*`, `browse`, `mapped`, `filtered`, `sorted`, "
+        "(not under `if` / `try` / `match` / `assert`, not past a short circuit "
+        "(`and`, `or`, `x if c else y`, `a < b < query`), not in a comprehension, "
+        "`while` or nested function, with no `break` / `continue` / `return` / "
+        "`yield` in the body), `self` / `env[...]` receiver, `search` / "
+        "`search_count` / `read`, with a receiver and arguments that use no loop "
+        "variable or name the loops rebind (by assignment, `except ... as`, a `match` "
+        "capture, `import ... as`, `def` or `class`). A query that is a plain "
+        "statement of an inner `for` is judged against that inner loop; names the "
+        "outer loops rebind count too. The body must also change no record: no "
+        "attribute or item store (`rec.state = ...`, `rec['a'] += 1`, "
+        "`rec.a, b = ...`, `for rec.state in ...`, `del rec.a`) and no call other than "
+        "a plain read (`search*`, `read*`, `browse`, `mapped`, `filtered`, `sorted`, "
         "`with_context`, `sudo`, `get`, `append`, `len` ...); any other call, such as "
         "`create` / `write` / `unlink` / `flush*` / `invalidate*` / `message_post` / "
         "`action_*` or a helper of the class, keeps the query medium. Such a query can "
         "be hoisted out of the loop as is. Blind spot: what a helper does is not "
-        "followed, which is why a helper call only ever lowers the confidence.",
+        "followed, which is why a helper call only ever lowers the confidence; calls "
+        "are allowed by name only, so a user-defined `get` / `format` that writes, or "
+        "a name that aliases one the loop mutates (`d = domain; d.append(..)`), is not "
+        "seen.",
     ),
     "create-in-loop": RuleDoc(
         detects="`create()` called inside a loop or comprehension (its iterable and "
@@ -414,7 +422,11 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="self.env['my.model'].create(vals_list)",
         notes="Medium confidence, as in Odoo's own addons: high only when the call is "
         "the only statement of a `for` body and its values and context do not use "
-        "the loop (`for n in names: self.env['x'].create({'a': 1})`).",
+        "the loop (`for n in names: self.env['x'].create({'a': 1})`) and call "
+        "nothing that may return another value on the next pass: only "
+        "`fields.Datetime.now()` / `today()`, builtins such as `len` / `str`, `_()` "
+        "and `with_context` / `sudo`; a sequence, `uuid` / `random`, `next()`, a "
+        "helper or another ORM call keeps it medium.",
     ),
     "write-in-loop": RuleDoc(
         detects="`write()` called inside a loop or comprehension (its iterable and "
@@ -426,8 +438,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="records.write({'state': 'done'})",
         notes="Medium confidence, as in Odoo's own addons: high only when the call is "
         "the only statement of a `for` body and its values and context do not use "
-        "the loop (`for rec in recs: rec.write({'state': 'done'})`). The receiver may "
-        "be the loop variable.",
+        "the loop (`for rec in recs: rec.write({'state': 'done'})`) and call "
+        "nothing that may return another value on the next pass (as for "
+        "`create-in-loop`: `fields.Datetime.now()` is fine, `next_by_code()` is "
+        "not). The receiver may be the loop variable.",
     ),
     "n-plus-one-read": RuleDoc(
         detects="Field reads on a record built by `browse(<one id>)` on every "

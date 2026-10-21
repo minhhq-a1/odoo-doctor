@@ -8,3 +8,4 @@ class Ticket(models.Model):
     name = fields.Char()
     state = fields.Char()
     count = fields.Integer()
+    date_done = fields.Datetime()
