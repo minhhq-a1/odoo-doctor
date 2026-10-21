@@ -30,6 +30,56 @@ def test_fingerprint_changes_when_config_changes(tmp_path: Path):
     assert fp1 != fp2
 
 
+def test_fingerprint_changes_when_an_asset_appears(tmp_path: Path):
+    root = _addon(tmp_path)
+    before = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    (root / "m" / "widget.js").write_text("export const ready = true;\n")
+    after = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    assert after != before
+
+
+def test_fingerprint_keeps_asset_symlink_aliases(tmp_path: Path):
+    import pytest
+
+    root = _addon(tmp_path)
+    asset = root / "m" / "widget.js"
+    asset.write_text("export const ready = true;\n")
+    before = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    try:
+        (root / "m" / "alias.js").symlink_to(asset)
+    except OSError:
+        pytest.skip("symlinks not available")
+    after = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    assert after != before
+
+
+def test_fingerprint_ignores_tooling_junk(tmp_path: Path):
+    root = _addon(tmp_path)
+    before = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    (root / "m" / "__pycache__").mkdir()
+    (root / "m" / "__pycache__" / "a.cpython-313.pyc").write_bytes(b"\0")
+    (root / "m" / "a.pyc").write_bytes(b"\0")
+    (root / "m" / ".DS_Store").write_bytes(b"\0")
+    (root / "m" / ".a.py.swp").write_bytes(b"\0")
+    after = project_fingerprint([root], config_repr="c", version="19.0", ruleset=())
+    assert after == before
+
+
+def test_fingerprint_skips_excluded_directory(tmp_path: Path):
+    root = _addon(tmp_path)
+    cache_dir = root / ".odoo_doctor_cache"
+    cache_dir.mkdir()
+    args = {
+        "config_repr": "c",
+        "version": "19.0",
+        "ruleset": (),
+        "excluded_paths": [cache_dir],
+    }
+    before = project_fingerprint([root], **args)
+    (cache_dir / "scan_cache.json").write_text("{}")
+    assert project_fingerprint([root], **args) == before
+
+
 def test_fingerprint_changes_when_ruleset_changes(tmp_path: Path):
     root = _addon(tmp_path)
     fp1 = project_fingerprint([root], config_repr="c", version="17.0", ruleset=("a",))

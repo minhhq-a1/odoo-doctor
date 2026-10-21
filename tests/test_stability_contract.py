@@ -374,7 +374,7 @@ def test_baseline_file_format_is_stable(tmp_path: Path):
     )
     assert result.exit_code == 0, result.output
     data = json.loads(baseline.read_text())
-    assert data["version"] == 2
+    assert data["version"] == 3
     assert isinstance(data["ids"], list) and data["ids"]
 
 
@@ -455,7 +455,7 @@ min_confidence = "high"
 def test_terminal_surface_default_is_medium(tmp_path):
     from odoo_doctor.core.config import DEFAULT_TERMINAL_SURFACE, _build_config
 
-    assert load_config(tmp_path).surfaces.get("terminal") is None
+    assert load_config(tmp_path).surfaces["terminal"] == DEFAULT_TERMINAL_SURFACE
     assert DEFAULT_TERMINAL_SURFACE.min_confidence == "medium"
     assert _build_config({}).surfaces["terminal"].min_confidence == "medium"
 
