@@ -175,3 +175,29 @@ def test_only_a_write_or_create_the_loop_does_not_feed_is_high(tmp_path: Path):
         ("write-in-loop", 10, "medium"),
         ("write-in-loop", 14, "medium"),
     ]
+
+
+def test_write_shadowing_walrus_and_early_exit_forms_are_medium(tmp_path: Path):
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, others):
+                for rec in self:
+                    rec.write({"a": rec.id, "b": [rec for rec in others]})
+                for rec in self:
+                    rec.write({"a": [rec for rec in others]})
+                for rec in self:
+                    rec.write({"a": (cur := 1)})
+                for rec in self:
+                    rec.write({"a": 1})
+                    break
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.line, d.confidence) for d in diags] == [
+        (4, "medium"),
+        (6, "high"),
+        (8, "medium"),
+        (10, "medium"),
+    ]

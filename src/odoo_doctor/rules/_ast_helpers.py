@@ -364,22 +364,69 @@ def orm_calls_in_loops(
     yield from walk(tree, set(), set(), frozenset())
 
 
-# Calls that change what a later query or write sees; a loop that makes one cannot have
-# its queries hoisted on the strength of their arguments alone.
-_MUTATING_METHODS = {
-    "create",
-    "write",
-    "unlink",
-    "copy",
-    "flush",
-    "flush_model",
-    "flush_recordset",
-    "invalidate_model",
-    "invalidate_recordset",
-    "commit",
-    "execute",
+# The only calls a loop may make for one of its queries to count as unaffected by it.
+# Anything else (create / write / unlink / flush / invalidate / message_post / action_* /
+# a helper of the class ...) may change what the query sees, so the query stays medium.
+_READ_ONLY_CALLS = {
+    "search",
+    "search_count",
+    "search_read",
+    "search_fetch",
+    "read",
+    "read_group",
+    "_read_group",
+    "browse",
+    "exists",
+    "ref",
+    "mapped",
+    "filtered",
+    "filtered_domain",
+    "sorted",
+    "with_context",
+    "with_company",
+    "with_user",
+    "with_env",
+    "sudo",
+    "get",
+    "items",
+    "keys",
+    "values",
+    "append",
+    "format",
+    "join",
+    "split",
+    "strip",
+    "lower",
+    "upper",
+    "startswith",
+    "endswith",
+    "replace",
+    # builtins and translation, called by name
+    "len",
+    "str",
+    "int",
+    "float",
+    "bool",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "sum",
+    "min",
+    "max",
+    "any",
+    "all",
+    "range",
+    "enumerate",
+    "zip",
+    "round",
+    "abs",
+    "isinstance",
+    "getattr",
+    "hasattr",
+    "repr",
+    "_",
 }
-_MUTATING_PREFIXES = ("action_", "button_", "_action", "_create", "_write", "_post")
 _CONTAINER_MUTATORS = {
     "append",
     "extend",
@@ -427,56 +474,86 @@ def _names_changed_by_loop(loop: ast.For | ast.While) -> set[str]:
     return changed
 
 
-def _free_names(node: ast.AST) -> set[str]:
-    loads = {
-        n.id
-        for n in ast.walk(node)
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-    }
-    bound = {
-        n.id
-        for n in ast.walk(node)
-        if isinstance(n, ast.Name) and not isinstance(n.ctx, ast.Load)
-    } | {
-        a.arg
-        for n in ast.walk(node)
-        if isinstance(n, ast.Lambda)
-        for a in ast.walk(n.args)
-        if isinstance(a, ast.arg)
-    }
-    return loads - bound
+_COMPREHENSIONS = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+# Not "every iteration": a branch, a short circuit, a deferred or separate scope.
+_NOT_EVERY_ITERATION = (
+    ast.IfExp,
+    ast.BoolOp,
+    ast.Lambda,
+    ast.If,
+    ast.Try,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.Match,
+    *_COMPREHENSIONS,
+    *([ast.TryStar] if hasattr(ast, "TryStar") else []),
+)
+
+
+def _free_names(node: ast.AST, bound: frozenset[str] = frozenset()) -> set[str]:
+    """Names *node* reads that it does not bind itself (comprehension variables and
+    lambda arguments shadow only inside their own scope)."""
+    if isinstance(node, ast.Name):
+        return {node.id} - bound if isinstance(node.ctx, ast.Load) else set()
+    if isinstance(node, _COMPREHENSIONS):
+        names: set[str] = set()
+        inner = set(bound)
+        for i, gen in enumerate(node.generators):
+            names |= _free_names(gen.iter, bound if i == 0 else frozenset(inner))
+            inner |= {n.id for n in ast.walk(gen.target) if isinstance(n, ast.Name)}
+            for cond in gen.ifs:
+                names |= _free_names(cond, frozenset(inner))
+        elts = [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+        for elt in elts:
+            names |= _free_names(elt, frozenset(inner))
+        return names
+    if isinstance(node, ast.Lambda):
+        args = {a.arg for a in ast.walk(node.args) if isinstance(a, ast.arg)}
+        defaults = [*node.args.defaults, *(d for d in node.args.kw_defaults if d)]
+        return _free_names(node.body, bound | args) | {
+            n for d in defaults for n in _free_names(d, bound)
+        }
+    return {n for c in ast.iter_child_nodes(node) for n in _free_names(c, bound)}
 
 
 def _runs_every_iteration(node: ast.AST, call: ast.Call) -> bool:
     """*call* sits in *node* on a path with no branch, short-circuit or deferred scope."""
     if node is call:
         return True
-    if isinstance(
-        node,
-        (
-            ast.IfExp,
-            ast.BoolOp,
-            ast.Lambda,
-            ast.If,
-            ast.Try,
-            ast.While,
-            ast.For,
-            ast.ListComp,
-            ast.SetComp,
-            ast.DictComp,
-            ast.GeneratorExp,
-        ),
-    ):
+    if isinstance(node, _NOT_EVERY_ITERATION):
         return False
     return any(_runs_every_iteration(c, call) for c in ast.iter_child_nodes(node))
 
 
-def _mutates_records(loop: ast.For | ast.While) -> bool:
+def _leaves_early(loop: ast.For | ast.While) -> bool:
+    """A ``break`` / ``continue`` / ``return`` in the body: not every pass reaches the end."""
+    return any(
+        isinstance(n, (ast.Break, ast.Continue, ast.Return))
+        for stmt in loop.body
+        for n in ast.walk(stmt)
+    )
+
+
+def _may_change_records(loop: ast.For | ast.While, call: ast.Call) -> bool:
+    """The body stores to an attribute / item (``rec.state = ..``, ``rec['a'] += 1``,
+    ``del rec.a``) or makes a call that is not a plain read. The *call* itself is not
+    counted; its arguments are."""
     for stmt in loop.body:
         for n in ast.walk(stmt):
-            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
-                name = n.func.attr
-                if name in _MUTATING_METHODS or name.startswith(_MUTATING_PREFIXES):
+            if isinstance(n, (ast.Assign, ast.AugAssign, ast.AnnAssign, ast.Delete)):
+                targets = (
+                    n.targets if isinstance(n, (ast.Assign, ast.Delete)) else [n.target]
+                )
+                if any(isinstance(t, (ast.Attribute, ast.Subscript)) for t in targets):
+                    return True
+            elif isinstance(n, ast.Call) and n is not call:
+                f = n.func
+                name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+                if name not in _READ_ONLY_CALLS:
                     return True
     return False
 
@@ -510,25 +587,33 @@ def is_repeated_unchanged(call: ast.Call, loop: LoopNode, tree: ast.AST) -> bool
     reaches it. It is the one loop shape that is plainly wrong and cheap to prove.
 
     * A query (``search`` ...) is a direct statement of the ``for`` body (no ``if`` /
-      ``try`` around it), its receiver and arguments use neither a loop variable nor a
-      name the loops rebind, and the body makes no write that could change the answer:
-      it can be hoisted out of the loop.
+      ``try`` / ``match`` / nested function around it, no ``break`` / ``continue`` /
+      ``return`` in the body), its receiver and arguments use neither a loop variable
+      nor a name the loops rebind, and the body changes no record: no attribute / item
+      store, no call other than a plain read (``_READ_ONLY_CALLS``). It can be hoisted
+      out of the loop.
     * A ``write`` / ``create`` is the only statement of the body and its arguments (and
       the context it is called with) do not use the loop either: ``for r in recs:
       r.write(vals)`` is ``recs.write(vals)``.
 
-    shortcut: calls into other functions are not followed for writes they may make, and
-    the check is by method name; upgrade when a real scan shows a false positive.
+    Blind spot: a query is judged by the loop body alone. A helper the body calls is
+    treated as a possible write (so the query stays medium), but nothing is known about
+    what the helper does, and a write made by an earlier statement outside the loop, a
+    cron or another transaction is not seen. A ``write`` / ``create`` is not checked for
+    what the batched form would change (order of effects, per-record side effects of
+    ``write`` overrides), only for being the lone statement.
     """
     if not isinstance(loop, ast.For) or not isinstance(call.func, ast.Attribute):
         return False
     method = call.func.attr
     writes = method in ("create", "write")
+    if any(isinstance(n, ast.NamedExpr) for n in ast.walk(call)):
+        return False  # a name bound inside the call leaks out of it
     if writes and not _only_statement(loop, call):
         return False
     if not any(_runs_every_iteration(stmt, call) for stmt in loop.body):
         return False
-    if not writes and _mutates_records(loop):
+    if not writes and (_leaves_early(loop) or _may_change_records(loop, call)):
         return False
     changed: set[str] = set()
     for node in ast.walk(tree):

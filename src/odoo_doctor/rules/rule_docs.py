@@ -391,11 +391,18 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "Confidence is medium for a query that depends on the loop, which is how Odoo's "
         "own addons are written (hundreds of per-record queries in core 19). It is high "
         "only when the loop cannot change the query: a plain statement of a `for` body "
-        "(not under `if` / `try`, not in a comprehension, `while` or nested loop), "
-        "`self` / `env[...]` receiver, `search` / `search_count` / `read`, with "
-        "arguments that use no loop variable or name the loops rebind, in a loop that "
-        "makes no `create` / `write` / `unlink` / `action_*` call. Such a query can be "
-        "hoisted out of the loop as is.",
+        "(not under `if` / `try` / `match`, not in a comprehension, `while`, nested "
+        "loop or nested function, with no `break` / `continue` / `return` in the "
+        "body), `self` / `env[...]` receiver, `search` / `search_count` / `read`, "
+        "with a receiver and arguments that use no loop variable or name the loops "
+        "rebind. The body must also change no record: no attribute or item store "
+        "(`rec.state = ...`, `rec['a'] += 1`, `del rec.a`) and no call other than a "
+        "plain read (`search*`, `read*`, `browse`, `mapped`, `filtered`, `sorted`, "
+        "`with_context`, `sudo`, `get`, `append`, `len` ...); any other call, such as "
+        "`create` / `write` / `unlink` / `flush*` / `invalidate*` / `message_post` / "
+        "`action_*` or a helper of the class, keeps the query medium. Such a query can "
+        "be hoisted out of the loop as is. Blind spot: what a helper does is not "
+        "followed, which is why a helper call only ever lowers the confidence.",
     ),
     "create-in-loop": RuleDoc(
         detects="`create()` called inside a loop or comprehension (its iterable and "

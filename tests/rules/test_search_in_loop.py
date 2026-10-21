@@ -394,3 +394,95 @@ def test_local_from_a_self_method_that_is_not_orm_is_not_a_recordset(tmp_path: P
                     rx.search(line)
         """
     assert _tiers(tmp_path, src) == []
+
+
+def test_a_query_stays_medium_when_the_loop_changes_records_or_calls_out(
+    tmp_path: Path,
+):
+    src = """\
+        class A:
+            def stores(self):
+                for rec in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    rec.state = "done"
+                for rec in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    rec["state"] = "done"
+                for rec in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    rec.qty += 1
+                for rec in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    del rec.qty
+
+            def calls(self):
+                for rec in self:
+                    self._helper(rec)
+                    self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    rec.message_post(body="x")
+                    self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    self.env["x"].flush_model()
+                    self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    self.env["x"].search([("a", "=", self._helper())])
+        """
+    assert {c for _line, c in _tiers(tmp_path, src)} == {"medium"}
+    assert len(_tiers(tmp_path, src)) == 8
+
+
+def test_a_query_stays_medium_when_not_every_pass_reaches_it(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, kind):
+                for rec in self:
+                    if rec.a:
+                        break
+                    self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    if rec.a:
+                        continue
+                    self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    found = self.env["x"].search([("a", "=", 1)])
+                    if found:
+                        return found
+                for rec in self:
+                    match kind:
+                        case 1:
+                            self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    def inner():
+                        return self.env["x"].search([("a", "=", 1)])
+                for rec in self:
+                    class Inner:
+                        found = self.env["x"].search([("a", "=", 1)])
+        """
+    assert {c for _line, c in _tiers(tmp_path, src)} == {"medium"}
+    assert len(_tiers(tmp_path, src)) == 6
+
+
+def test_a_comprehension_variable_does_not_hide_a_use_of_the_loop_variable(
+    tmp_path: Path,
+):
+    src = """\
+        class A:
+            def f(self, others):
+                for rec in self:
+                    self.env["x"].search(
+                        [("a", "=", rec.id), ("b", "in", [rec for rec in others])]
+                    )
+                for rec in self:
+                    self.env["x"].search([("b", "in", [r for r in others])])
+                for rec in self:
+                    self.env["x"].search([("a", "=", (cur := rec.id))])
+                for rec in self:
+                    self.env["x"].search([("a", "=", (cur := 1))])
+        """
+    assert _tiers(tmp_path, src) == [
+        (4, "medium"),
+        (8, "high"),
+        (10, "medium"),
+        (12, "medium"),
+    ]

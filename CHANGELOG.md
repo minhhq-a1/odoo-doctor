@@ -12,18 +12,27 @@ All notable changes to Odoo Doctor are documented here.
   provably wasted, no longer for every call on a plain `self` / `env[...]` receiver. A per-record query
   or write is how Odoo's own addons are written (core 19 holds 405 / 185 / 138 such findings that were
   `high`), so by the confidence policy those are now `medium`. `high` is kept for a call the loop cannot
-  change: a query that is a plain statement of a `for` body (not under `if` / `try`, in no comprehension,
-  `while` or nested loop that changes it), whose receiver and arguments use no loop variable or rebound
-  name, in a loop that makes no `create` / `write` / `unlink` / `action_*` call (hoist it); and a
-  `write` / `create` that is the only statement of a `for` body with values and context that do not use
-  the loop (`for r in recs: r.write(vals)` is `recs.write(vals)`). Finding titles are unchanged, so
-  baselines stay valid. Golden corpus case `loop_confidence` holds both sides; the `performance_loops`
-  and `loop_setup_not_flagged` cases now expect `medium`.
-  Measured on Odoo core 19 addons (`high` / `medium`): `search-in-loop` 405 / 75 to 0 / 480,
+  change: a query that is a plain statement of a `for` body (not under `if` / `try` / `match`, in no
+  comprehension, `while`, nested loop or nested function, no `break` / `continue` / `return` in the body),
+  whose receiver and arguments use no loop variable or rebound name, in a loop that stores no attribute
+  or item and calls nothing but plain reads (`search*`, `read*`, `browse`, `mapped`, `filtered`, `get`,
+  `len` ... ; `create` / `write` / `unlink` / `flush*` / `invalidate*` / `message_post` / `action_*` or a
+  helper of the class keep it `medium`), so it can be hoisted; and a `write` / `create` that is the only
+  statement of a `for` body with values and context that do not use the loop (`for r in recs:
+  r.write(vals)` is `recs.write(vals)`). Blind spot: a helper the loop calls is not followed (it only
+  lowers the confidence), and a `write` / `create` is not checked for what the batched form would change
+  (order of effects, per-record `write` overrides). Finding titles are unchanged, so baselines stay valid.
+  The default `--fail-on` (P0/P1, high confidence) no longer fails on these loop findings. Golden
+  corpus case `loop_confidence` holds one file per shape, named for its tier; the `performance_loops` and
+  `loop_setup_not_flagged` cases now expect `medium`.
+  Measured with native rules only (`[adapters] ruff = false, pylint_odoo = false`),
+  `odoo-doctor scan <addons> --odoo-version 19.0 --json`, before = `90082f5` (0.11.1), after = this
+  change. Odoo core 19 addons (`high` / `medium`): `search-in-loop` 405 / 75 to 0 / 480,
   `create-in-loop` 185 / 27 to 0 / 212, `write-in-loop` 138 / 43 to 1 / 180 (the one left is
   `mrp_production.py`: `for production in self: production.write({...constants...})`); project score
-  93.2 to 95.0. On a private 14-module addon set the 10 `high` loop findings became `medium` and the score
-  went 96.4 to 99.0.
+  93.3 to 95.1. On a private 14-module addon set the 10 `high` loop findings became `medium`
+  (create 2 to 0, search 7 to 0, write 1 to 0) and the score went 96.4 to 99.0. A whole core 19 scan took
+  about 95 s before and 93 s after.
 
 ### Fixed
 
