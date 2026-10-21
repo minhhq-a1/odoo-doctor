@@ -276,6 +276,8 @@ All notable changes to Odoo Doctor are documented here.
 - Invalidate scan caches for Ruff configuration changes, including ancestor and
   recursive `extend` configs, linter availability/versions and configured Odoo source
   changes. Plugins with arbitrary input dependencies bypass the built-in cache.
+  (The scanned repo's own Ruff configuration still does not steer the run, see the Ruff entry under
+  Security: the key moves, the findings do not.)
 - Use the same default P0/P1 high-confidence CI failure policy with absent, empty
   and partial configurations.
 - Collect context-rule generators once so plugin findings are retained in full and
