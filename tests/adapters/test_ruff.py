@@ -302,15 +302,15 @@ def test_ruff_does_not_hang_on_a_special_extend_target(
         os.mkfifo(repo / "evil.toml")
     else:
         (repo / "evil.toml").symlink_to("/dev/zero")
-    adapter = RuffAdapter()
     start = time.monotonic()
-    diags = adapter.run(repo / "m", "17.0")
-    adapter.run(repo / "m", "17.0")
+    diags = RuffAdapter().run(repo / "m", "17.0")
+    RuffAdapter().run(repo / "m", "17.0")
     assert time.monotonic() - start < 20
     assert "F401" in {d.rule for d in diags}
     assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
     err = capsys.readouterr().err
-    assert err.count("ruff configuration is ignored") == 1  # said once, not per run
+    # said once per process, not per run or per adapter instance
+    assert err.count("ruff configuration is ignored") == 1
     assert "ruff.toml" in err
 
 

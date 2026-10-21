@@ -35,6 +35,9 @@ class _RuleMapping:
 
 
 _UNMAPPED = _RuleMapping(category="Uncategorized", tier="P3", confidence="low")
+# Configs already reported as ignored: once per process, however many adapters a scan
+# (or the language server's rescans) creates.
+_NOTED_CONFIGS: set[Path] = set()
 
 
 class RuffAdapter:
@@ -43,7 +46,6 @@ class RuffAdapter:
 
     def __init__(self) -> None:
         self._mapping = self._load_mapping()
-        self._noted: set[Path] = set()
 
     def is_available(self) -> bool:
         return shutil.which("ruff") is not None
@@ -158,7 +160,7 @@ class RuffAdapter:
         return diags
 
     def _note_ignored_config(self, module: Path) -> None:
-        """Say once per scan that the repo's ruff configuration is not applied."""
+        """Say once per process that the repo's ruff configuration is not applied."""
         for parent in (module, *module.parents):
             for name in ("ruff.toml", ".ruff.toml", "pyproject.toml"):
                 path = parent / name
@@ -167,8 +169,8 @@ class RuffAdapter:
                     name == "pyproject.toml" and b"[tool.ruff" not in raw
                 ):
                     continue
-                if path not in self._noted:
-                    self._noted.add(path)
+                if path not in _NOTED_CONFIGS:
+                    _NOTED_CONFIGS.add(path)
                     typer.echo(
                         f"[INFO] {safe_text(path)}: ruff configuration is ignored; "
                         "Odoo Doctor runs ruff with its own settings (use [ignore] rules)",
