@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 
 from odoo_doctor.core.config import (
+    DEFAULT_CI_SURFACE,
     DEFAULT_TERMINAL_SURFACE,
     OdooDoctorConfig,
     SurfaceConfig,
@@ -303,7 +304,7 @@ def scan(
     if write_baseline_path:
         from odoo_doctor.core.baseline import write_baseline
 
-        write_baseline(diags, Path(write_baseline_path))
+        write_baseline(diags, Path(write_baseline_path), root=config_root)
         typer.echo(
             f"Wrote baseline with {len(diags)} finding(s) to {write_baseline_path}"
         )
@@ -315,7 +316,7 @@ def scan(
         from odoo_doctor.core.scanner import _score_per_module  # added in plan 04
 
         ids = load_baseline(Path(baseline))
-        diags = filter_against_baseline(diags, ids)
+        diags = filter_against_baseline(diags, ids, root=config_root)
 
         # Re-score with the suppressed set so score + exit code reflect only new
         # findings. Reuse the SAME scoring helper that collect_scores uses, so
@@ -420,7 +421,7 @@ def scan(
 
     # Fail on severity
     if fail_on:
-        ci_policy = cfg.surfaces.get("ci_failure", SurfaceConfig())
+        ci_policy = cfg.surfaces.get("ci_failure", DEFAULT_CI_SURFACE)
         gating = filter_for_surface(diags, ci_policy)
         if _has_severity_at_or_above(gating, fail_on):
             raise typer.Exit(code=1)

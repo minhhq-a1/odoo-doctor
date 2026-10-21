@@ -213,7 +213,7 @@ The tool uses a **two-phase architecture**:
 
 **Pipeline Phase** (`core/pipeline.py` — 7 pure transformation stages):
 1. **Normalize**: Normalize file paths to POSIX format
-2. **Deduplicate**: Group by (module, file, line, category, rule), keep highest confidence
+2. **Deduplicate**: Group by (module, file, line, category, rule, title), keep highest confidence
 3. **Severity Overrides**: Apply config-driven severity changes (`"off"` removes)
 4. **Ignore Filters**: Remove by rule name, file glob, module name
 5. **Inline Suppressions**: Remove findings suppressed by inline comments

@@ -212,7 +212,8 @@ All notable changes to Odoo Doctor are documented here.
 - `--cache` could answer differently from an uncached scan, or keep answering after an input changed:
   - A cache hit scored with the Odoo version from the config (often `unknown`) instead of the one the
     live scan detected from the manifests, so the in-scope categories, and with them the scores, could
-    differ for a ruleset with version- or capability-gated rules. The entry now stores that version.
+    differ for a ruleset with version- or capability-gated rules. The entry now stores each module's
+    Odoo version and a hit scores every module with its own (the same fix as the per-module gating below).
   - A hit listed modules in an order set by the process's hash seed, not the scan order, so `--json`
     differed byte for byte between a live run and a hit. The order is now the scan's.
   - The key held only `name@min_version` of each rule, so a plugin rule whose code changed kept
@@ -228,11 +229,12 @@ All notable changes to Odoo Doctor are documented here.
   - The key also holds the pylint-odoo distribution version, read by the interpreter behind the `pylint`
     executable (`pylint --version` does not name its plugins); `unknown` when that interpreter cannot be
     found.
-  - Known limits of the key: `odoo_source_path` is in it as a path string only (run without `--cache`
-    after updating an Odoo clone); a plugin's identity is its distribution version and a hash of the
-    rule's own module file only, so another file of the plugin package is not hashed.
+  - Known limit of the key: a rule registered outside `[plugins] enabled` (library use) is identified by its
+    distribution version and a hash of the rule's own module file only, so another file of that package is
+    not hashed. Rule plugins loaded through `[plugins] enabled` bypass the cache altogether.
 
-  `CACHE_VERSION` is now 4, so older cache files are rebuilt once.
+  `CACHE_VERSION` is now 5 (4 on main stored the per-module versions, 4 on this branch the scan's
+  version and the new key parts; 5 rebuilds either), so older cache files are rebuilt once.
 - `override-missing-super` accepted any `super()` call in the body: `super().write(..)` inside `create` counted as
   the call chain, so the missing `create` super was never reported. The call must now be
   `super().<same method>` (`super().create(..)`, `super(Cls, self).create(..)`); a `super()` kept in a variable
@@ -264,6 +266,20 @@ All notable changes to Odoo Doctor are documented here.
   module level; a parameter with the same name shadows an outer binding. `self.env.cr.commit()` was never
   exempt. No change on Odoo 19 community (23 medium), core 17 scanned as 19 (30 medium) or the working
   repository (1 medium). New golden corpus case `cr_commit_scope`.
+- Keep distinct violations of one rule at the same location, including missing
+  manifest fields and dependencies; only matching titles are deduplicated.
+- Apply version/capability gates and category scope per module in mixed-version
+  projects. Cache entries retain module versions so cached scores match fresh scans.
+- Write portable v3 baselines using paths relative to the scan root. Existing v1/v2
+  baselines remain readable with their original identities; regenerate them to move
+  between checkout paths.
+- Invalidate scan caches for Ruff configuration changes, including ancestor and
+  recursive `extend` configs, linter availability/versions and configured Odoo source
+  changes. Plugins with arbitrary input dependencies bypass the built-in cache.
+- Use the same default P0/P1 high-confidence CI failure policy with absent, empty
+  and partial configurations.
+- Collect context-rule generators once so plugin findings are retained in full and
+  diff scans.
 - Known limits, not audited yet (backlog): `csrf-disabled-authenticated-route` has the same inherited-auth
   gap as the route-auth bug fixed above (a bare override of a route with `csrf=False` is read as `user`);
   and the pre-existing `high` loop findings (core 19: `search-in-loop` 405, `create-in-loop` 185,

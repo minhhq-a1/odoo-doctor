@@ -124,12 +124,12 @@ def test_baselined_medium_does_not_hide_later_high_at_same_line(tmp_path: Path):
     assert filter_against_baseline([version, lic], load_baseline(bfile)) == [lic]
 
 
-def test_write_baseline_writes_version_2(tmp_path: Path):
+def test_write_baseline_writes_portable_version_3(tmp_path: Path):
     import json
 
     bfile = tmp_path / "b.json"
     write_baseline([_diag(str(_src(tmp_path)), 1)], bfile)
-    assert json.loads(bfile.read_text())["version"] == 2
+    assert json.loads(bfile.read_text())["version"] == 3
 
 
 def _v1_identity(diag: Diagnostic) -> str:
@@ -176,6 +176,18 @@ def test_version_2_file_ignores_old_style_identities(tmp_path: Path):
     bfile = tmp_path / "b.json"
     bfile.write_text(json.dumps({"version": 2, "ids": [_v1_identity(a)]}))
     assert filter_against_baseline([a], load_baseline(bfile)) == [a]
+
+
+def test_version_2_title_identity_still_works_with_a_scan_root(tmp_path: Path):
+    import json
+
+    f = _src(tmp_path)
+    existing, new = _diag(str(f), 1), _diag(str(f), 3)
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"version": 2, "ids": [finding_identity(existing)]}))
+    assert filter_against_baseline(
+        [existing, new], load_baseline(baseline), root=tmp_path
+    ) == [new]
 
 
 def test_garbage_baseline_is_empty(tmp_path: Path):

@@ -6,7 +6,7 @@ that can change results: all scanned file contents, the resolved config, the
 Odoo version, the active ruleset, the identity of every plugin rule (distribution
 version and a hash of its source), the versions of the enabled linters (ruff,
 pylint), the tool version, and CACHE_VERSION. The entry also stores what the live
-scan computed that cannot be recomputed from the findings (the detected Odoo
+scan computed that cannot be recomputed from the findings (each module's Odoo
 version, suppression stats, line counts) so a hit reproduces the live result. Because
 several rules are cross-module, caching is all-or-nothing: any change to any
 input invalidates the whole cache. This trades incremental granularity for
@@ -23,14 +23,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from importlib.metadata import PackageNotFoundError, packages_distributions
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from odoo_doctor.core.source import (
     MAX_FILE_BYTES,
-    is_scannable,
     path_within,
     read_bytes,
     warn_skipped,
@@ -38,12 +37,20 @@ from odoo_doctor.core.source import (
 
 # Bump when the serialized Diagnostic payload schema changes. A mismatch makes
 # any older on-disk cache miss cleanly instead of raising on Diagnostic(**old).
-# v2 adds suppression_stats, v3 adds python_lines, v4 adds the scan's detected version
-# and puts plugin and linter identities in the key.
-CACHE_VERSION = 4
+# v2 adds suppression_stats, v3 adds python_lines, v4 retains each module's effective Odoo
+# version, v5 puts plugin and linter identities in the key (and is the first version
+# written by a build that has both the v4 per-module versions and these identities, so a
+# v4 file from either lineage is rebuilt).
+CACHE_VERSION = 5
 
 _CACHE_FILE = "scan_cache.json"
-_SCANNED_SUFFIXES = {".py", ".xml", ".csv"}
+
+_SCANNED_SUFFIXES = {".py", ".pyi", ".xml", ".csv", ".toml", ".ipynb"}
+# Not scan inputs, and rewritten by tooling between scans (a running Odoo, pytest,
+# Finder, an editor): hashing them would turn every such write into a cache miss.
+_SKIP_DIRS = {".git", ".ruff_cache", ".mypy_cache", ".pytest_cache", "__pycache__"}
+_SKIP_FILES = {".DS_Store", "Thumbs.db"}
+_SKIP_SUFFIXES = {".pyc", ".pyo", ".swp", ".swo"}
 
 
 def _tool_version() -> str:
@@ -177,12 +184,46 @@ def plugin_identities(rules: Iterable[tuple[object, object]]) -> tuple[str, ...]
     return tuple(sorted(found))
 
 
+def _walk_files(root: Path, excluded: set[str]) -> Iterator[tuple[str, str | None]]:
+    """Yield (absolute path, symlink target or None) for every input file under *root*.
+
+    One `scandir` pass: directories are resolved (to honour *excluded*), files are not,
+    which keeps the cache-hit path cheap on trees with tens of thousands of files.
+    """
+    pending = [str(root.absolute())]
+    while pending:
+        folder = pending.pop()
+        if excluded and os.path.realpath(folder) in excluded:
+            continue
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name not in _SKIP_DIRS:
+                            pending.append(entry.path)
+                    elif (
+                        entry.name not in _SKIP_FILES
+                        and os.path.splitext(entry.name)[1] not in _SKIP_SUFFIXES
+                        and entry.is_file()
+                    ):
+                        link = entry.is_symlink()
+                        yield (
+                            entry.path,
+                            (os.path.realpath(entry.path) if link else None),
+                        )
+        except OSError:
+            continue
+
+
 def project_fingerprint(
     addon_paths: Iterable[Path],
     config_repr: str,
     version: str,
     ruleset: tuple[str, ...],
     extra: Iterable[str] = (),
+    extra_files: Iterable[Path] = (),
+    extra_identities: tuple[str, ...] = (),
+    excluded_paths: Iterable[Path] = (),
 ) -> str:
     """Hash every input that can change scan results.
 
@@ -191,6 +232,8 @@ def project_fingerprint(
     - version: the resolved Odoo version.
     - ruleset: a sorted tuple of active rule identities (name+min_version).
     - extra: further identities (plugin rules, linter versions) hashed as-is.
+    - extra_files / extra_identities: inputs outside the addons (linter configs, linter
+      executables); excluded_paths: directories to skip (the cache's own).
     """
     h = hashlib.sha256()
     h.update(f"cache_version={CACHE_VERSION}\0".encode())
@@ -201,30 +244,26 @@ def project_fingerprint(
         h.update(f"rule={r}\0".encode())
     for e in sorted(extra):
         h.update(f"{e}\0".encode())
+    for identity in extra_identities:
+        h.update(f"dependency={identity}\0".encode())
 
-    # File contents across all roots, in a deterministic order.
-    seen: set[str] = set()
+    # File contents across all roots, in a deterministic order. Value: the symlink
+    # target (None for regular files), so retargeting an alias changes the hash.
+    extras = {str(Path(p).resolve()) for p in extra_files}
+    files: dict[str, str | None] = dict.fromkeys(extras)
+    excluded = {str(Path(p).resolve()) for p in excluded_paths}
     for root in addon_paths:
-        root = Path(root)
-        if not root.exists():
+        files.update(_walk_files(Path(root), excluded))
+    for path in sorted(files):
+        h.update(f"{path}\0{files[path] or path}\0".encode("utf-8", "surrogateescape"))
+        # Every file's existence matters to manifest asset checks. Only inputs
+        # consumed as source/config need their contents hashed as well.
+        if path not in extras and os.path.splitext(path)[1] not in _SCANNED_SUFFIXES:
             continue
-        files = sorted(
-            p
-            for p in root.rglob("*")
-            if p.suffix in _SCANNED_SUFFIXES and is_scannable(p)
-        )
-        for p in files:
-            key = str(p.resolve())
-            if key in seen:
-                continue
-            seen.add(key)
-            h.update(key.encode("utf-8"))
-            h.update(b"\0")
-            try:
-                h.update(p.read_bytes())
-            except OSError:
-                h.update(b"<unreadable>")
-            h.update(b"\0")
+        # same guard as the scan: never open a special file, nor read one past the cap
+        data = read_bytes(path)
+        h.update(b"<unreadable>" if data is None else data)
+        h.update(b"\0")
     return h.hexdigest()
 
 
@@ -237,7 +276,7 @@ class ScanCache:
         self._diagnostics: list | None = None
         self._suppression_stats: dict | None = None
         self._python_lines: dict | None = None
-        self._version: str | None = None
+        self._module_versions: dict | None = None
 
     @property
     def _path(self) -> Path:
@@ -271,7 +310,7 @@ class ScanCache:
         self._diagnostics = data.get("diagnostics")
         self._suppression_stats = data.get("suppression_stats")
         self._python_lines = data.get("python_lines")
-        self._version = data.get("version")
+        self._module_versions = data.get("module_versions")
 
     def save(self) -> None:
         if self._fp is None:
@@ -283,7 +322,7 @@ class ScanCache:
                 "diagnostics": self._diagnostics or [],
                 "suppression_stats": self._suppression_stats or {},
                 "python_lines": self._python_lines or {},
-                "version": self._version,
+                "module_versions": self._module_versions or {},
             }
         )
         # The cache lives in the scanned repo, which is untrusted: never write through a
@@ -325,22 +364,22 @@ class ScanCache:
             return self._python_lines or {}
         return {}
 
-    def lookup_version(self, fingerprint: str) -> str | None:
-        """The Odoo version the stored scan ran as (None on a miss)."""
-        if self._fp == fingerprint:
-            return self._version
-        return None
-
     def store(
         self,
         fingerprint: str,
         diagnostics: list,
         suppression_stats: dict | None = None,
         python_lines: dict | None = None,
-        version: str | None = None,
+        module_versions: dict[str, str] | None = None,
     ) -> None:
         self._fp = fingerprint
         self._diagnostics = diagnostics
         self._suppression_stats = suppression_stats or {}
         self._python_lines = python_lines or {}
-        self._version = version
+        self._module_versions = module_versions or {}
+
+    def lookup_versions(self, fingerprint: str) -> dict[str, str]:
+        """Odoo version each module was scanned as ({} on a miss)."""
+        if self._fp == fingerprint:
+            return self._module_versions or {}
+        return {}

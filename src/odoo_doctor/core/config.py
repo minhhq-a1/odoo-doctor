@@ -26,10 +26,20 @@ class SurfaceConfig:
 
 
 # The terminal lists medium/high findings by default; `scan --show-low` or
-# `[surfaces.terminal] min_confidence = "low"` brings the rest back. `load_config()`
-# returns a bare OdooDoctorConfig (empty `surfaces`) when no file exists, so callers
-# must use `cfg.surfaces.get("terminal", DEFAULT_TERMINAL_SURFACE)`.
+# `[surfaces.terminal] min_confidence = "low"` brings the rest back.
 DEFAULT_TERMINAL_SURFACE = SurfaceConfig(min_confidence="medium")
+DEFAULT_CI_SURFACE = SurfaceConfig(min_confidence="high", tiers=["P0", "P1"])
+
+
+def _default_surfaces() -> dict[str, SurfaceConfig]:
+    return {
+        "terminal": DEFAULT_TERMINAL_SURFACE,
+        "pr_comment": SurfaceConfig(),
+        "ci_failure": SurfaceConfig(
+            min_confidence=DEFAULT_CI_SURFACE.min_confidence,
+            tiers=list(DEFAULT_CI_SURFACE.tiers),
+        ),
+    }
 
 
 @dataclass
@@ -57,7 +67,7 @@ class OdooDoctorConfig:
     ignore_files: list[str] = field(default_factory=list)
     ignore_modules: list[str] = field(default_factory=list)
     category_weights: dict[str, float] = field(default_factory=dict)
-    surfaces: dict[str, SurfaceConfig] = field(default_factory=dict)
+    surfaces: dict[str, SurfaceConfig] = field(default_factory=_default_surfaces)
 
 
 def load_config(directory: Path) -> OdooDoctorConfig:
@@ -67,9 +77,6 @@ def load_config(directory: Path) -> OdooDoctorConfig:
     after 20 levels to avoid infinite loops on symlink cycles.
     """
     chain = _find_config_chain(directory)
-    if not chain:
-        return OdooDoctorConfig()
-
     # Merge from outermost (parent) to innermost (child) so child wins
     merged_raw: dict = {}
     for config_path in chain:
@@ -125,13 +132,7 @@ def _build_config(raw: dict) -> OdooDoctorConfig:
     for key, val in adapters_raw.items():
         adapters[key] = bool(val)
 
-    surfaces = {
-        "terminal": DEFAULT_TERMINAL_SURFACE,
-        "pr_comment": SurfaceConfig(),
-        # Default CI policy: only serious (P0/P1), high-confidence findings can
-        # fail a build; style/advisory and low-confidence findings never do.
-        "ci_failure": SurfaceConfig(min_confidence="high", tiers=["P0", "P1"]),
-    }
+    surfaces = defaults.surfaces
     for surface_name, surface_data in surfaces_raw.items():
         if not isinstance(surface_data, dict):
             continue
