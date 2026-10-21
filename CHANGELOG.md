@@ -6,6 +6,43 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `fix` no longer rewrites line endings: a file is read and kept byte for byte, so a CRLF file stays CRLF and a
+  BOM stays. A file that is not valid UTF-8 is skipped (counted in "skipped") instead of stopping the command with
+  a traceback. After each fixer the engine checks that an `.xml` file still parses and a `.py` file still
+  compiles, and drops a result that does not. Findings of one file are fixed from the last line to the first.
+
+### Added
+
+- `odoo-doctor fix --upgrade-to <version> (--fix | --fix-dry-run)`: applies the mechanical migration fixes
+  that `scan --upgrade-report` calls mechanical, for `view-tree-removed`, `chatter-div-removed`,
+  `search-view-group-attributes` and `removed-core-field-usage` (`groups_id` to `group_ids` on six models,
+  `res.groups.users` to `user_ids`). Opt-in: without the flag no migration fixer runs, whatever version the
+  manifests or the config declare. The target must be 18.0 or later and cannot be combined with
+  `--odoo-version` (exit 3). Every module is evaluated as the target; the manifest `version` is never changed.
+  After `--fix` the report of what is left is printed. See `docs/upgrade-report.md`.
+
+### Changed
+
+- The report now says "mechanical (`fix --upgrade-to`)" and means it: the label and the fixers share one table.
+- `fixable` (in `--json` and the terminal "auto-fix" tag) is decided per finding instead of per rule, so a
+  `removed-core-field-usage` finding that is not a pure rename is no longer fixable, and the fix priorities of
+  Odoo 18+ modules rank mechanical findings by effort 1. The language server still offers no migration fix.
+- `chatter-div-removed` is `high` only when `<chatter/>` can replace the div without losing anything: the div has
+  only the class `oe_chatter`, holds only the standard chatter fields (or nothing) and sits directly under the root
+  of the view or in the body of an `xpath`. Any other div (an extra attribute, custom content, another parent) is
+  now `medium`: not scored and not mechanical in the upgrade report. Title and baseline identity are unchanged.
+  On Odoo 17 core, 73 of its 75 divs stay `high`.
+
+### Internal
+
+- Migration fixers live in `rules/upgrade_safety/fixers.py`; `MECHANICAL_RENAMES` in `core/upgrade.py` is the one
+  table behind the report label and the rename fixer.
+- `FixerRegistry` knows `migration` fixers (skipped unless the caller
+  passes `include_migration`) and a per-finding `applies` predicate; `rules/upgrade_safety/_xml_text.py` finds
+  tags and `<record>` spans in XML text.
+
 ---
 
 ## [0.11.2] — 2026-10-21
@@ -67,30 +104,6 @@ All notable changes to Odoo Doctor are documented here.
   to 95.1. On a private 14-module addon set the 10 `high` loop findings became `medium` (create 2 to 0,
   search 7 to 0, write 1 to 0) and the score went 96.4 to 99.0. A whole core 19 scan took about 88 s
   before and after (the two scans ran side by side).
-
-### Fixed
-
-- `fix` no longer rewrites line endings: a file is read and kept byte for byte, so a CRLF file stays CRLF and a
-  BOM stays. A file that is not valid UTF-8 is skipped (counted in "skipped") instead of stopping the command with
-  a traceback. After each fixer the engine checks that an `.xml` file still parses and a `.py` file still
-  compiles, and drops a result that does not. Findings of one file are fixed from the last line to the first.
-
-### Changed
-
-- `chatter-div-removed` is `high` only when `<chatter/>` can replace the div without losing anything: the div has
-  only the class `oe_chatter`, holds only the standard chatter fields (or nothing) and sits directly under the root
-  of the view or in the body of an `xpath`. Any other div (an extra attribute, custom content, another parent) is
-  now `medium`: not scored and not mechanical in the upgrade report. Title and baseline identity are unchanged.
-  On Odoo 17 core, 73 of its 75 divs stay `high`.
-
-### Internal
-
-- Migration fixers for `view-tree-removed`, `chatter-div-removed`, `search-view-group-attributes` and
-  `removed-core-field-usage` (`rules/upgrade_safety/fixers.py`) and `MECHANICAL_RENAMES` in `core/upgrade.py`. They
-  are registered as migration fixers but nothing imports them yet: `fix --upgrade-to` arrives in a later change.
-- Groundwork for the 0.12 migration fixers: `FixerRegistry` knows `migration` fixers (skipped unless the caller
-  passes `include_migration`) and a per-finding `applies` predicate; `rules/upgrade_safety/_xml_text.py` finds
-  tags and `<record>` spans in XML text. Nothing uses them yet.
 
 ---
 

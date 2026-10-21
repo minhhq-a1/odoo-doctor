@@ -21,6 +21,7 @@ from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
 from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.fixer import is_fixable_finding
 from odoo_doctor.core.git import reset_git_cache
 from odoo_doctor.core.pipeline import (
     derive_capabilities,
@@ -131,11 +132,6 @@ def _is_native(func: object) -> bool:
     return mod == "odoo_doctor" or mod.startswith("odoo_doctor.")
 
 
-def _is_fixable_rule(rule_name: str) -> bool:
-    entry = default_registry.get(rule_name)
-    return bool(entry and entry[0].fixable)
-
-
 def _score_module(
     mod_diags: list[Diagnostic],
     mod_elig: list[bool],
@@ -157,7 +153,7 @@ def _score_module(
         mod_elig,
         category_weights=cfg.category_weights,
         in_scope_categories=in_scope,
-        is_fixable=_is_fixable_rule,
+        is_fixable=lambda d: is_fixable_finding(d, include_migration=True),
     )
     result.suppression_stats = stats or {}
     result.python_lines = python_lines

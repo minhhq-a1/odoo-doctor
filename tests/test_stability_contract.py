@@ -90,7 +90,7 @@ FROZEN_RULE_IDS = [
 # --- CLI: command path -> flags that must keep existing ---------------------
 
 FROZEN_CLI = {
-    "fix": {"--fix", "--fix-dry-run", "--odoo-version"},
+    "fix": {"--fix", "--fix-dry-run", "--odoo-version", "--upgrade-to"},
     "history import": {"--branch", "--commit", "--timestamp"},
     "history show": {"--last", "--max-drop"},
     "init": {"--path"},
@@ -264,6 +264,28 @@ def test_exit_codes_of_the_other_commands(tmp_path: Path):
     empty_report.write_text("{}", encoding="utf-8")
     cases = [
         (["fix", str(FIXTURES / "bad_addon")], 3),  # neither --fix nor --fix-dry-run
+        (  # two sources for the version
+            [
+                "fix",
+                str(FIXTURES / "bad_addon"),
+                "--fix-dry-run",
+                "--upgrade-to",
+                "19.0",
+                "--odoo-version",
+                "19.0",
+            ],
+            3,
+        ),
+        (
+            [
+                "fix",
+                str(FIXTURES / "bad_addon"),
+                "--fix-dry-run",
+                "--upgrade-to",
+                "17.0",
+            ],
+            3,
+        ),  # no fixes before 18
         (["rules", "docs", "--out", str(stale), "--check"], 1),  # page out of date
         (["rules", "disable", "no-such-rule", "--path", str(tmp_path)], 3),
         (["rules", "docs", "--format", "pdf"], 3),
@@ -496,5 +518,10 @@ def test_doc_states_exit_codes_and_policy(stability_doc: str):
 
 
 def test_doc_covers_the_upgrade_report(stability_doc: str):
-    for needle in ("--upgrade-report", "upgrade_report", "readiness_schema_version"):
+    for needle in (
+        "--upgrade-report",
+        "upgrade_report",
+        "readiness_schema_version",
+        "--upgrade-to",
+    ):
         assert needle in stability_doc, needle

@@ -71,6 +71,7 @@ def _looks_like_action(keys: dict) -> bool:
     severity="error",
     default_confidence="high",
     needs_context=True,
+    fixable=True,
     min_version="18.0",
 )
 def check_view_tree_removed(ctx: ModuleContext) -> list[Diagnostic]:

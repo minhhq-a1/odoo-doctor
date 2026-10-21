@@ -178,7 +178,7 @@ def build_upgrade_report(
 
 
 def _split(t: dict) -> str:
-    return f"{t['mechanical']} mechanical (fixer planned) / {t['needs_review']} need review"
+    return f"{t['mechanical']} mechanical (`fix --upgrade-to`) / {t['needs_review']} need review"
 
 
 def render_upgrade_report(report: dict) -> str:

@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 from rich.table import Table
 
+from odoo_doctor.core.fixer import default_fixers
 from odoo_doctor.core.scoring import score_label, secondary_scores
 from odoo_doctor.core.suppression_stats import actionable_count
 from odoo_doctor.core.text import safe_text
@@ -83,7 +84,13 @@ def render_terminal(
         if fixes:
             console.print("  [bold]Fix first[/bold] [dim](best score per effort)[/dim]")
             for rank, fp in enumerate(fixes, 1):
-                auto = " [dim]auto-fix[/dim]" if fp.fixable else ""
+                auto = (
+                    " [dim]auto-fix (fix --upgrade-to)[/dim]"
+                    if fp.fixable and default_fixers.is_migration(fp.rule)
+                    else " [dim]auto-fix[/dim]"
+                    if fp.fixable
+                    else ""
+                )
                 console.print(
                     f"   {rank}. [bold]{escape(fp.rule)}[/bold] "
                     f"{escape(fp.file_path)}:{fp.line}  "

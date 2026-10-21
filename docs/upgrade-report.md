@@ -30,14 +30,14 @@ Terminal output (trimmed to one module; scan of the Odoo 17.0 `hr_holidays` addo
 Upgrade readiness report (target Odoo 19.0)
 
 hr_holidays  readiness 14.7/100
-  View type tree renamed to list: 30 finding(s) in 10 file(s), effort 30; 30 mechanical (fixer planned) / 0 need review
-  Chatter div replaced by <chatter/>: 3 finding(s) in 2 file(s), effort 3; 3 mechanical (fixer planned) / 0 need review
-  Kanban legacy templates: 4 finding(s) in 4 file(s), effort 12; 0 mechanical (fixer planned) / 4 need review
-  Search view group attributes: 4 finding(s) in 4 file(s), effort 4; 4 mechanical (fixer planned) / 0 need review
-  Removed core fields: 10 finding(s) in 6 file(s), effort 20; 4 mechanical (fixer planned) / 6 need review
-  Deprecated APIs: 12 finding(s) in 2 file(s), effort 12; 0 mechanical (fixer planned) / 12 need review
-  Cron removed fields: 2 finding(s) in 1 file(s), effort 2; 0 mechanical (fixer planned) / 2 need review
-  SQL constraints ignored: 5 finding(s) in 5 file(s), effort 10; 0 mechanical (fixer planned) / 5 need review
+  View type tree renamed to list: 30 finding(s) in 10 file(s), effort 30; 30 mechanical (`fix --upgrade-to`) / 0 need review
+  Chatter div replaced by <chatter/>: 3 finding(s) in 2 file(s), effort 3; 3 mechanical (`fix --upgrade-to`) / 0 need review
+  Kanban legacy templates: 4 finding(s) in 4 file(s), effort 12; 0 mechanical (`fix --upgrade-to`) / 4 need review
+  Search view group attributes: 4 finding(s) in 4 file(s), effort 4; 4 mechanical (`fix --upgrade-to`) / 0 need review
+  Removed core fields: 10 finding(s) in 6 file(s), effort 20; 4 mechanical (`fix --upgrade-to`) / 6 need review
+  Deprecated APIs: 12 finding(s) in 2 file(s), effort 12; 0 mechanical (`fix --upgrade-to`) / 12 need review
+  Cron removed fields: 2 finding(s) in 1 file(s), effort 2; 0 mechanical (`fix --upgrade-to`) / 2 need review
+  SQL constraints ignored: 5 finding(s) in 5 file(s), effort 10; 0 mechanical (`fix --upgrade-to`) / 5 need review
 ```
 
 Read a line as: *kind of change: how many findings in how many files, estimated effort;
@@ -123,12 +123,30 @@ Python dict that does not look like an action may be unrelated data. The future 
 applies only `high` findings (see [stability.md](stability.md) and `core/fixer.py`), so a
 `medium` finding is never promised as mechanical.
 
-In 0.11 the report says **mechanical (fixer planned for 0.12)**: nothing is auto-fixed yet.
-The `view-tree-removed` label is deliberately broad: every `high` finding of that rule is
-mechanical, including XPath steps named `tree`, `<field name="type">tree</field>`, `eval=`
-`view_mode` strings and nested `tree` elements. One finding covers a whole view record, so these
-forms cannot be counted separately. The 0.12 fixer must either be extended to all of them or the
-label narrowed; until then the mechanical count for this group is an upper bound.
+**Mechanical means `fix --upgrade-to` fixes it.** Every `high` finding of a mechanical rule is repaired by
+the migration fixer in every form the rule reports it at `high`: `view-tree-removed` covers `<tree>` elements
+(also nested), XPath steps named `tree`, `<field name="type">tree</field>`, `view_mode` in XML (text and
+`eval=`) and in Python action dicts, and `(id, 'tree')` pairs. A form the fixer could not repair safely is
+reported at `medium` instead: `chatter-div-removed` is `high` only for a div that has just the class
+`oe_chatter`, holds only the standard chatter fields (or nothing) and sits under the root of the view or in an
+`xpath` body; any other div needs a person. The coverage is checked by a test: after the fix the report shows no
+mechanical finding left.
+
+## Fixing the mechanical part
+
+```bash
+odoo-doctor fix . --upgrade-to 19.0 --fix-dry-run   # the diff, nothing written
+odoo-doctor fix . --upgrade-to 19.0 --fix           # apply, then print what is left
+```
+
+`--upgrade-to` is the target; it replaces `--odoo-version` (passing both exits 3), must be 18.0 or later, and
+evaluates every module as that version. Without it no migration fixer runs, even when a manifest or the config
+already says 19.0, because fixing `<tree>` to `<list>` stops the module from running on 17. The fixes edit the
+text of the record that has the finding and nothing else (line endings, BOM, comments and indentation stay); a
+result that no longer parses is dropped and listed as not fixed. A finding silenced by `odoo-doctor: disable` or
+`[ignore]` is not fixed. `version` and `depends` in the manifest are never touched; the command reminds you when
+a manifest still names an older Odoo. After `--fix` the report of what is left (the "need review" part) is
+printed, from a second scan.
 
 ## Effort
 

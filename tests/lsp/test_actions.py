@@ -163,6 +163,22 @@ def test_fix_edits_none_for_low_confidence(tmp_path: Path):
     assert fix_edits(finding, MANIFEST) is None
 
 
+def test_a_migration_fixer_is_never_offered_in_the_editor(tmp_path: Path):
+    xml = (
+        '<odoo><record id="v" model="ir.ui.view"><field name="arch" type="xml">'
+        "<tree/></field></record></odoo>"
+    )
+    finding = _finding(
+        tmp_path / "v.xml",
+        rule="view-tree-removed",
+        category="Upgrade Safety",
+        line=1,
+        odoo_version="19.0",
+    )
+    assert fix_edits(finding, xml) is None
+    assert to_lsp_diagnostic(finding, xml, fixable=False).data["fixable"] is False
+
+
 # --- the action list -----------------------------------------------------------
 
 

@@ -177,6 +177,6 @@ def test_text_render():
     text = render_upgrade_report(build_upgrade_report(diags, ["m", "clean"], "19.0"))
     assert "19.0" in text and "m" in text
     assert "1 mechanical" in text and "1 need review" in text
-    assert "fixer planned" in text
+    assert "fix --upgrade-to" in text
     assert "no Upgrade Safety findings" in text
     assert "auto-fix" not in text

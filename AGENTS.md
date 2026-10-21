@@ -73,6 +73,7 @@ odoo-doctor scan . --diff HEAD --fail-on error  # Changed files only
 odoo-doctor scan . --cache     # Incremental cached scan
 odoo-doctor fix .              # Apply deterministic fixes
 odoo-doctor fix . --fix-dry-run  # Preview fixes as unified diff
+odoo-doctor fix . --upgrade-to 19.0 --fix-dry-run  # Preview migration fixers (opt-in, >= 18.0)
 odoo-doctor rules list         # List all rules
 odoo-doctor rules explain rule-name  # Explain a rule
 odoo-doctor rules disable rule-name   # Disable a rule in odoo-doctor.toml

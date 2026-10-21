@@ -130,6 +130,7 @@ def _inside_probe(node: ast.AST, parents: dict, name: str) -> bool:
     severity="error",
     default_confidence="high",
     needs_context=True,
+    fixable=True,
     min_version="18.0",
 )
 def check_removed_core_field_usage(ctx: ModuleContext) -> list[Diagnostic]:

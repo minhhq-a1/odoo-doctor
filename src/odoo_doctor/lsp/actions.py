@@ -12,9 +12,8 @@ from lsprotocol import types as lsp
 
 import odoo_doctor.rules.manifest.fixers  # noqa: F401  (registers the fixers)
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.fixer import compute_fixes, default_fixers
+from odoo_doctor.core.fixer import compute_fixes, default_fixers, is_fixable_finding
 from odoo_doctor.lsp.convert import diff_edits, position_at, split_lines
-from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import _SUPPRESS_FILE_RE
 
 DISABLE_RULE_COMMAND = "odooDoctor.disableRule"
@@ -153,8 +152,11 @@ def disable_file_edit(rule: str, file_path: str, text: str) -> lsp.TextEdit | No
 
 def fix_edits(finding: Diagnostic, text: str) -> list[lsp.TextEdit] | None:
     """Edits from the deterministic fixer of the finding's rule, if it has one."""
-    entry = default_registry.get(finding.rule)
-    fixable = {finding.rule} if entry and entry[0].fixable else set()
+    fixable = (
+        {finding.rule}
+        if is_fixable_finding(finding, include_migration=False)
+        else set()
+    )
     result, _ = compute_fixes(
         [finding], fixable, default_fixers, read_text=lambda _path: text
     )

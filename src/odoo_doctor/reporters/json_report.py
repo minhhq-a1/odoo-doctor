@@ -8,12 +8,12 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from odoo_doctor import __version__
+from odoo_doctor.core.fixer import is_fixable_finding
 from odoo_doctor.core.scoring import (
     SCORE_SCHEMA_VERSION,
     project_score,
     secondary_scores,
 )
-from odoo_doctor.rules.registry import default_registry
 
 # Importing the rule modules triggers their @rule registration so the registry
 # knows their fixable flag. Import only what this reporter needs. Registration order is
@@ -21,6 +21,7 @@ from odoo_doctor.rules.registry import default_registry
 # isort: off
 import odoo_doctor.rules.manifest.missing_required_fields
 import odoo_doctor.rules.manifest.data_order_risk
+import odoo_doctor.rules.manifest.fixers
 # isort: on
 
 if TYPE_CHECKING:
@@ -86,7 +87,7 @@ def build_payload(
                 "category": d.category,
                 "severity": d.severity,
                 "confidence": d.confidence,
-                "fixable": _is_fixable(d.rule),
+                "fixable": is_fixable_finding(d, include_migration=True),
             }
             for d in top
         ],
@@ -104,8 +105,3 @@ def render_json(
     if upgrade_report is not None:
         payload["upgrade_report"] = upgrade_report
     return json.dumps(payload, indent=2)
-
-
-def _is_fixable(rule_name: str) -> bool:
-    entry = default_registry.get(rule_name)
-    return bool(entry and entry[0].fixable)

@@ -122,7 +122,7 @@ def rank_fixes(
     eligible: list[bool],
     category_weights: dict[str, float] | None,
     in_scope_categories: list[str] | None,
-    is_fixable: Callable[[str], bool],
+    is_fixable: Callable[[Diagnostic], bool],
 ) -> list[FixPriority]:
     """Rank score-eligible findings, best next fix first."""
     weights = {**DEFAULT_CATEGORY_WEIGHTS, **(category_weights or {})}
@@ -141,7 +141,7 @@ def rank_fixes(
         if not ok or d.category not in impact:
             continue
         points = TIER_IMPACT.get(d.tier, 0) * weights.get(d.category, 1.0)
-        fixable = is_fixable(d.rule)
+        fixable = is_fixable(d)
         effort = 1 if fixable else EFFORT_BY_RULE.get(d.rule, DEFAULT_EFFORT)
         pending[d.category].append((d, points, effort, fixable))
         impact[d.category] += points

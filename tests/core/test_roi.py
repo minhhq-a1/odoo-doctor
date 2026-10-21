@@ -48,7 +48,7 @@ def _rank(diags, eligible=None, fixable=()):
         eligible,
         category_weights=None,
         in_scope_categories=None,
-        is_fixable=lambda rule: rule in fixable,
+        is_fixable=lambda d: d.rule in fixable,
     )
 
 
