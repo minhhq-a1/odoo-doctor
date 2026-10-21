@@ -6,6 +6,19 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `fix` no longer rewrites line endings: a file is read and kept byte for byte, so a CRLF file stays CRLF and a
+  BOM stays. A file that is not valid UTF-8 is skipped (counted in "skipped") instead of stopping the command with
+  a traceback. After each fixer the engine checks that an `.xml` file still parses and a `.py` file still
+  compiles, and drops a result that does not. Findings of one file are fixed from the last line to the first.
+
+### Internal
+
+- Groundwork for the 0.12 migration fixers: `FixerRegistry` knows `migration` fixers (skipped unless the caller
+  passes `include_migration`) and a per-finding `applies` predicate; `rules/upgrade_safety/_xml_text.py` finds
+  tags and `<record>` spans in XML text. Nothing uses them yet.
+
 ---
 
 ## [0.11.1] — 2026-10-21
