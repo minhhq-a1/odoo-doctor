@@ -6,6 +6,10 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.11.2] — 2026-10-21
+
 ### Security
 
 - The Ruff adapter no longer applies the scanned repo's Ruff configuration. This reverses the change in
