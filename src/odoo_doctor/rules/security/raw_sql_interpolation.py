@@ -13,7 +13,9 @@ from odoo_doctor.rules._ast_helpers import is_test_file, pylint_disabled_ranges
 from odoo_doctor.rules._taint import Taint, TaintVisitor, trusting_opaque_values
 from odoo_doctor.rules.registry import rule
 
-_CR_METHODS = {"execute", "executemany"}
+_CR_METHODS = {"execute", "executemany", "copy_expert"}
+# Odoo 17+: `env.execute_query(SQL(...))` runs a statement on the environment's cursor.
+_ENV_METHODS = {"execute_query"}
 # `cr`, `env.cr`, `self._cr`, `request.env.cr`, `request.cr`: anything ending in a cursor name.
 _CR_NAMES = {"cr", "_cr"}
 # DDL and other statements that do not contain SELECT/UPDATE/INSERT/DELETE/CREATE anyway.
@@ -279,9 +281,11 @@ def _opens_cursor(node: ast.expr) -> bool:
 def _is_cursor_execute(node: ast.Call, cursors: set[str]) -> bool:
     if not isinstance(node.func, ast.Attribute):
         return False
+    receiver = node.func.value
+    if node.func.attr in _ENV_METHODS:
+        return _dotted_name(receiver).rsplit(".", 1)[-1] == "env"
     if node.func.attr not in _CR_METHODS:
         return False
-    receiver = node.func.value
     if _opens_cursor(receiver):
         return True
     name = _dotted_name(receiver)
