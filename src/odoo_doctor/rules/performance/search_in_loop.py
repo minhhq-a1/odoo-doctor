@@ -8,7 +8,11 @@ from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import is_test_file, orm_calls_in_loops
+from odoo_doctor.rules._ast_helpers import (
+    is_repeated_unchanged,
+    is_test_file,
+    orm_calls_in_loops,
+)
 from odoo_doctor.rules.registry import rule
 
 # Queries that Odoo's own addons run per group or per company inside loops.
@@ -50,6 +54,13 @@ def check_search_in_loop(
         if isinstance(loop, ast.While) and _is_paged(node):
             continue
         method = node.func.attr
+        # A per-record query is how Odoo's own addons are written (hundreds of them in
+        # core 19), so only a query the loop cannot change is proven wasted.
+        high = not (
+            guessed
+            or method in _AGGREGATES
+            or not is_repeated_unchanged(node, loop, tree)
+        )
         diags.append(
             Diagnostic(
                 module=module_name,
@@ -61,7 +72,7 @@ def check_search_in_loop(
                 severity="error",
                 tier="P1",
                 source="native",
-                confidence="medium" if guessed or method in _AGGREGATES else "high",
+                confidence="high" if high else "medium",
                 title=f"ORM '{method}' called inside loop",
                 message=f"'{method}()' at line {node.lineno} is called inside a loop. Consider batching.",
                 help=f"Move the '{method}()' call outside the loop and batch the operation.",

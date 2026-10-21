@@ -579,11 +579,13 @@ company = self.env.company
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `create()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules and confidence tiers of `search-in-loop` apply).
+**Detects**: `create()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules of `search-in-loop` apply).
 
 **Why**: Each call triggers its own INSERT and recomputation round trip.
 
 **Fix**: Collect the values and call `create()` once with a list.
+
+**Note**: Medium confidence, as in Odoo's own addons: high only when the call is the only statement of a `for` body and its values and context do not use the loop (`for n in names: self.env['x'].create({'a': 1})`).
 
 Bad:
 
@@ -634,7 +636,7 @@ for partner in self.env['res.partner'].browse(partner_ids):
 
 **Fix**: Move the call out of the loop and batch the results.
 
-**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported. The receiver must be a recordset: `self`, an `env[...]` lookup, a loop variable over records and a local assigned from one (`recs = self.env['x'].search([])`), but not an attribute that `__init__` or the class body sets to a plain object (`self.client = Client()`). Medium confidence, not high: the receiver is a local (`recs.search(..)`, `Model = self.env['x']`), the loop is a comprehension, or the query is `search_read` / `search_fetch` / `read_group` (Odoo's own addons run those per company or per group); `self` / `env[...]` receivers in a `for` or `while` stay high.
+**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported. The receiver must be a recordset: `self`, an `env[...]` lookup, a loop variable over records and a local assigned from one (`recs = self.env['x'].search([])`), but not an attribute that `__init__` or the class body sets to a plain object (`self.client = Client()`). Confidence is medium for a query that depends on the loop, which is how Odoo's own addons are written (hundreds of per-record queries in core 19). It is high only when the loop cannot change the query: a plain statement of a `for` body (not under `if` / `try`, not in a comprehension, `while` or nested loop), `self` / `env[...]` receiver, `search` / `search_count` / `read`, with arguments that use no loop variable or name the loops rebind, in a loop that makes no `create` / `write` / `unlink` / `action_*` call. Such a query can be hoisted out of the loop as is.
 
 Bad:
 
@@ -654,11 +656,13 @@ by_id = {p.id: p for p in partners}
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `write()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules and confidence tiers of `search-in-loop` apply).
+**Detects**: `write()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules of `search-in-loop` apply).
 
 **Why**: Each call triggers its own UPDATE and recomputation round trip.
 
 **Fix**: Write once on the whole recordset when the values are identical.
+
+**Note**: Medium confidence, as in Odoo's own addons: high only when the call is the only statement of a `for` body and its values and context do not use the loop (`for rec in recs: rec.write({'state': 'done'})`). The receiver may be the loop variable.
 
 Bad:
 

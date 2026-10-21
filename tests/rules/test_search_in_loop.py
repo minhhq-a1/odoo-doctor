@@ -271,30 +271,66 @@ def _tiers(tmp_path: Path, src: str) -> list[tuple[int, str]]:
     return [(d.line, d.confidence) for d in check_search_in_loop(f, "m", "19.0")]
 
 
-def test_plain_receivers_stay_high_and_inferred_ones_are_medium(tmp_path: Path):
-    """Odoo's own addons query in loops over a local, a comprehension, a group: medium."""
+def test_only_a_query_the_loop_cannot_change_is_high(tmp_path: Path):
+    """Odoo's own addons query per record (hundreds of times in core 19): medium. High
+    needs a query that is a plain statement of the body and does not use the loop."""
     src = """\
         class A:
             def f(self, vals):
                 for rec in self:
                     self.env["x"].search([("a", "=", rec.id)])
-                    rec.env["x"].search_count([("a", "=", rec.id)])
-                    self.env["x"].search_read([("a", "=", rec.id)])
-                    self.env["x"]._read_group([("a", "=", rec.id)], ["a"])
+                    self.env["x"].search([("a", "=", 1)])
+                    self.env["x"].search_count([("a", "=", self.id)])
+                    self.env["x"].search_read([("a", "=", 1)])
+                    self.env["x"]._read_group([("a", "=", 1)], ["a"])
+                    if rec.a:
+                        self.env["x"].search([("a", "=", 1)])
                 recs = self.env["x"].search([])
                 for r in recs:
-                    r.search([("a", "=", r.id)])
-                    self.env["x"].search([("a", "=", r.id)])
-                [self.env["x"].search([("a", "=", v)]) for v in vals]
+                    r.search([("a", "=", 1)])
+                    self.env["x"].search([("a", "=", 1)])
+                [self.env["x"].search([("a", "=", 1)]) for v in vals]
         """
     assert _tiers(tmp_path, src) == [
-        (4, "high"),
+        (4, "medium"),
         (5, "high"),
-        (6, "medium"),
+        (6, "high"),
         (7, "medium"),
+        (8, "medium"),
         (10, "medium"),
-        (11, "high"),
+        (13, "medium"),
+        (14, "high"),
+        (15, "medium"),
+    ]
+
+
+def test_a_loop_that_writes_or_rebinds_keeps_a_query_medium(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, names):
+                for rec in self:
+                    self.env["x"].search([("a", "=", 1)])
+                    rec.write({"a": 1})
+                for name in names:
+                    self.env["x"].search([("a", "=", 1)])
+                    self.env["x"].search([("a", "=", name)])
+                domain = []
+                for name in names:
+                    domain.append(("a", "=", name))
+                    self.env["x"].search(domain)
+                while names:
+                    self.env["x"].search([("a", "=", 1)])
+                for a in names:
+                    for b in names:
+                        self.env["x"].search([("a", "=", a)])
+        """
+    assert _tiers(tmp_path, src) == [
+        (4, "medium"),
+        (7, "high"),
+        (8, "medium"),
         (12, "medium"),
+        (14, "medium"),
+        (17, "medium"),
     ]
 
 
@@ -307,9 +343,9 @@ def test_rebinding_self_or_a_loop_variable_keeps_the_plain_tier(tmp_path: Path):
                 for task in self:
                     task.search([("a", "=", task.id)])
                 for rec in self:
-                    self.env["x"].search([("a", "=", rec.id)])
+                    self.env["x"].search([("a", "=", 1)])
         """
-    assert _tiers(tmp_path, src) == [(6, "high"), (8, "high")]
+    assert _tiers(tmp_path, src) == [(6, "medium"), (8, "high")]
 
 
 def test_env_lookup_on_a_local_adapter_of_self_stays_high(tmp_path: Path):
@@ -318,13 +354,13 @@ def test_env_lookup_on_a_local_adapter_of_self_stays_high(tmp_path: Path):
             def f(self):
                 ctx = self.with_context(a=1)
                 for rec in self:
-                    ctx.env["x"].search([("a", "=", rec.id)])
-                    ctx.search([("a", "=", rec.id)])
+                    ctx.env["x"].search([("a", "=", 1)])
+                    ctx.search([("a", "=", 1)])
         """
     assert _tiers(tmp_path, src) == [(5, "high"), (6, "medium")]
 
 
-def test_comprehension_nested_in_a_loop_keeps_the_loop_tier(tmp_path: Path):
+def test_comprehension_nested_in_a_loop_is_medium(tmp_path: Path):
     src = """\
         class A:
             def f(self, recs):
@@ -335,7 +371,7 @@ def test_comprehension_nested_in_a_loop_keeps_the_loop_tier(tmp_path: Path):
                 while recs:
                     [self.search([("a", "=", q)]) for q in (1, 2, 3)]
         """
-    assert _tiers(tmp_path, src) == [(4, "high"), (6, "high"), (8, "high")]
+    assert _tiers(tmp_path, src) == [(4, "medium"), (6, "medium"), (8, "medium")]
 
 
 def test_standalone_comprehension_is_medium_and_bounded_one_is_silent(tmp_path: Path):

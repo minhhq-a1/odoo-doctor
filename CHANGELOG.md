@@ -6,6 +6,25 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- `search-in-loop`, `create-in-loop` and `write-in-loop` are `high` only for the loop shape that is
+  provably wasted, no longer for every call on a plain `self` / `env[...]` receiver. A per-record query
+  or write is how Odoo's own addons are written (core 19 holds 405 / 185 / 138 such findings that were
+  `high`), so by the confidence policy those are now `medium`. `high` is kept for a call the loop cannot
+  change: a query that is a plain statement of a `for` body (not under `if` / `try`, in no comprehension,
+  `while` or nested loop that changes it), whose receiver and arguments use no loop variable or rebound
+  name, in a loop that makes no `create` / `write` / `unlink` / `action_*` call (hoist it); and a
+  `write` / `create` that is the only statement of a `for` body with values and context that do not use
+  the loop (`for r in recs: r.write(vals)` is `recs.write(vals)`). Finding titles are unchanged, so
+  baselines stay valid. Golden corpus case `loop_confidence` holds both sides; the `performance_loops`
+  and `loop_setup_not_flagged` cases now expect `medium`.
+  Measured on Odoo core 19 addons (`high` / `medium`): `search-in-loop` 405 / 75 to 0 / 480,
+  `create-in-loop` 185 / 27 to 0 / 212, `write-in-loop` 138 / 43 to 1 / 180 (the one left is
+  `mrp_production.py`: `for production in self: production.write({...constants...})`); project score
+  93.2 to 95.0. On a private 14-module addon set the 10 `high` loop findings became `medium` and the score
+  went 96.4 to 99.0.
+
 ### Fixed
 
 - `fix` no longer rewrites line endings: a file is read and kept byte for byte, so a CRLF file stays CRLF and a

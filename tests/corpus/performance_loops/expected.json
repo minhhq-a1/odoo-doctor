@@ -7,11 +7,11 @@
   [
     "create-in-loop",
     "perf/models/runner.py",
-    "high"
+    "medium"
   ],
   [
     "search-in-loop",
     "perf/models/runner.py",
-    "high"
+    "medium"
   ]
 ]
