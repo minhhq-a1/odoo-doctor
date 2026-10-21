@@ -117,3 +117,19 @@ def test_diff_ignores_the_cache(project):
     uncached = _scan(root, "--diff", "HEAD")
     assert _scan(root, "--diff", "HEAD", "--cache") == uncached
     assert _scan(root, "--diff", "HEAD", "--cache") == uncached
+
+
+@pytest.mark.parametrize(
+    "tooling", [".git", ".ruff_cache", ".mypy_cache", ".pytest_cache", "__pycache__"]
+)
+def test_tooling_directories_are_neither_scanned_nor_cached(project, tooling):
+    root = project("17.0")
+    hidden = root / "alpha" / tooling / "deep"
+    hidden.mkdir(parents=True)
+    (hidden / "evil.py").write_text("def f(x):\n    return eval(x)\n")
+    uncached = _scan(root)
+    assert "evil.py" not in uncached  # not scanned
+    _scan(root, "--cache")
+    # a file changing inside the directory the fingerprint skips cannot matter
+    (hidden / "evil.py").write_text("def g(x):\n    return eval(x + '1')\n")
+    assert _scan(root, "--cache") == uncached

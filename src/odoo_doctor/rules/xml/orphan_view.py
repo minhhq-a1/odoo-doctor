@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import is_scannable
+from odoo_doctor.core.source import in_tooling_dir, is_scannable
 from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.rules.registry import rule
 
@@ -25,7 +25,11 @@ def _module_text(ctx: ModuleContext) -> str:
     (``env.ref('m.view')``, ``form_view_ref`` in a context, JS ``doAction``)."""
     parts: list[str] = []
     for f in sorted(ctx.path.rglob("*")):
-        if f.suffix not in _TEXT_SUFFIXES or not is_scannable(f, ctx.path):
+        if (
+            f.suffix not in _TEXT_SUFFIXES
+            or in_tooling_dir(f, ctx.path)
+            or not is_scannable(f, ctx.path)
+        ):
             continue
         try:
             if f.stat().st_size > _MAX_FILE_BYTES:

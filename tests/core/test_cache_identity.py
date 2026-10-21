@@ -267,3 +267,13 @@ def test_pylint_odoo_version_comes_from_the_interpreter_behind_pylint(tmp_path: 
     assert _pylint_odoo_version(str(pylint), str(tmp_path)) == "9.9.9"
     pylint.write_text("not a script\n")
     assert _pylint_odoo_version(str(pylint), str(tmp_path)) == "unknown"
+
+
+def test_linters_are_not_pointed_at_python_in_tooling_directories(tmp_path: Path):
+    from odoo_doctor.core.source import lint_targets
+
+    (tmp_path / "ok.py").write_text("x = 1\n")
+    assert lint_targets(tmp_path) == [tmp_path]
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "x.py").write_text("y = 1\n")
+    assert lint_targets(tmp_path) == [tmp_path / "ok.py"]

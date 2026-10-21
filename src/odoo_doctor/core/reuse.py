@@ -26,10 +26,9 @@ import time
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import read_bytes
+from odoo_doctor.core.source import SKIP_DIRS, read_bytes
 
 RACY_SECONDS = 2.0
-_SKIPPED_DIRS = frozenset({".git", "__pycache__"})
 
 
 class Stamper:
@@ -77,7 +76,7 @@ class Stamper:
         directories are not followed (neither do the linters)."""
         h = hashlib.sha1()
         for dirpath, dirs, names in os.walk(root):
-            dirs[:] = sorted(d for d in dirs if d not in _SKIPPED_DIRS)
+            dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
             for name in sorted(names):
                 if suffixes and not name.endswith(suffixes):
                     continue

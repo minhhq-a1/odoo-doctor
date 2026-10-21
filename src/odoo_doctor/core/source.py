@@ -100,10 +100,28 @@ def path_within(path: Path | str, root: Path | str) -> bool:
         return False
 
 
+# Tooling directories: rewritten by git, ruff, mypy, pytest and the interpreter, and never
+# holding addon code. Neither the scan walkers nor the scan-cache fingerprint look into them
+# (one constant, so a hit cannot hide a file the scan would read).
+SKIP_DIRS = frozenset(
+    {".git", ".ruff_cache", ".mypy_cache", ".pytest_cache", "__pycache__"}
+)
+
+
+def in_tooling_dir(path: Path | str, root: Path | str) -> bool:
+    """True when *path* sits below a :data:`SKIP_DIRS` directory of *root*."""
+    try:
+        parts = Path(path).relative_to(root).parts[:-1]
+    except ValueError:
+        return False
+    return not SKIP_DIRS.isdisjoint(parts)
+
+
 def scannable_files(root: Path, pattern: str = "*.py") -> Iterator[Path]:
-    """``root.rglob(pattern)`` limited to files :func:`is_scannable` accepts."""
+    """``root.rglob(pattern)`` limited to files :func:`is_scannable` accepts, outside
+    the tooling directories (:data:`SKIP_DIRS`)."""
     for path in root.rglob(pattern):
-        if is_scannable(path, root):
+        if not in_tooling_dir(path, root) and is_scannable(path, root):
             yield path
 
 
@@ -120,7 +138,9 @@ def lint_targets(root: Path) -> list[Path]:
     for dirpath, _dirs, names in os.walk(root):
         for name in names:
             path = Path(dirpath, name)
-            if name.endswith(_LINT_SUFFIXES) and not is_scannable(path, root):
+            if name.endswith(_LINT_SUFFIXES) and (
+                in_tooling_dir(path, root) or not is_scannable(path, root)
+            ):
                 return sorted(scannable_files(root))
     return [root]
 
