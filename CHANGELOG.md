@@ -70,9 +70,15 @@ All notable changes to Odoo Doctor are documented here.
   `select` only change what ruff reads or reports). Residual risk: a hostile repo's ruff config can
   disable or change ruff's own findings (never odoo-doctor's native rules); the cache key already holds the
   repo's ruff configuration. Pylint is different and stays isolated: its configuration is ignored because
-  pylint executes `init-hook` from it (see the Pylint entry above).
+  pylint executes `init-hook` from it (see the Pylint-Odoo entry under Security in 0.11.0).
   Ruff and Pylint-Odoo also open every Python file they find, so a FIFO named `*.py` hung them; when
   the addon holds a file that must not be opened, they now get the regular `.py` files one by one.
+  Ruff also opens the config files and every `extend` target itself: `extend = "evil.toml"` with a FIFO
+  there (or a symlink to `/dev/zero`) held it until the 60 s adapter timeout, per addon. Before running
+  Ruff the adapter now walks the config files it would find and their `extend` chain; if a link is not a
+  regular file, is over 16 MiB or cannot be read, Ruff runs with `--isolated` for that addon and one
+  `[WARN]` line names the file and says the repo's Ruff configuration is ignored. Any other config is
+  honoured as before.
 - A file name in the scanned repo can no longer inject GitHub workflow commands. `--format github`
   wrote the path into `file=` unescaped, so a name holding a newline and `::stop-commands::` or
   `::error::` ended the annotation and started a command of its own (the title and message were
@@ -275,14 +281,24 @@ All notable changes to Odoo Doctor are documented here.
   manifest fields and dependencies; only matching titles are deduplicated.
 - Apply version/capability gates and category scope per module in mixed-version
   projects. Cache entries retain module versions so cached scores match fresh scans.
-- Write portable v3 baselines using paths relative to the scan root. Existing v1/v2
+- Write portable v3 baselines using paths relative to the scan root (`--write-baseline` now writes
+  `"version": 3`). Existing v1/v2
   baselines remain readable with their original identities; regenerate them to move
-  between checkout paths.
+  between checkout paths. An older odoo-doctor reading a v3 baseline does not recognise its identities
+  and treats every finding as new.
 - Invalidate scan caches for Ruff configuration changes, including ancestor and
   recursive `extend` configs, linter availability/versions and configured Odoo source
   changes. Plugins with arbitrary input dependencies bypass the built-in cache.
-  (The scanned repo's own Ruff configuration still does not steer the run, see the Ruff entry under
-  Security: the key moves, the findings do not.)
+- Tooling directories are not scanned: `.git`, `.ruff_cache`, `.mypy_cache`, `.pytest_cache` and
+  `__pycache__` (anywhere below an addon). The scan-cache fingerprint already skipped them, while the scan
+  still read Python and data files inside them, so a warm `--cache` run could report fewer findings than an
+  uncached one. Both now share one list (`core/source.py::SKIP_DIRS`); it also applies to the line counts,
+  the module graph, the orphan-view text search, the language server's file stamps, and Ruff/Pylint are
+  handed explicit files when such a directory holds Python.
+- The language server did not see a change to the Ruff configuration while it ran: after creating, editing
+  or deleting `ruff.toml`, `.ruff.toml`, `pyproject.toml`, a file they `extend`, or a `.gitignore`, Ruff
+  findings stayed stale until a restart. These files and the Ruff/Pylint executables are now stamped into
+  the reuse key and the per-addon lint signature.
 - Use the same default P0/P1 high-confidence CI failure policy with absent, empty
   and partial configurations.
 - Collect context-rule generators once so plugin findings are retained in full and

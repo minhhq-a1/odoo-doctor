@@ -384,3 +384,37 @@ def test_stamper_sees_a_rewrite_with_the_same_size_and_mtime(tmp_path: Path):
     os.utime(f, ns=(mtime, mtime))  # ...and the same mtime
     assert Stamper(first.racy).file(f) != sig
     assert Stamper(first.racy).file(f) == Stamper(first.racy).file(f)
+
+
+@pytest.mark.skipif(shutil.which("ruff") is None, reason="ruff is not installed")
+def test_ruff_configuration_changes_reach_a_reusing_scan(tmp_path: Path):
+    """Create, edit and delete of ruff.toml, and of the file it extends, change the linter's
+    findings in the very next reusing scan (not after a restart)."""
+    root = tmp_path.resolve()
+    _project(root, ruff=True)
+    m = root / "mod_c" / "models" / "m.py"
+    m.write_text("import os\n" + m.read_text())  # F401 with ruff's defaults
+
+    def f401(diags):
+        return [d for d in diags if d.rule == "F401"]
+
+    reuse = ScanReuse()
+    assert f401(_same(root, reuse))
+    config = root / "ruff.toml"
+    config.write_text('[lint]\nignore = ["F401"]\n')  # create
+    assert not f401(_same(root, reuse))
+    config.write_text("[lint]\nselect = ['F']\n")  # edit
+    assert f401(_same(root, reuse))
+    shared = root / "shared.toml"
+    shared.write_text('[lint]\nignore = ["F401"]\n')
+    config.write_text('extend = "shared.toml"\n')  # edit to extend another file
+    assert not f401(_same(root, reuse))
+    shared.write_text("[lint]\n")  # edit the extend target
+    assert f401(_same(root, reuse))
+    config.unlink()  # delete
+    shared.unlink()
+    assert f401(_same(root, reuse))
+    (root / ".gitignore").write_text(
+        "mod_c/models/m.py\n"
+    )  # ruff honours .gitignore too
+    _same(root, reuse)

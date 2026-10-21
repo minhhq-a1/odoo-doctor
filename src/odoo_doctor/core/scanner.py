@@ -108,7 +108,9 @@ def _identity_inputs(
     )
 
 
-def _lint_signature(ctx, modules: dict, module_sigs: dict[str, str]) -> str:
+def _lint_signature(
+    ctx, modules: dict, module_sigs: dict[str, str], config_sig: str = ""
+) -> str:
     """What a linter run on one addon can see: its files and those of the addons it depends on
     (transitively), since a linter may follow an import into a sibling addon."""
     closure: dict[str, None] = {}
@@ -119,7 +121,8 @@ def _lint_signature(ctx, modules: dict, module_sigs: dict[str, str]) -> str:
             continue
         closure[name] = None
         pending.extend(modules[name].depends)
-    return repr(sorted((n, module_sigs.get(str(modules[n].path), "")) for n in closure))
+    sigs = sorted((n, module_sigs.get(str(modules[n].path), "")) for n in closure)
+    return repr((sigs, config_sig))  # a linter also reads ruff.toml, .gitignore ...
 
 
 def _is_native(func: object) -> bool:
@@ -306,6 +309,7 @@ def collect_scores(
     stamper: Stamper | None = None
     module_sigs: dict[str, str] = {}
     project_key = ""
+    config_sig = ""
     source_index = None
     if reuse is not None:
         reuse.begin(
@@ -323,7 +327,17 @@ def collect_scores(
             if cfg.odoo_source_path
             else ""
         )
-        project_key = repr((sorted(module_sigs.items()), index_sig))
+        # linter configuration, ignore files and executables (the same inputs as --cache's
+        # key): stamped like the addons' files, missing files included
+        from odoo_doctor.adapters.cache import cache_dependencies
+
+        dep_files, dep_identities = cache_dependencies(
+            addon_paths, config_root, cfg.adapters
+        )
+        config_sig = repr(
+            (sorted((str(p), stamper.file(p)) for p in dep_files), dep_identities)
+        )
+        project_key = repr((sorted(module_sigs.items()), index_sig, config_sig))
         # plugin rules (context ones too) may read anything: they run on every scan
         plugins = any(not _is_native(f) for _, f in default_registry.get_rules())
         if not plugins and reuse.last is not None and reuse.last[0] == project_key:
@@ -454,7 +468,7 @@ def collect_scores(
                     adapter.name,
                     str(ctx.path),
                     ctx.odoo_version,
-                    _lint_signature(ctx, graph.modules, module_sigs),
+                    _lint_signature(ctx, graph.modules, module_sigs, config_sig),
                 )
                 hit = reuse.adapters.get(key)
                 if hit is not None:
