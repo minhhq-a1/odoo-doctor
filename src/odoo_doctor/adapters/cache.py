@@ -42,16 +42,19 @@ def _ruff_configs(roots: list[Path]) -> set[Path]:
     catches changes to config precedence and Python target-version inference.
     """
     candidates: set[Path] = set()
-    for root in roots:
-        root = root.resolve()
+    # the workspace folder is usually both an addons path and the config root: walk it once
+    for root in dict.fromkeys(r.resolve() for r in roots):
         for parent in (root, *root.parents):
             candidates.update(
                 parent / name for name in (*_RUFF_CONFIG_NAMES, *_IGNORE_NAMES)
             )
             candidates.add(parent / ".git" / "info" / "exclude")
-        candidates.update(root.rglob("*.toml"))
-        for name in _IGNORE_NAMES:
-            candidates.update(root.rglob(name))
+        for dirpath, _dirs, names in os.walk(root):  # one walk for all three patterns
+            candidates.update(
+                Path(dirpath, n)
+                for n in names
+                if n.endswith(".toml") or n in _IGNORE_NAMES
+            )
         # Resolve worktree/common git dirs and explicitly configured global ignores.
         # These read-only commands do not execute repository hooks or project code.
         for args in (

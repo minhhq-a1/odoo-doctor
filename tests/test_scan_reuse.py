@@ -418,3 +418,18 @@ def test_ruff_configuration_changes_reach_a_reusing_scan(tmp_path: Path):
         "mod_c/models/m.py\n"
     )  # ruff honours .gitignore too
     _same(root, reuse)
+
+
+def test_ruff_config_candidates_include_nested_files_and_missing_ones(tmp_path: Path):
+    from odoo_doctor.adapters.cache import _ruff_configs
+
+    root = tmp_path.resolve()
+    (root / "a" / "deep").mkdir(parents=True)
+    for rel in ("a/ruff.toml", "a/deep/.gitignore", "a/deep/x.toml", "a/.ignore"):
+        (root / rel).write_text("")
+    found = _ruff_configs([root, root])  # the same folder twice: walked once
+    for rel in ("a/ruff.toml", "a/deep/.gitignore", "a/deep/x.toml", "a/.ignore"):
+        assert (root / rel).resolve() in found
+    assert (
+        root / "ruff.toml"
+    ).resolve() in found  # missing: creating it must invalidate
