@@ -182,3 +182,27 @@ def test_qweb_branch_in_a_regular_view_is_skipped_but_the_rest_is_checked(
         </form></field></record></odoo>"""
     (d,) = _diags(tmp_path, xml)
     assert d.line == 5 and "1 element(s)" in d.message
+
+
+def test_xpath_on_a_field_named_like_templates_is_still_checked(tmp_path: Path):
+    xml = """<odoo><record id="v" model="ir.ui.view">
+        <field name="model">x.a</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='email_templates']" position="attributes">
+                <attribute name="attrs">{'invisible': [('a', '=', 1)]}</attribute>
+            </xpath>
+        </field></record></odoo>"""
+    assert len(_diags(tmp_path, xml)) == 1
+
+
+def test_xpath_through_the_templates_step_is_qweb(tmp_path: Path):
+    xml = """<odoo><record id="v" model="ir.ui.view">
+        <field name="model">x.a</field>
+        <field name="inherit_id" ref="x.kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//templates/t[@t-name='kanban-box']//button" position="attributes">
+                <attribute name="states">draft</attribute>
+            </xpath>
+        </field></record></odoo>"""
+    assert _diags(tmp_path, xml) == []

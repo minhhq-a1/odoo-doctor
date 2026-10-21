@@ -135,8 +135,6 @@ def per_iteration_nodes(loop: LoopNode) -> Iterator[ast.AST]:
             if isinstance(curr, ast.For):
                 todo.append(curr.iter)
             todo.extend(curr.orelse)
-        elif isinstance(curr, Comprehension):
-            todo.append(curr.generators[0].iter)
         else:
             todo.extend(ast.iter_child_nodes(curr))
 
@@ -259,6 +257,35 @@ def _bind_loop_targets(
                 inferred.difference_update(names)
 
 
+_RECORDSET_METHODS = {
+    "search",
+    "browse",
+    "mapped",
+    "filtered",
+    "filtered_domain",
+    "sorted",
+    "sudo",
+    "with_context",
+    "with_company",
+    "with_user",
+    "with_env",
+    "exists",
+    "concat",
+    "grouped",
+}
+
+
+def _clearly_records(value: ast.expr, orm_vars: set[str]) -> bool:
+    """``self.env['x']...``, a recordset method on anything ORM, or a known recordset name;
+    not ``self._get_regex()`` (any other call on ``self``)."""
+    if isinstance(value, ast.Call) and isinstance(value.func, ast.Attribute):
+        if value.func.attr in _RECORDSET_METHODS:
+            return True
+    return any(isinstance(n, ast.Subscript) for n in ast.walk(value)) or _root_name(
+        value
+    ) in orm_vars | {"cls"} - {"self"}
+
+
 def _bind_assign(
     node: ast.Assign,
     orm_vars: set[str],
@@ -274,7 +301,11 @@ def _bind_assign(
         and isinstance(value.func, ast.Attribute)
         and value.func.attr in _PLAIN_DATA_METHODS
     )
-    is_records = not plain_data and node_is_orm(value, orm_vars, plain)
+    is_records = (
+        not plain_data
+        and node_is_orm(value, orm_vars, plain)
+        and _clearly_records(value, orm_vars)
+    )
     for target in node.targets:
         # `self = self.with_context(..)` still is the plain receiver.
         if isinstance(target, ast.Name) and target.id not in ("self", "cls"):
@@ -298,6 +329,8 @@ def orm_calls_in_loops(
     ``self`` / ``env[...]`` receiver in a ``for`` / ``while``.
     """
 
+    reported: set[int] = set()  # calls an enclosing loop already yielded
+
     def walk(
         node: ast.AST,
         orm_vars: set[str],
@@ -315,8 +348,10 @@ def orm_calls_in_loops(
                         isinstance(n, ast.Call)
                         and isinstance(n.func, ast.Attribute)
                         and n.func.attr in methods
+                        and id(n) not in reported
                         and receiver_is_orm(n, orm_vars, plain)
                     ):
+                        reported.add(id(n))
                         guessed = isinstance(
                             node, Comprehension
                         ) or not receiver_is_orm(n, orm_vars - inferred, plain)

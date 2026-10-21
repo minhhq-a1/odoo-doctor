@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from lxml import etree
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
     from odoo_doctor.graph.module_context import ModuleContext
 
 _REMOVED_ATTRS = ("attrs", "states")
+# `templates` as a path step of an xpath (`//templates/t`), not inside a name.
+_TEMPLATES_STEP = re.compile(r"(?:^|/)templates\b")
 
 
 def _is_qweb(record: etree._Element, arch: etree._Element) -> bool:
@@ -31,7 +34,7 @@ def _is_qweb_part(el: etree._Element) -> bool:
     if el.tag == "templates" or any(k.startswith("t-") for k in el.attrib):
         return True
     expr = el.get("expr", "") if el.tag == "xpath" else ""
-    return "@t-" in expr or "templates" in expr
+    return "@t-" in expr or _TEMPLATES_STEP.search(expr) is not None
 
 
 def _offenders(arch: etree._Element) -> list[etree._Element]:

@@ -106,12 +106,12 @@ All notable changes to Odoo Doctor are documented here.
   comprehension, or `search_read` / `search_fetch` / `read_group` / `_read_group`. `self` and `env[...]`
   receivers in a `for` / `while` loop stay `high` and are unchanged (no `high` finding of these rules changed
   on core 19, core 17 scanned as 19, or the working repository: `scripts/measure.py` shows only `medium`
-  increases). Odoo's own addons query per company or per group inside loops: of the 152 new core 19
+  increases). Odoo's own addons query per company or per group inside loops: of the 145 new core 19
   findings 35 are `_read_group` / `search_fetch` / `search_read` calls (often per entry of a `grouped(..).items()`
-  dict or per company), 114 follow a local (many are `Model = self.env['x']` handles used per file, warehouse or
+  dict or per company), 107 follow a local (many are `Model = self.env['x']` handles used per file, warehouse or
   company) and 3 are in comprehensions, so the policy keeps them out of `high`. Measured: Odoo 19 community
-  76 + 27 + 49 new `medium`
-  (`search` / `create` / `write`; `high` 405 / 185 / 138 unchanged), core 17 scanned as 19 62 + 30 + 39, the
+  75 + 27 + 43 new `medium`
+  (`search` / `create` / `write`; `high` 405 / 185 / 138 unchanged), core 17 scanned as 19 61 + 30 + 35, the
   working repository 3 + 2 + 2.
 
 ### Fixed

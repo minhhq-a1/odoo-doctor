@@ -322,3 +322,39 @@ def test_env_lookup_on_a_local_adapter_of_self_stays_high(tmp_path: Path):
                     ctx.search([("a", "=", rec.id)])
         """
     assert _tiers(tmp_path, src) == [(5, "high"), (6, "medium")]
+
+
+def test_comprehension_nested_in_a_loop_keeps_the_loop_tier(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, recs):
+                for r in self.env["x"].search([]):
+                    [self.env["y"].search([("a", "=", i)]) for i in r.ids]
+                for r in recs:
+                    [self.search([("a", "=", i)]) for i in range(3)]
+                while recs:
+                    [self.search([("a", "=", q)]) for q in (1, 2, 3)]
+        """
+    assert _tiers(tmp_path, src) == [(4, "high"), (6, "high"), (8, "high")]
+
+
+def test_standalone_comprehension_is_medium_and_bounded_one_is_silent(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, recs):
+                a = [self.search([("a", "=", r)]) for r in recs]
+                b = [self.search([("a", "=", q)]) for q in (1, 2, 3)]
+                return a, b
+        """
+    assert _tiers(tmp_path, src) == [(3, "medium")]
+
+
+def test_local_from_a_self_method_that_is_not_orm_is_not_a_recordset(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, lines):
+                rx = self._get_regex()
+                for line in lines:
+                    rx.search(line)
+        """
+    assert _tiers(tmp_path, src) == []
