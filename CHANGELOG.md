@@ -53,7 +53,8 @@ All notable changes to Odoo Doctor are documented here.
   (`core/git.py`) that sets `core.fsmonitor=false`, `core.hooksPath` to the null device, an empty
   `core.sshCommand`, `--no-optional-locks`, blanks every configured filter driver, passes
   `--no-ext-diff --no-textconv` to `diff`, and runs git with a minimal environment (no tokens, no
-  `GIT_*` variables except `GIT_CONFIG_GLOBAL`, `GIT_TERMINAL_PROMPT=0`). Your own global and system git
+  `GIT_*` variables except `GIT_CONFIG_GLOBAL` and the ones it sets itself: `GIT_TERMINAL_PROMPT`,
+  `GIT_OPTIONAL_LOCKS`, `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`). Your own global and system git
   config still applies, and so do your own filter drivers (git-lfs): only drivers the repository itself
   defines are blanked, through `GIT_CONFIG_COUNT` (git 2.31 or newer; older git is refused with a warning when
   a driver name holds `=`). git output is decoded leniently, so a non-UTF-8 config value or file name no
@@ -83,19 +84,61 @@ All notable changes to Odoo Doctor are documented here.
   unchanged. `--end-of-options` is not used: it needs git 2.24 and the check above already leaves
   nothing for git to read as an option.
 
+- Residual, not fixed here (backlog): the PR comment (`--format github` in a pull request) runs `gh pr view` /
+  `gh api` / `gh pr comment` with the scanned repository as working directory and the inherited
+  environment, and `gh` finds the repository (`{owner}/{repo}`) through `git` there, so the repo's own git
+  config can apply to those calls; pinning `--repo` and the PR number needs the CI event data and was left
+  alone to keep the behaviour on GitHub Actions. Use `--no-pr-comment` on a repository you do not trust.
+  Pylint-Odoo adds the addon's parent directory to `sys.path` when it lints, so a repo file that shadows a
+  module pylint imports lazily could be loaded (not verified here).
+
 ### Changed
 
+- `raw-sql-string-interpolation` audited against Odoo 19 under the confidence policy (measured on
+  `20f5882e`; Odoo 17.0 `02d3a1d8` scanned as 19.0 for comparison; skw has no finding of the rule).
+  All 12 `high` hits on core 19 were read one by one; none is a proven injection:
+
+  | class | core 19 | core17as19 (47) | what changed |
+  |---|---|---|---|
+  | rule wrong, no longer reported | 3 | 25 | an operator checked against literal choices before use (`if op not in ('<', '='): return`); a record's `.id` and `Datetime.now()` in a string; `LIMIT %d` / `%i` / `%f` formatting; the clauses of an Odoo 14-17 `Query` (`get_sql()`, `select()`, `subselect()`); `sql.Placeholder` |
+  | core convention, now `medium` | 9 | 22 | SQL built from model metadata (`self._sequence_field`), ORM-built fragments (`self._get_seen_list_extra()`, `_select_companies_rates()`) or the parameter of a `_private` helper whose callers pass literals |
+  | true positive, `high` | 0 | 0 | |
+
+  `high` now means that the text of the query is built from something a caller outside the module
+  controls: a parameter (including `**kw` / `post`) of a public method (RPC reaches those) or of a route;
+  `request.params`, `request.httprequest`, `request.get_json_data()` and cookies; a public field of `self`
+  (`self.name`, `self.mapped('name')`, `for rec in self`: the fields of a wizard are typed in by the user);
+  and the same values passed on to a private helper of the same class or a module-level function of the
+  same file (up to 3 hops). It stays `high` even if model metadata is interpolated next to them.
+  Everything else that is dynamic is `medium`: model metadata and ORM-built fragments, `self.env.context`,
+  a private helper only literals reach, a module-level function no entry point calls, and the ORM hooks
+  with a leading underscore that the ORM feeds from RPC arguments (`_search`, `_read_group`,
+  `_name_search`, `_search_*`; an `order`, `groupby` or name typed by a client can reach them, a
+  documented limit). `medium` is listed but does not lower the score and does not trip the default
+  `--fail-on` policy (P0/P1 high confidence). Core 19: 12 `high` -> 0 `high` + 9 `medium` (3 gone);
+  core17as19: 47 `high` -> 0 `high` + 22 `medium` (25 gone); skw: no finding of the rule, as before.
+  The message of a `high` finding now reads "... uses dynamic SQL string construction from a parameter a
+  caller controls" (a `medium` one says it comes from model metadata, ORM-built fragments or a private
+  helper's parameter); it appears in JSON, SARIF, GitHub annotations and the HTML report. Odoo 17+
+  `env.execute_query(SQL(f"...{x}"))` (on `self.env`, `env`, `request.env`) and `cr.copy_expert(...)` are
+  checked like `cr.execute`; this adds no `high` on core 19, core 17 scanned as 19 or skw.
+  The shared taint analysis (`rules/_taint.py`) also follows `with ... as` targets and unpacking of a
+  constant value, which `eval-usage` gets too. Scores of 7 core 19 modules rise (`phone_validation`
+  64.4 -> 100.0, `product_margin` 64.4 -> 100.0, `mass_mailing_sms` 59.8 -> 77.9); none falls.
 - The language server no longer redoes everything on each save. It keeps, per workspace folder and in
   memory only, the results of the previous scan and reuses what cannot have changed: the whole scan when no
   file moved, the file-based native rules per unchanged file, Ruff and Pylint-Odoo per addon (an addon is
   linted again when one of its files, or a file of an addon it depends on, changed) and the index of
   `odoo_source_path`. Cross-module rules and the graph are still rebuilt on every changed scan, so the
-  findings and scores equal a scan from scratch (`tests/test_scan_reuse.py`). Saves arriving within 0.3 s
+  findings and scores equal a scan from scratch (`tests/test_scan_reuse.py` backs this). A file is told apart
+  by size, mtime, ctime and inode (plus a content hash for files written in the last 2 s); the whole result
+  is never reused while a plugin rule is registered. Saves arriving within 0.3 s
   of each other share one scan. Measured on a copy of the 14-addon skw repo (save of one file, median):
   1.5 s -> 0.6 s without linters, 10.6 s -> 1.9 s (p95 11.2 s -> 3.1 s) with Ruff and Pylint-Odoo,
   12.6 s -> 0.8 s with `odoo_source_path` set; a save that changes nothing relevant takes about 0.01 s.
   On a 29-addon slice of Odoo 19 core: 29.7 s -> 13.3 s. Set `ODOO_DOCTOR_LSP_REUSE=0` to turn it off.
-  The command line is unchanged. *Rescan workspace* always scans from scratch.
+  The command line is unchanged. *Rescan workspace* forgets the kept state first (the escape hatch if a result looks stale), and forgetting
+  never waits for a running scan.
 - `public-controller-sudo-risk` grades a route by whether `auth=` is written on it. `auth='public'` or
   `'none'` on the route stays `high` (`medium` after an access check). A route that omits `auth` now takes
   the auth of the route it overrides (see Fixed) and is `medium` (`low` after an access check) when that
@@ -107,7 +150,7 @@ All notable changes to Odoo Doctor are documented here.
   `website_sale_collect` read the session's own cart and website configuration,
   `pos_online_payment_self_order` `pos_order_pay_confirmation` reads one transaction after `super()` checked
   the access token). Hence no new `high` on core 19 (151 high stay, medium 68 -> 74, low 0 -> 1) or on core 17
-  scanned as 19 (medium 57 -> 61, low 0 -> 2). `scripts/measure.py` shows no new `high` for any rule and no
+  scanned as 19 (medium 57 -> 62, low 0 -> 2). `scripts/measure.py` shows no new `high` for any rule and no
   change on the working repository. The grade of an explicit `auth='public'` with `sudo()` (`high`, 151 hits in
   Odoo 19 community, mostly conventions like the above) is a pre-existing choice and is not touched here; the
   inherited grade is deliberately `medium`.
@@ -116,8 +159,9 @@ All notable changes to Odoo Doctor are documented here.
   (`recs = self.env['x'].search([])` then `recs.write(..)`, or the model handle `Model = self.env['x']`), a
   comprehension, or `search_read` / `search_fetch` / `read_group` / `_read_group`. `self` and `env[...]`
   receivers in a `for` / `while` loop stay `high` and are unchanged (no `high` finding of these rules changed
-  on core 19, core 17 scanned as 19, or the working repository: `scripts/measure.py` shows only `medium`
-  increases). Odoo's own addons query per company or per group inside loops: of the 145 new core 19
+  on core 19, core 17 scanned as 19, or the working repository; the rule that treats a clearly ORM-local
+  recordset as `medium` lost 8 `medium` findings on core 19 (5 on core 17 scanned as 19) and 0 `high`;
+  otherwise `scripts/measure.py` shows only `medium` increases). Odoo's own addons query per company or per group inside loops: of the 145 new core 19
   findings 35 are `_read_group` / `search_fetch` / `search_read` calls (often per entry of a `grouped(..).items()`
   dict or per company), 107 follow a local (many are `Model = self.env['x']` handles used per file, warehouse or
   company) and 3 are in comprehensions, so the policy keeps them out of `high`. Measured: Odoo 19 community
@@ -136,8 +180,9 @@ All notable changes to Odoo Doctor are documented here.
   'mail.thread']` without `_name`, in a module that does not define `x.base`) now count for `x.base`: a view on
   it using `message_ids` was still reported. An extension whose `_inherit` is computed (`['x.base'] + MIXINS`)
   still names `x.base` and makes it unresolved; one that names no model (`_inherit = MIXINS`, no `_name`) used to
-  lose its fields, which are now never reported missing. On Odoo 17 scanned as 19, 9 false `high` findings go (all on the
-  `ir.module.module` views of `website`, whose model is declared with `_inherit = _name`); none change on Odoo 19.
+  lose its fields, which are now never reported missing. On Odoo 17 scanned as 19, 11 false `high` findings go (24 -> 13): the 9
+  `ir.module.module` views of `website`, whose model is declared with `_inherit = _name`, and 2 `res.company`
+  views using `message_follower_ids` / `message_ids`, a model that `account` extends with `mail.thread`; none change on Odoo 19.
 - A route that omits `auth` (a bare `@http.route()` override, or `@http.route('/x', website=True)`) was
   recorded as `auth='user'`, although Odoo merges the parent route's routing into the override. Overridden
   public routes (`/shop`, portal pages) therefore escaped `public-controller-sudo-risk`. The auth is now taken
@@ -159,7 +204,7 @@ All notable changes to Odoo Doctor are documented here.
   so resolving the base would add nothing). The rule takes each route's auth from the same resolution; a route
   whose auth is public or unknown is left to `public-controller-sudo-risk`, so the rule is silent on a bare
   override of a parent route that is not scanned and on a computed `auth=CONST`. Measured: no new `high` on core;
-  3 new `medium` on core 17 scanned as 19 and 4 on core 19 (the totals above, medium 6 -> 10 and 4 -> 7).
+  4 new `medium` on core 19 (6 -> 10) and 3 on core 17 scanned as 19 (4 -> 7).
 - `scan --diff` missed changed files whose name has non-ASCII characters (`modèle.py`), a tab or a
   newline: git prints such names quoted and escaped (`"mod\303\250le.py"`), which matched no file, so
   their findings were silently left out of the diff scan. Changed files are now read with `-z`
@@ -180,7 +225,6 @@ All notable changes to Odoo Doctor are documented here.
   - The config part of the key put a Python `set` (`explicit_adapters`) through `repr()`, whose order
     changes with the hash seed, so a config with two or more `[adapters]` entries could miss on every
     run. It is now serialised in sorted order.
-
   - The key also holds the pylint-odoo distribution version, read by the interpreter behind the `pylint`
     executable (`pylint --version` does not name its plugins); `unknown` when that interpreter cannot be
     found.
@@ -220,6 +264,11 @@ All notable changes to Odoo Doctor are documented here.
   module level; a parameter with the same name shadows an outer binding. `self.env.cr.commit()` was never
   exempt. No change on Odoo 19 community (23 medium), core 17 scanned as 19 (30 medium) or the working
   repository (1 medium). New golden corpus case `cr_commit_scope`.
+- Known limits, not audited yet (backlog): `csrf-disabled-authenticated-route` has the same inherited-auth
+  gap as the route-auth bug fixed above (a bare override of a route with `csrf=False` is read as `user`);
+  and the pre-existing `high` loop findings (core 19: `search-in-loop` 405, `create-in-loop` 185,
+  `write-in-loop` 138) are against the confidence policy (Odoo's own addons write such loops) and have not
+  been audited like `raw-sql-string-interpolation`.
 
 
 ## [0.11.0] — 2026-10-19
@@ -269,35 +318,6 @@ All notable changes to Odoo Doctor are documented here.
   findings may appear: on Odoo core 19 the scan adds 11 (4 `high` loop rules in install hooks such as
   `l10n_ch`, 7 `low` `sudo-without-comment`); on core 17 scanned as 19, 23 (including 6 `medium`
   `missing-translation` in `UserError` messages of hooks); the SKW project is unchanged. The largest score drop seen is `project_timesheet_holidays` in Odoo core 19 (94.7 -> 89.9).
-
-### Changed
-
-- `raw-sql-string-interpolation` audited against Odoo 19 under the confidence policy (measured on
-  `20f5882e`; Odoo 17.0 `02d3a1d8` scanned as 19.0 for comparison; skw has no finding of the rule).
-  All 12 `high` hits on core 19 were read one by one; none is a proven injection:
-
-  | class | core 19 | core17as19 (47) | what changed |
-  |---|---|---|---|
-  | rule wrong, no longer reported | 3 | 25 | an operator checked against literal choices before use (`if op not in ('<', '='): return`); a record's `.id` and `Datetime.now()` in a string; `LIMIT %d` / `%i` / `%f` formatting; the clauses of an Odoo 14-17 `Query` (`get_sql()`, `select()`, `subselect()`); `sql.Placeholder` |
-  | core convention, now `medium` | 9 | 22 | SQL built from model metadata (`self._sequence_field`), ORM-built fragments (`self._get_seen_list_extra()`, `_select_companies_rates()`) or the parameter of a `_private` helper whose callers pass literals |
-  | true positive, `high` | 0 | 0 | |
-
-  `high` now means that the text of the query is built from something a caller outside the module
-  controls: a parameter (including `**kw` / `post`) of a public method (RPC reaches those) or of a route;
-  `request.params`, `request.httprequest`, `request.get_json_data()` and cookies; a public field of `self`
-  (`self.name`, `self.mapped('name')`, `for rec in self`: the fields of a wizard are typed in by the user);
-  and the same values passed on to a private helper of the same class or a module-level function of the
-  same file (up to 3 hops). It stays `high` even if model metadata is interpolated next to them.
-  Everything else that is dynamic is `medium`: model metadata and ORM-built fragments, `self.env.context`,
-  a private helper only literals reach, a module-level function no entry point calls, and the ORM hooks
-  with a leading underscore that the ORM feeds from RPC arguments (`_search`, `_read_group`,
-  `_name_search`, `_search_*`; an `order`, `groupby` or name typed by a client can reach them, a
-  documented limit). `medium` is listed but does not lower the score and does not trip the default
-  `--fail-on` policy (P0/P1 high confidence). Core 19: 12 `high` -> 0 `high` + 9 `medium` (3 gone);
-  core17as19: 47 `high` -> 0 `high` + 22 `medium` (25 gone); skw: no finding of the rule, as before.
-  The shared taint analysis (`rules/_taint.py`) also follows `with ... as` targets and unpacking of a
-  constant value, which `eval-usage` gets too. Scores of 7 core 19 modules rise (`phone_validation`
-  64.4 -> 100.0, `product_margin` 64.4 -> 100.0, `mass_mailing_sms` 59.8 -> 77.9); none falls.
 
 ### Fixed
 

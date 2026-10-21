@@ -108,7 +108,7 @@ empty report, with a warning). See [docs/upgrade-report.md](docs/upgrade-report.
 | `kanban-legacy-templates` | P1 | Upgrade Safety |
 | `hardcoded-company-or-currency` | P2 | Correctness |
 
-Plus Ruff and Pylint-Odoo findings when those tools are installed. They run isolated from the scanned repository: its Ruff and Pylint configuration is ignored (see the CHANGELOG), so filter their findings with `[ignore] rules` in `odoo-doctor.toml`.
+Plus Ruff and Pylint-Odoo findings when those tools are installed. They run isolated from the scanned repository: its Ruff and Pylint configuration is ignored (see the CHANGELOG), so filter their findings with `[ignore] rules` in `odoo-doctor.toml`. In short: the repo's Ruff/Pylint configuration is ignored; use `[ignore] rules` in `odoo-doctor.toml` to filter findings. In terminal and PR-comment text, a `::` that came from the repo (a file or module name) is shown with an invisible zero-width space between the colons, so copy-pasting such a name keeps that character.
 
 The full, generated reference (55 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
