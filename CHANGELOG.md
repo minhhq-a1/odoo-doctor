@@ -6,6 +6,10 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.11.1] — 2026-10-21
+
 ### Security
 
 - The terminal report (the default format, which lands in CI logs) wrapped a repo-chosen `::error::`
