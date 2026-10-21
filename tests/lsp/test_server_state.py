@@ -301,3 +301,17 @@ def test_addons_appearing_clears_the_warning_so_it_can_come_back(
     asyncio.run(server.request_scan(root))
 
     assert len(server.shown) == 2
+
+
+def test_a_burst_of_saves_is_one_scan(server, tmp_path: Path, monkeypatch):
+    server.set_roots([tmp_path])
+    server.SAVE_DEBOUNCE_SECONDS = 0.05
+    calls = []
+    monkeypatch.setattr(srv, "scan_project", lambda root: calls.append(root) or {})
+
+    async def go():
+        root = tmp_path.resolve()
+        await asyncio.gather(*(server.request_scan_after_save(root) for _ in range(5)))
+
+    asyncio.run(go())
+    assert len(calls) == 1

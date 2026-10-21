@@ -7,6 +7,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from odoo_doctor.core.reuse import Stamper
 from odoo_doctor.core.source import chain_too_long, read_source, scannable_files
 from odoo_doctor.parsers.python_models import parse_models
 
@@ -18,30 +19,40 @@ class SourceIndex:
     module_depends: dict[str, list[str]] = field(default_factory=dict)
 
 
+def _addon_dirs(source_path: Path | str | None) -> list[Path]:
+    """The addons of an Odoo source checkout (``[]`` for no path or a missing directory)."""
+    if not source_path:
+        return []
+    p = Path(source_path).resolve()
+    if not p.is_dir():
+        return []
+    # Odoo standard addon locations, plus direct addons roots for custom layouts.
+    scan_dirs = [p / "addons", p / "odoo" / "addons"]
+    if not (p / "__manifest__.py").exists():
+        scan_dirs.append(p)
+    addon_dirs: list[Path] = []
+    for d in scan_dirs:
+        if d.is_dir():
+            for child in d.iterdir():
+                if child.is_dir() and (child / "__manifest__.py").exists():
+                    addon_dirs.append(child)
+    return addon_dirs
+
+
+def index_signature(source_path: Path | str | None, stamper: Stamper) -> str:
+    """A digest of the files :func:`build_source_index` reads: equal means the same index."""
+    return "|".join(
+        f"{d}:{stamper.tree(d, ('.py',))}" for d in _addon_dirs(source_path)
+    )
+
+
 def build_source_index(source_path: Path | str | None) -> SourceIndex:
     """Scan and index all addons in the Odoo source path."""
     model_owners: dict[str, str] = {}
     xml_id_owners: dict[str, str] = {}
     module_depends: dict[str, list[str]] = {}
 
-    if not source_path:
-        return SourceIndex(model_owners, xml_id_owners, module_depends)
-
-    p = Path(source_path).resolve()
-    if not p.is_dir():
-        return SourceIndex(model_owners, xml_id_owners, module_depends)
-
-    # Odoo standard addon locations, plus direct addons roots for custom layouts.
-    scan_dirs = [p / "addons", p / "odoo" / "addons"]
-    if not (p / "__manifest__.py").exists():
-        scan_dirs.append(p)
-    addon_dirs: list[Path] = []
-
-    for d in scan_dirs:
-        if d.is_dir():
-            for child in d.iterdir():
-                if child.is_dir() and (child / "__manifest__.py").exists():
-                    addon_dirs.append(child)
+    addon_dirs = _addon_dirs(source_path)
 
     # Index discovered addons
     for addon_dir in addon_dirs:

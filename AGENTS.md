@@ -250,7 +250,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `src/odoo_doctor/core/upgrade.py` | Upgrade readiness report (`scan --upgrade-report`): groups Upgrade Safety findings by change, mechanical vs needs-review table, readiness score; JSON key `upgrade_report` only with the flag (see `docs/upgrade-report.md`) |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
 | `src/odoo_doctor/reporters/html_report.py` | HTML report (`scan --html`), assets in `reporters/html/`; `docs/html-report.md` |
-| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
+| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover` are pure, `engine.py` keeps per-folder `core/reuse.py` state so a save redoes only what changed (equal to a full scan), `server.py` is the pygls glue; docs in `docs/lsp.md` |
 | `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
 | `ci-templates/` | GitLab CI and Bitbucket Pipelines templates (same script in both); `tests/test_ci_templates.py` runs it in a temp git repo |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |

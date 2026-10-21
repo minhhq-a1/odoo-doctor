@@ -58,9 +58,23 @@ Configuration (addons paths, `[ignore]`, `[severity]`, plugins, ...) comes from
   string, not after a backslash continuation, not inside an XML tag, and not in a file that
   cannot be tokenized.
 - Each refresh scans the whole workspace folder, because cross-module rules need every
-  addon. A scan takes roughly 0.06 s per addon. Scans never overlap; saves that arrive
-  during a scan are merged into one rerun, and a failed scan is logged and does not stop
-  the next one.
+  addon, but reuses what the previous scan of the folder computed (kept in memory, per folder;
+  nothing is written to the repository): the whole result when no file of any addon changed; the
+  file-based native rules for each unchanged file; Ruff and Pylint-Odoo for each addon whose files
+  and whose dependencies' files are unchanged; the index of `odoo_source_path`. Cross-module rules
+  and the symbol graph are rebuilt on every changed scan, since a change in one addon can change
+  the findings of another. The findings equal a scan from scratch. Files are told apart by size
+  and modification time (and by content when written in the last two seconds); a changed config,
+  Odoo version, ruleset or plugin discards everything kept. Memory: the findings of the last scan
+  plus a few kilobytes per file. Restart the server after upgrading Ruff or Pylint-Odoo. Set
+  `ODOO_DOCTOR_LSP_REUSE=0` in the server's environment to scan from scratch every time.
+  Reference timings, one saved file, median (14 addons / 29 Odoo core addons): 0.6 s / 13 s without
+  linters (was 1.5 s / 30 s), 1.9 s with Ruff and Pylint-Odoo (was 10.6 s), 0.8 s with
+  `odoo_source_path` (was 12.6 s). Not yet reused (backlog): the symbol graph and the
+  cross-module rules, which dominate on large addons (about 13 s of the 29-addon slice).
+- Scans never overlap; a save waits 0.3 s for further saves (save all, format on save) so they
+  share one scan, saves that arrive during a scan are merged into one rerun, and a failed scan is
+  logged and does not stop the next one.
 - Findings are published for every file in the project, not only the open ones, under the
   path the editor opened the folder with (so symlinked folders work). A folder nested in
   another workspace folder is covered by the outer one and not scanned twice; folders

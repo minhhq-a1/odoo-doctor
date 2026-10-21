@@ -10,6 +10,7 @@ from odoo_doctor.core.source import is_scannable, scannable_files
 from odoo_doctor.discovery.addons import discover_addons
 from odoo_doctor.discovery.odoo_version import detect_odoo_version
 from odoo_doctor.graph.resolver import SymbolResolver
+from odoo_doctor.graph.source_index import SourceIndex
 from odoo_doctor.parsers.manifest import ManifestData, parse_manifest
 from odoo_doctor.parsers.python_models import (
     ControllerClass,
@@ -154,8 +155,12 @@ def build_project_graph(
     target_modules: list[str] | None = None,
     odoo_source_path: str | None = None,
     force_version: bool = False,
+    source_index: SourceIndex | None = None,
 ) -> ProjectGraph:
-    """Discover addons, parse all inputs, build shared resolver and per-module contexts."""
+    """Discover addons, parse all inputs, build shared resolver and per-module contexts.
+
+    *source_index* is the index of ``odoo_source_path`` when the caller already holds it.
+    """
     addons = discover_addons(addon_paths, target_modules=target_modules)
 
     # First pass: collect all models and XML IDs across all modules (for resolver)
@@ -290,6 +295,7 @@ def build_project_graph(
         repo_xml_ids=all_xml_ids,
         stub_version=resolver_version,
         source_path=odoo_source_path,
+        source_index=source_index,
         extended_fields=extended_fields,
         extended_methods=extended_methods,
         unattributed_members=unattributed,

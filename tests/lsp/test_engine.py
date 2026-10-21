@@ -140,3 +140,18 @@ def test_addons_found_follows_addons_paths_from_the_config(tmp_path: Path):
 
 def test_addons_found_is_false_for_an_empty_folder(tmp_path: Path):
     assert not addons_found(tmp_path)
+
+
+def test_a_second_scan_reuses_the_first_and_can_be_switched_off(
+    tmp_path: Path, monkeypatch
+):
+    from odoo_doctor.lsp import engine
+
+    root = _project(tmp_path)
+    first = scan_project(root)
+    assert scan_project(root) == first
+    assert root.resolve() in engine._reuse
+    monkeypatch.setenv("ODOO_DOCTOR_LSP_REUSE", "0")
+    assert scan_project(root) == first
+    engine.forget(root)
+    assert root.resolve() not in engine._reuse

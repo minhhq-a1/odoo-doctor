@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from odoo_doctor.graph.source_index import build_source_index
+from odoo_doctor.graph.source_index import SourceIndex, build_source_index
 from odoo_doctor.graph.stubs.loader import load_stubs
 
 if TYPE_CHECKING:
@@ -141,6 +141,7 @@ class SymbolResolver:
         module_dependencies: dict[str, list[str]] | None = None,
         module_licenses: dict[str, str] | None = None,
         module_external_python: dict[str, set[str]] | None = None,
+        source_index: SourceIndex | None = None,
     ):
         self._repo_models = repo_models
         self._repo_xml_ids = repo_xml_ids
@@ -155,7 +156,7 @@ class SymbolResolver:
         # Names declared by classes that extend a model the parser could not name: absence
         # of one of them from a model proves nothing.
         self._unattributed = set(unattributed_members or ())
-        self._source_index = build_source_index(source_path)
+        self._source_index = source_index or build_source_index(source_path)
         self._rule_models: set[str] | None = None
         self._by_underscore: dict[str, list[str]] | None = None
         # module -> declared depends, for modules whose manifest we have seen

@@ -85,6 +85,17 @@ All notable changes to Odoo Doctor are documented here.
 
 ### Changed
 
+- The language server no longer redoes everything on each save. It keeps, per workspace folder and in
+  memory only, the results of the previous scan and reuses what cannot have changed: the whole scan when no
+  file moved, the file-based native rules per unchanged file, Ruff and Pylint-Odoo per addon (an addon is
+  linted again when one of its files, or a file of an addon it depends on, changed) and the index of
+  `odoo_source_path`. Cross-module rules and the graph are still rebuilt on every changed scan, so the
+  findings and scores equal a scan from scratch (`tests/test_scan_reuse.py`). Saves arriving within 0.3 s
+  of each other share one scan. Measured on a copy of the 14-addon skw repo (save of one file, median):
+  1.5 s -> 0.6 s without linters, 10.6 s -> 1.9 s (p95 11.2 s -> 3.1 s) with Ruff and Pylint-Odoo,
+  12.6 s -> 0.8 s with `odoo_source_path` set; a save that changes nothing relevant takes about 0.01 s.
+  On a 29-addon slice of Odoo 19 core: 29.7 s -> 13.3 s. Set `ODOO_DOCTOR_LSP_REUSE=0` to turn it off.
+  The command line is unchanged.
 - `public-controller-sudo-risk` grades a route by whether `auth=` is written on it. `auth='public'` or
   `'none'` on the route stays `high` (`medium` after an access check). A route that omits `auth` now takes
   the auth of the route it overrides (see Fixed) and is `medium` (`low` after an access check) when that

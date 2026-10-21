@@ -132,6 +132,11 @@ def flush_skipped() -> None:
         typer.echo(f"[WARN] ... and {extra} more skipped", err=True)
 
 
+def skipped_count() -> int:
+    """How many files this scan has warned about so far."""
+    return len(_skipped)
+
+
 def reset_skipped() -> None:
     """Start of a scan (the CLI and the LSP's repeated scans share one process)."""
     _skipped.clear()
