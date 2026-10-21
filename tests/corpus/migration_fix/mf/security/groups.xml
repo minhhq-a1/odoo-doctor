@@ -1,0 +1,17 @@
+<odoo>
+    <!-- mechanical: users on res.groups becomes user_ids -->
+    <record id="group_mf_user" model="res.groups">
+        <field name="name">Migration fix user</field>
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+    </record>
+    <!-- mechanical: groups_id on res.users becomes group_ids -->
+    <record id="user_mf" model="res.users">
+        <field name="name">Migration fix</field>
+        <field name="login">mf</field>
+        <field name="groups_id" eval="[(4, ref('group_mf_user'))]"/>
+    </record>
+    <!-- fine: groups_id on a model that is not in the rename table is left to a person -->
+    <record id="mf_thing_rec" model="mf.thing">
+        <field name="name">Thing</field>
+    </record>
+</odoo>

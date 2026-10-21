@@ -1,0 +1,23 @@
+<odoo>
+    <record id="mf_search" model="ir.ui.view">
+        <field name="name">mf.search</field>
+        <field name="model">mf.thing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <group expand="0" string="Group By">
+                    <filter name="by_name" string="Name" context="{'group_by': 'name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <!-- fine: a form group keeps its string -->
+    <record id="mf_form_group" model="ir.ui.view">
+        <field name="name">mf.form.group</field>
+        <field name="model">mf.thing</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <form><group string="Details"><field name="name"/></group></form>
+        </field>
+    </record>
+</odoo>

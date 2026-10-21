@@ -351,9 +351,11 @@ def fix_chatter_div_removed(diag: Diagnostic, text: str) -> str | None:
             continue
         tag = _tag_of(fragment, root, div)
         closing = xt.end_tag_for(fragment, tag) if tag else None
-        if tag is None or closing is None or not is_plain_chatter_div(div, arch):
+        if tag is None or not is_plain_chatter_div(div, arch):
             return None
-        edits.append((tag.start, closing.end, "<chatter/>"))
+        if closing is None and not tag.self_closing:
+            return None
+        edits.append((tag.start, closing.end if closing else tag.end, "<chatter/>"))
     new_fragment = _apply(fragment, edits)
     new_root = _parse(new_fragment)
     new_arch = _field(new_root, "arch") if new_root is not None else None

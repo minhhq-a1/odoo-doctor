@@ -1,0 +1,48 @@
+<odoo>
+    <record id="mf_form" model="ir.ui.view">
+        <field name="name">mf.form</field>
+        <field name="model">mf.thing</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet><field name="name"/></sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+    <record id="mf_form_tree" model="ir.ui.view">
+        <field name="name">mf.form.tree</field>
+        <field name="model">mf.thing</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="message_ids"><tree><field name="name"/></tree></field>
+            </form>
+        </field>
+    </record>
+    <!-- not mechanical: a div with custom content stays for a person -->
+    <record id="mf_form_custom" model="ir.ui.view">
+        <field name="name">mf.form.custom</field>
+        <field name="model">mf.thing</field>
+        <field name="priority">30</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet><field name="name"/></sheet>
+                <div class="oe_chatter"><field name="name"/></div>
+            </form>
+        </field>
+    </record>
+    <!-- chatter inside an xpath, as core 19 does it -->
+    <record id="mf_form_inherit" model="ir.ui.view">
+        <field name="name">mf.form.inherit</field>
+        <field name="model">mf.thing</field>
+        <field name="inherit_id" ref="mf_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="after">
+                <div class="oe_chatter"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
