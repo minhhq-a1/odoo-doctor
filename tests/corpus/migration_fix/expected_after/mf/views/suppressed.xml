@@ -1,0 +1,10 @@
+<odoo>
+    <record id="mf_suppressed" model="ir.ui.view">
+        <field name="name">mf.suppressed</field>
+        <field name="model">mf.thing</field>
+        <field name="arch" type="xml">
+            <!-- odoo-doctor: disable=view-tree-removed -->
+            <tree><field name="name"/></tree>
+        </field>
+    </record>
+</odoo>

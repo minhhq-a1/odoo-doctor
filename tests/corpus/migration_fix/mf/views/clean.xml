@@ -1,0 +1,10 @@
+<odoo>
+    <!-- nothing to fix: the file must come out byte for byte -->
+    <record id="mf_clean" model="ir.ui.view">
+        <field name="name">mf.clean</field>
+        <field name="model">mf.thing</field>
+        <field name="arch" type="xml">
+            <list><field name="name"/></list>
+        </field>
+    </record>
+</odoo>

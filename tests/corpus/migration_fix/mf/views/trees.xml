@@ -1,0 +1,32 @@
+<odoo>
+    <!-- the element, with a nested tree and a text predicate that must stay -->
+    <record id="mf_tree" model="ir.ui.view">
+        <field name="name">mf.tree</field>
+        <field name="model">mf.thing</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom" decoration-danger="name == 'tree'">
+                <field name="name"/>
+            </tree>
+        </field>
+    </record>
+    <!-- an inherited view: the xpath step -->
+    <record id="mf_tree_inherit" model="ir.ui.view">
+        <field name="name">mf.tree.inherit</field>
+        <field name="model">mf.thing</field>
+        <field name="inherit_id" ref="mf_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//tree/field[@name='name']" position="after">
+                <field name="message_ids"/>
+            </xpath>
+        </field>
+    </record>
+    <!-- the type field -->
+    <record id="mf_tree_typed" model="ir.ui.view">
+        <field name="name">mf.tree.typed</field>
+        <field name="model">mf.thing</field>
+        <field name="type">tree</field>
+        <field name="arch" type="xml">
+            <data/>
+        </field>
+    </record>
+</odoo>

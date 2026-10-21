@@ -1,0 +1,9 @@
+<odoo>
+    <record id="mf_crlf" model="ir.ui.view">
+        <field name="name">mf.crlf</field>
+        <field name="model">mf.thing</field>
+        <field name="arch" type="xml">
+            <list><field name="name"/></list>
+        </field>
+    </record>
+</odoo>

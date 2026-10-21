@@ -1,0 +1,9 @@
+[odoo-doctor]
+odoo_version = "19.0"
+
+[adapters]
+ruff = false
+pylint_odoo = false
+
+[ignore]
+rules = ["orphan-view"]

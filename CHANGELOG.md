@@ -12,6 +12,8 @@ All notable changes to Odoo Doctor are documented here.
   BOM stays. A file that is not valid UTF-8 is skipped (counted in "skipped") instead of stopping the command with
   a traceback. After each fixer the engine checks that an `.xml` file still parses and a `.py` file still
   compiles, and drops a result that does not. Findings of one file are fixed from the last line to the first.
+- `chatter-div-removed`: an empty self-closing `<div class="oe_chatter"/>` (for example inside an `xpath`) is now
+  replaced by `<chatter/>`; it was reported as mechanical but skipped.
 
 ### Added
 
@@ -42,6 +44,9 @@ All notable changes to Odoo Doctor are documented here.
 - `FixerRegistry` knows `migration` fixers (skipped unless the caller
   passes `include_migration`) and a per-finding `applies` predicate; `rules/upgrade_safety/_xml_text.py` finds
   tags and `<record>` spans in XML text.
+- `tests/corpus/migration_fix/` (with a hand-written `expected_after/`) and `tests/test_migration_fix_invariants.py`
+  fence the contract: every mechanical finding is gone after `fix --upgrade-to`, a second run changes nothing,
+  files without findings stay byte for byte, and each `MECHANICAL_RENAMES` entry round-trips.
 
 ---
 

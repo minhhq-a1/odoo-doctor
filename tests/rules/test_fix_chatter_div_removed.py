@@ -45,6 +45,15 @@ def test_text_after_the_closing_div_is_kept(tmp_path: Path):
     assert '<form><chatter/><field name="n"/></form>' in texts["v.xml"]
 
 
+def test_empty_self_closing_div_becomes_chatter(tmp_path: Path):
+    xml = view(
+        '<xpath expr="//sheet" position="after"><div class="oe_chatter"/></xpath>'
+    )
+    diags, texts, result = _fix(tmp_path, xml)
+    assert len(diags) == 1 and result.skipped_count == 0
+    assert texts["v.xml"] == xml.replace('<div class="oe_chatter"/>', "<chatter/>")
+
+
 def test_custom_content_is_not_fixed(tmp_path: Path):
     xml = view('<form><div class="oe_chatter"><span>mine</span></div></form>')
     diags, texts, result = _fix(tmp_path, xml)
