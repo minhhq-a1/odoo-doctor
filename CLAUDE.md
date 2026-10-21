@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pip install -e ".[dev]" && pip install "ruff>=0.16,<0.17"   # setup (ruff is not in the dev extra but CI needs it)
 
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest         # what CI runs
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -p xdist -n auto   # what CI runs (parallel; drop the flags to run serially)
 
 ruff check src tests && ruff format --check src tests   # both must pass in CI (ruff format to fix)
 ```

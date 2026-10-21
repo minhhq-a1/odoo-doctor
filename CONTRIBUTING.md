@@ -21,7 +21,7 @@ We use `pytest` for testing. Ensure your changes don't break existing behavior.
 
 ```bash
 # Run all tests (what CI runs)
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -p xdist -n auto
 
 # Run tests with coverage
 pytest --cov=odoo_doctor
