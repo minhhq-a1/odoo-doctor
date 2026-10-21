@@ -22,6 +22,7 @@ else:
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import lint_targets
+from odoo_doctor.core.text import safe_text
 
 
 @dataclass
@@ -62,17 +63,17 @@ class RuffAdapter:
             return []
         by_file = targets != [module]
         try:
-            # The scanned repo's ruff.toml / pyproject.toml must not steer the run: its
-            # `cache-dir` writes elsewhere, its `ignore` hides findings and its `extend`
-            # reads any file. So: --isolated (no config, ruff's own default rules),
-            # --no-cache (default would write .ruff_cache into the repo), a scratch cwd
-            # and a secret-free environment. Filter findings with `[ignore] rules`.
+            # The repo's own ruff.toml / pyproject.toml [tool.ruff] is honoured (the team's
+            # rules), found by ruff from the linted paths, never from the cwd. Ruff cannot run
+            # code from config, but `cache-dir` could make it write elsewhere, so: --no-cache
+            # (also no .ruff_cache in the repo), a scratch cwd and HOME (no user-level config,
+            # nothing written to the repo) and a secret-free environment. Residual risk: a
+            # hostile config can disable or change ruff's own findings (not the native rules).
             with tempfile.TemporaryDirectory(prefix="odoo-doctor-ruff-") as scratch:
                 result = subprocess.run(
                     [
                         "ruff",
                         "check",
-                        "--isolated",
                         "--no-cache",
                         # ruff's default excludes (node_modules ...) for files listed one by one
                         *(["--force-exclude"] if by_file else []),
@@ -142,7 +143,8 @@ class RuffAdapter:
                     odoo_version,
                     "process error",
                     f"Ruff exited with status {result.returncode} but produced no findings; "
-                    "the run may have failed (configuration or internal error).",
+                    "the run may have failed (configuration or internal error"
+                    f"{_cause(result.stderr)}).",
                 )
             ]
         return diags
@@ -197,6 +199,13 @@ class RuffAdapter:
                 confidence=info.get("confidence", "high"),
             )
         return result
+
+
+def _cause(stderr: str) -> str:
+    """Ruff's own complaint (last line: the root cause of a bad or `required-version` config)."""
+    lines = [ln.strip() for ln in stderr.splitlines() if ln.strip()]
+    line = lines[-1].removeprefix("Cause: ") if lines else ""
+    return f": {safe_text(line)[:200]}" if line else ""
 
 
 _ENV_KEEP = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "COMSPEC", "PATHEXT")

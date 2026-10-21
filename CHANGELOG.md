@@ -59,13 +59,18 @@ All notable changes to Odoo Doctor are documented here.
   defines are blanked, through `GIT_CONFIG_COUNT` (git 2.31 or newer; older git is refused with a warning when
   a driver name holds `=`). git output is decoded leniently, so a non-UTF-8 config value or file name no
   longer crashes a scan.
-- The Ruff adapter no longer takes its configuration from the scanned repo. A repo `ruff.toml` or
-  `pyproject.toml` could set `cache-dir` (ruff then wrote there), `ignore` rules (hiding findings) or
-  `extend` another file; and ruff's default cache wrote a `.ruff_cache` folder into the scanned repo.
-  Ruff now runs with `--isolated --no-cache`, from a temporary directory, with a minimal environment,
-  so it reports ruff's own default rule set whatever the repo configures. If you relied on a repo
-  ruff config (more rules, `ignore`, `line-length`), move the filtering to `[ignore] rules` in
-  `odoo-doctor.toml`; rules the repo config had switched on are no longer reported.
+- The Ruff adapter is hardened without giving up the repo's own Ruff configuration. A repo `ruff.toml` or
+  `pyproject.toml` `[tool.ruff]` is still honoured (ruff finds it from the linted paths, so the team's rules
+  and `ignore` apply), but ruff now runs with `--no-cache` (no `.ruff_cache` folder in the scanned repo, and a
+  `cache-dir` in the repo config cannot make ruff write elsewhere), from a temporary working directory with
+  `HOME`/`TMPDIR` there (no user-level config is read, nothing is written to the repo) and with a minimal
+  environment (no tokens, no `RUFF_*`). A `required-version` the installed ruff does not satisfy gives a
+  clear `adapter-ruff-warning` naming the cause instead of silence. Ruff config cannot run code (checked in
+  ruff's documentation and by probes: `extend`, `per-file-ignores`, `exclude`, `src`, `preview` and
+  `select` only change what ruff reads or reports). Residual risk: a hostile repo's ruff config can
+  disable or change ruff's own findings (never odoo-doctor's native rules); the cache key already holds the
+  repo's ruff configuration. Pylint is different and stays isolated: its configuration is ignored because
+  pylint executes `init-hook` from it (see the Pylint entry above).
   Ruff and Pylint-Odoo also open every Python file they find, so a FIFO named `*.py` hung them; when
   the addon holds a file that must not be opened, they now get the regular `.py` files one by one.
 - A file name in the scanned repo can no longer inject GitHub workflow commands. `--format github`

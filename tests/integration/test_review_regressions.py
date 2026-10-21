@@ -159,15 +159,12 @@ def test_cache_invalidates_when_ruff_configuration_changes(tmp_path, config_kind
     cache = ScanCache(tmp_path / ".cache")
     first, _ = collect_scores([root], cfg, "19.0", cache=cache, config_root=root)
     assert len([d for d in first if d.rule == "F841"]) == 1
-    # the scanned repo's ruff configuration never steers the run (ruff runs --isolated, see
-    # the 0.11.1 security notes), so the finding stays; the key still moves, and a hit must
-    # equal a fresh scan
     ruff_config.write_text(f'[{table}]\nselect = ["F841"]\nignore = ["F841"]\n')
     cached, _ = collect_scores([root], cfg, "19.0", cache=cache, config_root=root)
     fresh, _ = collect_scores([root], cfg, "19.0", config_root=root)
     cached_count = len([d for d in cached if d.rule == "F841"])
     fresh_count = len([d for d in fresh if d.rule == "F841"])
-    assert fresh_count == 1
+    assert fresh_count == 0
     assert cached_count == fresh_count, f"cached={cached_count}, fresh={fresh_count}"
 
 
