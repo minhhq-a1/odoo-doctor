@@ -500,3 +500,24 @@ def test_psycopg2_placeholder_is_a_safe_builder(tmp_path: Path):
                 self.env.cr.execute(query, {"search": search})
         """
     assert _found(tmp_path, src) == []
+
+
+@pytest.mark.parametrize(
+    "call, expected",
+    [
+        ('self.env.execute_query(SQL(f"SELECT {name}"))', "high"),
+        ('env.execute_query(SQL("SELECT " + name))', "high"),
+        ('request.env.execute_query(SQL(f"SELECT {name}"))', "high"),
+        ('self.env.cr.copy_expert(f"COPY (SELECT {name}) TO STDOUT", None)', "high"),
+        ('self.env.execute_query(SQL("SELECT %s", name))', None),
+        ('self.env.execute_query(SQL("SELECT 1"))', None),
+        ('self.client.execute_query(f"SELECT {name}")', None),
+    ],
+)
+def test_execute_query_and_copy_expert_are_sinks(tmp_path: Path, call: str, expected):
+    src = f"""\
+        class M:
+            def f(self, name):
+                {call}
+        """
+    assert _found(tmp_path, src) == ([] if expected is None else [(3, expected)])
