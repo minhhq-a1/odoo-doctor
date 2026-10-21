@@ -7,7 +7,11 @@ from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import is_test_file, orm_calls_in_loops
+from odoo_doctor.rules._ast_helpers import (
+    is_repeated_unchanged,
+    is_test_file,
+    orm_calls_in_loops,
+)
 from odoo_doctor.rules.registry import rule
 
 
@@ -34,13 +38,17 @@ def _loop_diagnostics(
             severity="error",
             tier="P1",
             source="native",
-            confidence="medium" if guessed else "high",
+            confidence=(
+                "high"
+                if not guessed and is_repeated_unchanged(node, loop, tree)
+                else "medium"
+            ),
             title=f"ORM '{method_name}' called inside loop",
             message=f"'{method_name}()' at line {node.lineno} is called inside a loop. Consider batching.",
             help=f"Move the '{method_name}()' call outside the loop and batch the operation.",
             odoo_version=version,
         )
-        for node, _loop, guessed in orm_calls_in_loops(tree, {method_name})
+        for node, loop, guessed in orm_calls_in_loops(tree, {method_name})
     ]
 
 

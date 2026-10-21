@@ -134,3 +134,113 @@ def test_inferred_receivers_are_medium(tmp_path: Path):
         ("write-in-loop", 4, "high"),
         ("write-in-loop", 7, "medium"),
     ]
+
+
+def test_only_a_write_or_create_the_loop_does_not_feed_is_high(tmp_path: Path):
+    """Per-record writes are everywhere in core 19: medium. High is `recs.write(vals)` in
+    disguise, a lone statement whose values and context do not use the loop."""
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, names):
+                for rec in self:
+                    rec.write({"state": "done"})
+                for rec in self:
+                    rec.write({"name": rec.name})
+                for rec in self:
+                    rec.with_context(a=rec.id).write({"state": "done"})
+                for rec in self:
+                    rec.write({"state": "done"})
+                    rec.message_post(body="x")
+                for rec in self:
+                    if rec.a:
+                        rec.write({"state": "done"})
+                for name in names:
+                    self.env["x"].create({"a": 1})
+                for name in names:
+                    self.env["x"].create({"a": name})
+                for name in names:
+                    self.env["x"].with_context(a=name).create({"a": 1})
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.rule, d.line, d.confidence) for d in diags] == [
+        ("create-in-loop", 16, "high"),
+        ("create-in-loop", 18, "medium"),
+        ("create-in-loop", 20, "medium"),
+        ("write-in-loop", 4, "high"),
+        ("write-in-loop", 6, "medium"),
+        ("write-in-loop", 8, "medium"),
+        ("write-in-loop", 10, "medium"),
+        ("write-in-loop", 14, "medium"),
+    ]
+
+
+def test_write_shadowing_walrus_and_early_exit_forms_are_medium(tmp_path: Path):
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, others):
+                for rec in self:
+                    rec.write({"a": rec.id, "b": [rec for rec in others]})
+                for rec in self:
+                    rec.write({"a": [rec for rec in others]})
+                for rec in self:
+                    rec.write({"a": (cur := 1)})
+                for rec in self:
+                    rec.write({"a": 1})
+                    break
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.line, d.confidence) for d in diags] == [
+        (4, "medium"),
+        (6, "high"),
+        (8, "medium"),
+        (10, "medium"),
+    ]
+
+
+def test_write_values_that_may_differ_on_each_pass_are_medium(tmp_path: Path):
+    """A value computed per pass (a sequence, a uuid, a helper, another ORM call) makes
+    each write different; only `fields.Datetime.now()`-like calls keep it high."""
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, it):
+                for rec in self:
+                    rec.write({"a": self.env["ir.sequence"].next_by_code("x")})
+                for rec in self:
+                    rec.write({"a": uuid.uuid4().hex})
+                for rec in self:
+                    rec.write({"a": random.random()})
+                for rec in self:
+                    rec.write({"a": next(it)})
+                for rec in self:
+                    rec.write({"a": self._value()})
+                for rec in self:
+                    rec.write({"a": self.env["y"].search([]).id})
+                for rec in self:
+                    rec.write({"a": fields.Datetime.now(), "b": _("x")})
+                for rec in self:
+                    self.env["x"].create({"a": fields.Date.today()})
+                for rec in self:
+                    self.env["x"].create({"a": self.env["y"].create({}).id})
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.rule, d.line, d.confidence) for d in diags] == [
+        ("create-in-loop", 18, "high"),
+        ("create-in-loop", 20, "medium"),
+        ("create-in-loop", 20, "medium"),
+        ("write-in-loop", 4, "medium"),
+        ("write-in-loop", 6, "medium"),
+        ("write-in-loop", 8, "medium"),
+        ("write-in-loop", 10, "medium"),
+        ("write-in-loop", 12, "medium"),
+        ("write-in-loop", 14, "medium"),
+        ("write-in-loop", 16, "high"),
+    ]

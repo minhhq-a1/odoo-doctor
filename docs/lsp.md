@@ -66,7 +66,7 @@ Configuration (addons paths, `[ignore]`, `[severity]`, plugins, ...) comes from
   the findings of another. The findings equal a scan from scratch (`tests/test_scan_reuse.py` checks this). Files are told
   apart by size, modification time, change time and inode (and by content when written in the last
   two seconds); a changed config, Odoo version or ruleset discards everything kept. Memory: the findings of the last scan
-  plus a few kilobytes per file. Ruff's configuration (`ruff.toml`, `.ruff.toml`, `pyproject.toml` and the files they `extend`), `.gitignore` files and the Ruff and Pylint executables are stamped like the addons' files, so creating, editing or deleting them (or upgrading the tool) is seen by the next save. Set
+  plus a few kilobytes per file. The Ruff and Pylint executables and versions are part of the key, so upgrading a tool is seen by the next save; the repo's Ruff configuration and `.gitignore` files are not (Ruff ignores them). Set
   `ODOO_DOCTOR_LSP_REUSE=0` in the server's environment to scan from scratch every time. The
   *Odoo Doctor: Rescan workspace* command (`odooDoctor.rescan`) discards what is kept first, so it
   is always a clean scan (forgetting never waits for a running scan): use it if a result ever looks
