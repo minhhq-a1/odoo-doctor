@@ -20,8 +20,9 @@ else:
     except ImportError:
         import tomli as tomllib  # type: ignore[no-redef]
 
+from odoo_doctor.adapters.cache import ruff_config_problem
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import lint_targets
+from odoo_doctor.core.source import lint_targets, warn_skipped
 from odoo_doctor.core.text import safe_text
 
 
@@ -62,6 +63,13 @@ class RuffAdapter:
         if not targets:
             return []
         by_file = targets != [module]
+        # ruff opens the config and every `extend` target itself: a FIFO there hangs it
+        problem = ruff_config_problem(module)
+        if problem is not None:
+            warn_skipped(
+                problem[0],
+                f"{problem[1]}: the repository's ruff configuration is ignored (--isolated)",
+            )
         try:
             # The repo's own ruff.toml / pyproject.toml [tool.ruff] is honoured (the team's
             # rules), found by ruff from the linted paths, never from the cwd. Ruff cannot run
@@ -75,6 +83,7 @@ class RuffAdapter:
                         "ruff",
                         "check",
                         "--no-cache",
+                        *(["--isolated"] if problem is not None else []),
                         # ruff's default excludes (node_modules ...) for files listed one by one
                         *(["--force-exclude"] if by_file else []),
                         "--output-format=json",

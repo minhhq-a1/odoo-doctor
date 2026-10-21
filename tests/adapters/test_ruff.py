@@ -283,3 +283,49 @@ def test_ruff_does_not_hang_on_a_fifo_named_py(tmp_path: Path, monkeypatch):
     )  # blocks (60 s timeout warning) if broken
     assert "B018" in {d.rule for d in diags}  # F401 is ignored by the repo config
     assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
+
+
+def _run_with_timer(repo: Path):
+    import time
+
+    start = time.monotonic()
+    diags = RuffAdapter().run(repo / "m", "17.0")
+    return diags, time.monotonic() - start
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no os.mkfifo")
+@pytest.mark.parametrize("kind", ["fifo", "dev-zero"])
+def test_ruff_does_not_hang_on_a_special_extend_target(
+    tmp_path: Path, capsys, kind: str
+):
+    if shutil.which("ruff") is None:
+        pytest.skip("ruff is not installed")
+    repo = tmp_path / "repo"
+    (repo / "m").mkdir(parents=True)
+    (repo / "m" / "a.py").write_text("import os\n")
+    (repo / "ruff.toml").write_text('extend = "evil.toml"\n')
+    if kind == "fifo":
+        os.mkfifo(repo / "evil.toml")
+    else:
+        (repo / "evil.toml").symlink_to("/dev/zero")
+    diags, elapsed = _run_with_timer(repo)
+    _run_with_timer(repo)
+    assert elapsed < 20
+    assert "F401" in {d.rule for d in diags}  # other findings still reported
+    assert not [d for d in diags if d.rule == "adapter-ruff-warning"]
+    err = capsys.readouterr().err
+    assert err.count("ruff configuration is ignored") == 1  # said once, not per run
+    assert "evil.toml" in err
+
+
+def test_ruff_still_honours_an_extend_to_a_regular_file(tmp_path: Path, capsys):
+    if shutil.which("ruff") is None:
+        pytest.skip("ruff is not installed")
+    repo = tmp_path / "repo"
+    (repo / "m").mkdir(parents=True)
+    (repo / "m" / "a.py").write_text("import os\n")
+    (repo / "ruff.toml").write_text('extend = "shared.toml"\n')
+    (repo / "shared.toml").write_text('[lint]\nignore = ["F401"]\n')
+    diags, _ = _run_with_timer(repo)
+    assert "F401" not in {d.rule for d in diags}
+    assert "ignored" not in capsys.readouterr().err
