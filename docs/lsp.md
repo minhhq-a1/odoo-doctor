@@ -67,7 +67,11 @@ Configuration (addons paths, `[ignore]`, `[severity]`, plugins, ...) comes from
   and modification time (and by content when written in the last two seconds); a changed config,
   Odoo version, ruleset or plugin discards everything kept. Memory: the findings of the last scan
   plus a few kilobytes per file. Restart the server after upgrading Ruff or Pylint-Odoo. Set
-  `ODOO_DOCTOR_LSP_REUSE=0` in the server's environment to scan from scratch every time.
+  `ODOO_DOCTOR_LSP_REUSE=0` in the server's environment to scan from scratch every time. The
+  *Odoo Doctor: Rescan workspace* command (`odooDoctor.rescan`) discards what is kept first, so it
+  is always a clean scan: use it if a result ever looks stale. A scan that reuses nothing new
+  does not repeat the warnings about skipped files, and a project with plugin rules enabled never
+  reuses the whole result (plugin rules run on every scan).
   Reference timings, one saved file, median (14 addons / 29 Odoo core addons): 0.6 s / 13 s without
   linters (was 1.5 s / 30 s), 1.9 s with Ruff and Pylint-Odoo (was 10.6 s), 0.8 s with
   `odoo_source_path` (was 12.6 s). Not yet reused (backlog): the symbol graph and the

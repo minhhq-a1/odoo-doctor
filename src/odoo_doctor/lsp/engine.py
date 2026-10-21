@@ -28,9 +28,11 @@ def reuse_enabled() -> bool:
 
 
 def forget(root: Path) -> None:
-    """Drop what is kept for a folder the editor no longer has open."""
-    with _scan_lock:
-        _reuse.pop(Path(root).resolve(), None)
+    """Drop what is kept for a folder (closed, or to force a clean scan).
+
+    No lock: this runs on the event loop and a scan can take minutes. A scan under way keeps
+    the state it started with; the next one starts empty."""
+    _reuse.pop(Path(root).resolve(), None)
 
 
 def _load_plugins_once(allow: list[str] | None) -> None:

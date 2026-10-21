@@ -123,7 +123,8 @@ the deprecation window above.
 
 Everything else may change in any release: modules other than `plugin_api`, the graph and
 parsers, the pipeline functions, the scan cache file format, finding messages and help
-text, the order of findings, and the wording of terminal output.
+text, the order of findings, and the wording of terminal output. The language server's
+scan reuse and its `ODOO_DOCTOR_LSP_REUSE` switch are not part of the contract either.
 
 ## Changing the public surface
 

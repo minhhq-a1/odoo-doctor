@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import shutil
+import stat
+import sys
 import time
 from pathlib import Path
+
+import pytest
 
 import odoo_doctor.cli.app  # noqa: F401  (registers the rules)
 from odoo_doctor.core.config import load_config
@@ -39,10 +44,10 @@ def _module(root: Path, name: str, depends: list[str], model: str, body: str = S
     )
 
 
-def _project(root: Path) -> None:
+def _project(root: Path, ruff: bool = False, extra: str = "") -> None:
     (root / "odoo-doctor.toml").write_text(
-        '[odoo-doctor]\nodoo_version = "17.0"\n\n'
-        "[adapters]\nruff = false\npylint_odoo = false\n"
+        '[odoo-doctor]\nodoo_version = "17.0"\n' + extra + "\n"
+        f"[adapters]\nruff = {str(ruff).lower()}\npylint_odoo = false\n"
     )
     _module(root, "base_x", ["base"], "x.base")
     # b's view shows a field of a model defined in base_x; c has nothing to do with them
@@ -169,6 +174,201 @@ def test_config_change_drops_what_was_kept(tmp_path: Path):
         toml.read_text() + '\n[ignore]\nrules = ["raw-sql-string-interpolation"]\n'
     )
     assert not any(d.rule == "raw-sql-string-interpolation" for d in _same(root, reuse))
+
+
+# --- the safeguards through collect_scores, not the Stamper alone ---------------
+
+posix = pytest.mark.skipif(
+    sys.platform == "win32", reason="utime/ctime/inode semantics"
+)
+EVAL = "from odoo import models\n\nclass E(models.Model):\n    _name = 'x.e'\n    def f(self, n):\n        {call}(n)\n"
+
+
+def _eval_project(tmp_path: Path):
+    root = tmp_path.resolve()
+    _project(root)
+    f = root / "mod_c" / "models" / "e.py"
+    f.write_text(EVAL.format(call="evax"))
+    return root, f
+
+
+def _has_eval(diags) -> bool:
+    return any(d.rule == "eval-usage" for d in diags)
+
+
+def test_racy_files_are_remembered_after_a_changed_scan(tmp_path: Path):
+    root, f = _eval_project(tmp_path)
+    reuse = ScanReuse()
+    _scan(root, reuse)
+    f.write_text(EVAL.format(call="evax") + "# x\n")  # a changed scan
+    _scan(root, reuse)
+    assert str(f) in reuse.racy
+
+
+@posix
+def test_same_size_rewrite_with_the_old_mtime_is_seen(tmp_path: Path):
+    root, f = _eval_project(tmp_path)
+    reuse = ScanReuse()
+    _scan(root, reuse)
+    f.write_text(EVAL.format(call="evax") + "# x\n")
+    _scan(root, reuse)
+    st = f.stat()
+    f.write_text(EVAL.format(call="eval") + "# x\n")  # same size
+    os.utime(f, ns=(st.st_atime_ns, st.st_mtime_ns))  # and the old mtime
+    assert _has_eval(_same(root, reuse))
+    time.sleep(2.1)  # outside the racy window
+    f.write_text(EVAL.format(call="evax") + "# x\n")
+    os.utime(f, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert not _has_eval(_same(root, reuse))
+
+
+@posix
+def test_a_save_by_rename_is_seen(tmp_path: Path):
+    root, f = _eval_project(tmp_path)
+    reuse = ScanReuse()
+    _scan(root, reuse)
+    st = f.stat()
+    tmp = f.with_name("e.tmp")
+    tmp.write_text(EVAL.format(call="eval"))  # same size
+    os.utime(tmp, ns=(st.st_atime_ns, st.st_mtime_ns))
+    os.replace(tmp, f)
+    assert _has_eval(_same(root, reuse))
+
+
+def test_same_size_edit_with_a_later_mtime_is_seen(tmp_path: Path):
+    root, f = _eval_project(tmp_path)
+    old = 1_000_000_000_000_000_000  # long ago: outside the racy window
+    os.utime(f, ns=(old, old))
+    reuse = ScanReuse()
+    _scan(root, reuse)
+    f.write_text(EVAL.format(call="eval"))
+    os.utime(f, ns=(old + 5_000_000_000, old + 5_000_000_000))
+    assert _has_eval(_same(root, reuse))
+
+
+# --- linters, source index and plugins in the keys ------------------------------
+
+FAKE_RUFF = r"""#!/bin/sh
+if [ "$1" = "--version" ]; then echo "ruff 0.16.0"; exit 0; fi
+out=""
+for t in "$@"; do
+  case "$t" in /*)
+    if [ "$(basename "$t")" = "mod_b" ] && grep -q BAD "$t/../base_x/models/m.py" 2>/dev/null; then
+      out="$out{\"code\":\"F841\",\"filename\":\"$t/models/m.py\",\"location\":{\"row\":1,\"column\":1},\"message\":\"sibling\"},"
+    fi
+    for f in $(grep -rl BAD --include=*.py "$t" 2>/dev/null); do
+      out="$out{\"code\":\"F841\",\"filename\":\"$f\",\"location\":{\"row\":1,\"column\":1},\"message\":\"own\"},"
+    done;;
+  esac
+done
+echo "[${out%,}]"
+"""
+
+
+@posix
+def test_linter_results_follow_edits_in_the_addon_and_its_dependencies(
+    tmp_path: Path, monkeypatch
+):
+    from odoo_doctor.core import cache as cache_mod
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    exe = bindir / "ruff"
+    exe.write_text(FAKE_RUFF)
+    exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(cache_mod, "_tool_versions", {})
+    root = tmp_path / "proj"
+    root.mkdir()
+    _project(root, ruff=True)
+    reuse = ScanReuse()
+
+    def ruff(diags):
+        return sorted((d.module, d.message) for d in diags if d.source == "ruff")
+
+    assert ruff(_same(root, reuse)) == []
+    own = root / "mod_c" / "models" / "m.py"
+    own.write_text(own.read_text() + "# BAD\\n")
+    assert ruff(_same(root, reuse)) == [("mod_c", "own")]
+    dep = root / "base_x" / "models" / "m.py"  # mod_b depends on base_x
+    dep.write_text(dep.read_text() + "# BAD\\n")
+    assert ("mod_b", "sibling") in ruff(_same(root, reuse))
+    dep.write_text(dep.read_text().replace("BAD", "ok "))
+    assert ("mod_b", "sibling") not in ruff(_same(root, reuse))
+
+
+def test_source_index_follows_edits_in_the_odoo_source(tmp_path: Path):
+    core = tmp_path / "core" / "addons" / "fakecore"
+    (core / "models").mkdir(parents=True)
+    (core / "__manifest__.py").write_text('{"name": "fakecore", "depends": []}')
+    model = core / "models" / "m.py"
+    model.write_text(
+        "from odoo import models\n\nclass F(models.Model):\n    _name = 'fake.model'\n"
+    )
+    root = tmp_path / "proj"
+    root.mkdir()
+    _project(root, extra=f'odoo_source_path = "{(tmp_path / "core").as_posix()}"')
+    _module(root, "mod_s", ["base"], "x.s")
+    (root / "mod_s" / "models" / "m.py").write_text(
+        "from odoo import models\n\nclass S(models.Model):\n    _inherit = 'fake.model'\n"
+    )
+    reuse = ScanReuse()
+
+    def missing(diags):
+        return [d for d in diags if d.rule == "manifest-missing-dependency"]
+
+    assert missing(_same(root, reuse))  # owner found in the source
+    model.write_text(model.read_text().replace("fake.model", "fake.modez"))  # same size
+    os.utime(model, ns=(1_000_000_000_000_000_000,) * 2)
+    assert not missing(_same(root, reuse))
+    model.write_text(model.read_text().replace("fake.modez", "fake.model"))
+    assert missing(_same(root, reuse))
+
+
+class _PluginRule:
+    """A rule registered the way a plugin does (its module is not odoo_doctor's)."""
+
+    def __init__(self, needs_context: bool) -> None:
+        self.calls = 0
+        self.needs_context = needs_context
+
+    def __enter__(self):
+        from odoo_doctor.rules.registry import RuleMeta, default_registry
+
+        def func(*args):
+            self.calls += 1
+            return []
+
+        func.__module__ = "fake_plugin"
+        meta = RuleMeta(
+            "fake-plugin-rule",
+            "Security",
+            "P3",
+            "info",
+            "low",
+            self.needs_context,
+            None,
+        )
+        default_registry.register(meta, func)
+        return self
+
+    def __exit__(self, *exc):
+        from odoo_doctor.rules.registry import default_registry
+
+        default_registry.unregister("fake-plugin-rule")
+
+
+@pytest.mark.parametrize("needs_context", [True, False])
+def test_a_plugin_rule_runs_on_every_scan(tmp_path: Path, needs_context: bool):
+    root = tmp_path.resolve()
+    _project(root)
+    with _PluginRule(needs_context) as plugin:
+        reuse = ScanReuse()
+        _scan(root, reuse)
+        first = plugin.calls
+        assert first > 0
+        _scan(root, reuse)  # nothing changed
+        assert plugin.calls == 2 * first
 
 
 def test_stamper_sees_a_rewrite_with_the_same_size_and_mtime(tmp_path: Path):

@@ -95,7 +95,7 @@ All notable changes to Odoo Doctor are documented here.
   1.5 s -> 0.6 s without linters, 10.6 s -> 1.9 s (p95 11.2 s -> 3.1 s) with Ruff and Pylint-Odoo,
   12.6 s -> 0.8 s with `odoo_source_path` set; a save that changes nothing relevant takes about 0.01 s.
   On a 29-addon slice of Odoo 19 core: 29.7 s -> 13.3 s. Set `ODOO_DOCTOR_LSP_REUSE=0` to turn it off.
-  The command line is unchanged.
+  The command line is unchanged. *Rescan workspace* always scans from scratch.
 - `public-controller-sudo-risk` grades a route by whether `auth=` is written on it. `auth='public'` or
   `'none'` on the route stays `high` (`medium` after an access check). A route that omits `auth` now takes
   the auth of the route it overrides (see Fixed) and is `medium` (`low` after an access check) when that

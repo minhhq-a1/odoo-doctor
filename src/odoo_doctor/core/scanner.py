@@ -308,7 +308,9 @@ def collect_scores(
             else ""
         )
         project_key = repr((sorted(module_sigs.items()), index_sig))
-        if reuse.last is not None and reuse.last[0] == project_key:
+        # plugin rules (context ones too) may read anything: they run on every scan
+        plugins = any(not _is_native(f) for _, f in default_registry.get_rules())
+        if not plugins and reuse.last is not None and reuse.last[0] == project_key:
             reuse.racy = stamper.racy
             return list(reuse.last[1]), dict(reuse.last[2])
         if cfg.odoo_source_path:
@@ -529,10 +531,11 @@ def collect_scores(
         )
 
     flush_skipped()  # after every stage that can skip a file
-    if reuse is not None:
-        reuse.files = (
-            kept_files  # what this scan did not see (deleted files) is dropped
-        )
+    if reuse is not None and stamper is not None:
+        # racy files, so a rewrite that keeps size and mtime is noticed next time
+        reuse.racy = stamper.racy
+        # files and adapters seen by this scan only: deleted files and addons are dropped
+        reuse.files = kept_files
         reuse.adapters = kept_adapters
         reuse.last = (project_key, list(diags), dict(scores))
     return diags, scores

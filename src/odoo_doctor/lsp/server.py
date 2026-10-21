@@ -137,6 +137,8 @@ class OdooDoctorServer(LanguageServer):
 
     async def request_scan(self, root: Path) -> None:
         """Scan *root* now, or after the scan that is already running for it."""
+        if root not in self.roots:  # closed since the request: stays closed
+            return
         self._dirty.add(root)
         if root in self._running:
             return
@@ -158,6 +160,9 @@ class OdooDoctorServer(LanguageServer):
                         )
                     )
                     continue  # a request that arrived meanwhile still gets its rerun
+                if root not in self.roots:  # closed during the scan
+                    forget(root)
+                    break
                 self._publish(root, result)
                 await self._report_empty(root, result)
         finally:
@@ -317,6 +322,8 @@ def create_server() -> OdooDoctorServer:
 
     @server.command(RESCAN_COMMAND)
     async def rescan() -> None:
+        for root in server.roots:
+            forget(root)  # a clean scan, the escape hatch if a result ever looks stale
         await asyncio.gather(*(server.request_scan(root) for root in server.roots))
 
     @server.command(DISABLE_RULE_COMMAND)

@@ -44,7 +44,7 @@ class Stamper:
     def __init__(self, previous: dict[str, tuple], now: float | None = None) -> None:
         self.previous = previous
         self.now = time.time() if now is None else now
-        self.racy: dict[str, tuple] = {}  # path -> (size, mtime_ns, content hash)
+        self.racy: dict[str, tuple] = {}  # path -> (*signature, content hash)
 
     def _hash(self, path: str) -> str:
         data = read_bytes(path)
@@ -58,16 +58,17 @@ class Stamper:
             return ("missing",)
         if not stat.S_ISREG(st.st_mode):
             return ("irregular", st.st_mode)
-        sig: tuple = (st.st_size, st.st_mtime_ns)
+        # ctime cannot be set back by utime, and a save by rename changes the inode
+        sig: tuple = (st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino)
         digest = None
         if self.now - st.st_mtime < RACY_SECONDS:
             digest = self._hash(path)
             self.racy[path] = (*sig, digest)
         # a file that was racy last time and still has the same size and mtime: same content?
         before = self.previous.get(path)
-        if before is not None and before[:2] == sig:
+        if before is not None and before[:-1] == sig:
             digest = digest or self._hash(path)
-            if digest != before[2]:
+            if digest != before[-1]:
                 sig += ("rewritten", digest)
         return sig
 
