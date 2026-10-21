@@ -116,7 +116,7 @@ access_my_model_user,my.model user,model_my_model,base.group_user,1,1,1,0
 
 **Tier**: P0 (critical) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `execute()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, `registry.cursor()` / `self.pool.cursor()` and names bound to them) that build the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. Tuple unpacking and `:=` carry the state.
+**Detects**: `execute()`, `executemany()` and `copy_expert()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, `registry.cursor()` / `self.pool.cursor()` and names bound to them), and Odoo 17+ `env.execute_query(...)` on `self.env` / `env` / `request.env`, that build the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. Tuple unpacking and `:=` carry the state.
 
 **Why**: Interpolating values into SQL leads to SQL injection.
 

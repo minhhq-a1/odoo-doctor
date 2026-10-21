@@ -37,8 +37,10 @@ def rule_doc_url(rule_name: str) -> str | None:
 RULE_DOCS: dict[str, RuleDoc] = {
     # ------------------------------------------------------------- Security
     "raw-sql-string-interpolation": RuleDoc(
-        detects="`execute()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, "
-        "`registry.cursor()` / `self.pool.cursor()` and names bound to them) that build "
+        detects="`execute()`, `executemany()` and `copy_expert()` calls on a cursor (`cr`, "
+        "`env.cr`, `request.env.cr`, `request.cr`, `registry.cursor()` / `self.pool.cursor()` "
+        "and names bound to them), and Odoo 17+ `env.execute_query(...)` on `self.env` / "
+        "`env` / `request.env`, that build "
         "the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with "
         "f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. "
         "Tuple unpacking and `:=` carry the state.",
