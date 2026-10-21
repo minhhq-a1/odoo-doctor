@@ -29,7 +29,7 @@ def _fix(tmp_path: Path, files: dict[str, str]):
         diags, {"removed-core-field-usage"}, registry, include_migration=True
     )
     addon = tmp_path / "mod"
-    texts = {n: (addon / n).read_text(newline="") for n in files}
+    texts = {n: (addon / n).read_bytes().decode() for n in files}
     for path, new in result.changed_files.items():
         texts[Path(path).relative_to(addon).as_posix()] = new
     return diags, texts, result

@@ -24,7 +24,7 @@ def fix_files(
         diags, {d.rule for d in diags}, registry, include_migration=True
     )
     addon = tmp_path / "mod"
-    texts = {name: (addon / name).read_text(newline="") for name in files}
+    texts = {name: (addon / name).read_bytes().decode() for name in files}
     for path, new in result.changed_files.items():
         texts[Path(path).relative_to(addon).as_posix()] = new
     return diags, texts, result
