@@ -52,3 +52,12 @@ def test_corpus_case_matches_golden(case: str):
         golden.write_text(json.dumps(actual, indent=2) + "\n")
     assert golden.exists(), f"missing {golden}; run with UPDATE_GOLDEN=1 and review it"
     assert actual == json.loads(golden.read_text())
+
+
+def test_loop_confidence_file_names_state_the_expected_tier():
+    """Each shape of the ``loop_confidence`` case lives in a file named for its tier, so a
+    swap of two shapes (or a tier that drifts) cannot hide behind a total count."""
+    for _rule, file, confidence in json.loads(
+        (CORPUS / "loop_confidence" / "expected.json").read_text()
+    ):
+        assert Path(file).name.startswith(confidence + "_"), file

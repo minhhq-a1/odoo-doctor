@@ -137,7 +137,7 @@ def test_baseline_survives_a_different_checkout_directory(tmp_path):
 
 @pytest.mark.skipif(shutil.which("ruff") is None, reason="Ruff not installed")
 @pytest.mark.parametrize("config_kind", ["local", "ancestor", "extended"])
-def test_cache_invalidates_when_ruff_configuration_changes(tmp_path, config_kind):
+def test_ruff_configuration_is_ignored_and_the_cache_agrees(tmp_path, config_kind):
     project = tmp_path / "project"
     project.mkdir()
     root = project / "addons"
@@ -164,7 +164,7 @@ def test_cache_invalidates_when_ruff_configuration_changes(tmp_path, config_kind
     fresh, _ = collect_scores([root], cfg, "19.0", config_root=root)
     cached_count = len([d for d in cached if d.rule == "F841"])
     fresh_count = len([d for d in fresh if d.rule == "F841"])
-    assert fresh_count == 0
+    assert fresh_count == 1  # the repo's ignore is not applied
     assert cached_count == fresh_count, f"cached={cached_count}, fresh={fresh_count}"
 
 
@@ -172,7 +172,7 @@ def test_cache_invalidates_when_ruff_configuration_changes(tmp_path, config_kind
     shutil.which("ruff") is None or shutil.which("git") is None,
     reason="Ruff and git required",
 )
-def test_cache_invalidates_when_ruff_gitignore_changes(tmp_path):
+def test_ruff_gitignore_does_not_hide_findings_and_the_cache_agrees(tmp_path):
     subprocess.run(["git", "init", str(tmp_path)], capture_output=True, check=True)
     mod = addon(tmp_path)
     (mod / "unused.py").write_text("def f():\n    unused_variable = 1\n")
@@ -184,7 +184,7 @@ def test_cache_invalidates_when_ruff_gitignore_changes(tmp_path):
     (tmp_path / ".gitignore").write_text("m/unused.py\n")
     cached, _ = collect_scores([tmp_path], cfg, "19.0", cache=cache)
     fresh, _ = collect_scores([tmp_path], cfg, "19.0")
-    assert not any(d.rule == "F841" for d in fresh)
+    assert any(d.rule == "F841" for d in fresh)
     assert cached == fresh
 
 

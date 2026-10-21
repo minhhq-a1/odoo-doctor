@@ -224,7 +224,6 @@ def project_fingerprint(
     version: str,
     ruleset: tuple[str, ...],
     extra: Iterable[str] = (),
-    extra_files: Iterable[Path] = (),
     extra_identities: tuple[str, ...] = (),
     excluded_paths: Iterable[Path] = (),
 ) -> str:
@@ -235,8 +234,8 @@ def project_fingerprint(
     - version: the resolved Odoo version.
     - ruleset: a sorted tuple of active rule identities (name+min_version).
     - extra: further identities (plugin rules, linter versions) hashed as-is.
-    - extra_files / extra_identities: inputs outside the addons (linter configs, linter
-      executables); excluded_paths: directories to skip (the cache's own).
+    - extra_identities: inputs outside the addons (linter executables); excluded_paths:
+      directories to skip (the cache's own).
     """
     h = hashlib.sha256()
     h.update(f"cache_version={CACHE_VERSION}\0".encode())
@@ -252,8 +251,7 @@ def project_fingerprint(
 
     # File contents across all roots, in a deterministic order. Value: the symlink
     # target (None for regular files), so retargeting an alias changes the hash.
-    extras = {str(Path(p).resolve()) for p in extra_files}
-    files: dict[str, str | None] = dict.fromkeys(extras)
+    files: dict[str, str | None] = {}
     excluded = {str(Path(p).resolve()) for p in excluded_paths}
     for root in addon_paths:
         files.update(_walk_files(Path(root), excluded))
@@ -261,7 +259,7 @@ def project_fingerprint(
         h.update(f"{path}\0{files[path] or path}\0".encode("utf-8", "surrogateescape"))
         # Every file's existence matters to manifest asset checks. Only inputs
         # consumed as source/config need their contents hashed as well.
-        if path not in extras and os.path.splitext(path)[1] not in _SCANNED_SUFFIXES:
+        if os.path.splitext(path)[1] not in _SCANNED_SUFFIXES:
             continue
         # same guard as the scan: never open a special file, nor read one past the cap
         data = read_bytes(path)
