@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from odoo_doctor.core.config import tomllib
+from odoo_doctor.core.git import run_git
+from odoo_doctor.core.source import MAX_FILE_BYTES, read_bytes
 
 _RUFF_CONFIG_NAMES = ("pyproject.toml", "ruff.toml", ".ruff.toml")
 _IGNORE_NAMES = (".gitignore", ".ignore")
@@ -39,16 +42,19 @@ def _ruff_configs(roots: list[Path]) -> set[Path]:
     catches changes to config precedence and Python target-version inference.
     """
     candidates: set[Path] = set()
-    for root in roots:
-        root = root.resolve()
+    # the workspace folder is usually both an addons path and the config root: walk it once
+    for root in dict.fromkeys(r.resolve() for r in roots):
         for parent in (root, *root.parents):
             candidates.update(
                 parent / name for name in (*_RUFF_CONFIG_NAMES, *_IGNORE_NAMES)
             )
             candidates.add(parent / ".git" / "info" / "exclude")
-        candidates.update(root.rglob("*.toml"))
-        for name in _IGNORE_NAMES:
-            candidates.update(root.rglob(name))
+        for dirpath, _dirs, names in os.walk(root):  # one walk for all three patterns
+            candidates.update(
+                Path(dirpath, n)
+                for n in names
+                if n.endswith(".toml") or n in _IGNORE_NAMES
+            )
         # Resolve worktree/common git dirs and explicitly configured global ignores.
         # These read-only commands do not execute repository hooks or project code.
         for args in (
@@ -56,14 +62,9 @@ def _ruff_configs(roots: list[Path]) -> set[Path]:
             ["config", "--path", "--get", "core.excludesFile"],
         ):
             try:
-                result = subprocess.run(
-                    ["git", *args],
-                    cwd=root,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    check=False,
-                )
+                result = run_git(
+                    args, root, timeout=10
+                )  # the repo's config must not run code
             except (OSError, subprocess.TimeoutExpired):
                 continue
             if result.returncode == 0 and result.stdout.strip():
@@ -89,9 +90,12 @@ def _ruff_configs(roots: list[Path]) -> set[Path]:
         if path in seen:
             continue
         seen.add(path)
+        raw = read_bytes(path)  # never opens a FIFO or a huge file in the scanned repo
+        if raw is None:
+            continue
         try:
-            config = tomllib.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            config = tomllib.loads(raw.decode("utf-8"))
+        except ValueError:  # includes UnicodeDecodeError
             continue
         if path.name == "pyproject.toml":
             tool = config.get("tool", {})
@@ -121,3 +125,50 @@ def cache_dependencies(
             _tool_identity("pylint", ("pylint", "pylint-odoo", "astroid"))
         )
     return files, tuple(identities)
+
+
+def ruff_config_problem(module: Path) -> tuple[Path, str] | None:
+    """Why ruff must not read the configuration it would find for *module*, else None.
+
+    Ruff opens every config file and every ``extend`` target itself, so a FIFO or
+    ``/dev/zero`` behind ``extend = "..."`` hangs it until the adapter's timeout. Walks the
+    config files of *module* and its ancestors and their ``extend`` chains and returns
+    (offending path, reason) for the first link that is not a regular file, is over
+    :data:`MAX_FILE_BYTES` or cannot be read; missing files are fine (ruff reports those fast).
+    """
+    pending = [
+        parent / name
+        for parent in (module, *module.parents)
+        for name in (*_RUFF_CONFIG_NAMES,)
+    ]
+    seen: set[str] = set()
+    while pending:
+        path = pending.pop(0)
+        key = os.path.realpath(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            return path, "not a regular file"
+        if st.st_size > MAX_FILE_BYTES:
+            return path, f"larger than {MAX_FILE_BYTES // 2**20} MiB"
+        raw = read_bytes(path)
+        if raw is None:
+            return path, "cannot be read"
+        try:
+            config = tomllib.loads(raw.decode("utf-8"))
+        except ValueError:
+            continue  # ruff reports a malformed file itself, quickly
+        if path.name == "pyproject.toml":
+            tool = config.get("tool", {})
+            config = tool.get("ruff", {}) if isinstance(tool, dict) else {}
+        extended = config.get("extend") if isinstance(config, dict) else None
+        if isinstance(extended, str):
+            pending.append(
+                path.parent / Path(os.path.expandvars(extended)).expanduser()
+            )
+    return None

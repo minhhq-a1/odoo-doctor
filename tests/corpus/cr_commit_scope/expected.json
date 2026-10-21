@@ -1,0 +1,17 @@
+[
+  [
+    "manual-cr-commit",
+    "cc/models/job.py",
+    "high"
+  ],
+  [
+    "manual-cr-commit",
+    "cc/models/job.py",
+    "medium"
+  ],
+  [
+    "manual-cr-commit",
+    "cc/models/job.py",
+    "medium"
+  ]
+]

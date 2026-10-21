@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable
 from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.rules.registry import rule
 
@@ -40,6 +41,8 @@ def _is_view_action_file(path_str: str) -> bool:
 
 def _read_xml(module_dir: Path, rel: str) -> ET.Element | None:
     if not rel.endswith(".xml"):
+        return None
+    if not is_scannable(module_dir / rel, module_dir):
         return None
     try:
         return ET.fromstring((module_dir / rel).read_bytes())
@@ -186,6 +189,8 @@ def safe_placement(
     for risk in analyze(module_dir, module_name, data):
         if risk.file not in high:
             continue  # only what a reported high finding asks for may move
+        if not is_scannable(module_dir / risk.file, module_dir):
+            return None
         try:
             text = (module_dir / risk.file).read_text(encoding="utf-8", errors="ignore")
         except OSError:

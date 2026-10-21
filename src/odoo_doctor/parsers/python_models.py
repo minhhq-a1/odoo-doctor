@@ -58,18 +58,35 @@ class ModelInfo:
     # False when the class sets `_auto = False`: no table is created by the ORM, so the
     # default `create`/`write` behind `super()` has nothing to store into.
     auto_table: bool = True
+    # `_inherit` / `_inherits` is not a literal (a name, a computed list, `*args`): the parents
+    # are not all known, so the model's symbols cannot be proven complete.
+    inherit_unresolved: bool = False
 
 
 @dataclass
 class ControllerInfo:
     method_name: str
     route: str
+    # The auth the route runs with: the decorator's literal, else the parent route's (see
+    # ``resolve_route_auth``), else "user" (the default of a route with no parent). "unknown"
+    # when the decorator computes it or the parent route lies outside the scanned code.
     auth: str = "user"
+    # What the decorator says: the literal, "unknown" for a computed value, None when absent.
+    declared_auth: str | None = None
     uses_sudo: bool = False
     # A call that checks access (token comparison, signature, record access check).
     guarded: bool = False
     file_path: str = ""
     line: int = 0
+
+
+@dataclass
+class ControllerClass:
+    """A class that may carry routes, with the bases that route inheritance walks."""
+
+    name: str
+    bases: list[str] = field(default_factory=list)  # last component of each base
+    routes: dict[str, ControllerInfo] = field(default_factory=dict)  # by method name
 
 
 # --- Odoo base class names ---
@@ -138,38 +155,116 @@ def parse_models(file_path: Path) -> list[ModelInfo]:
     return models
 
 
-def parse_controllers(file_path: Path) -> list[ControllerInfo]:
-    """Parse all http.route controllers from a Python file."""
+def parse_controller_classes(file_path: Path) -> list[ControllerClass]:
+    """Every class of a file that has a base (and so may inherit routes), with its routes."""
     tree = parse_python(file_path)
     if tree is None:
         return []
     source = read_source(file_path) or ""
 
-    controllers: list[ControllerInfo] = []
+    classes: list[ControllerClass] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
+        if not isinstance(node, ast.ClassDef) or _is_odoo_model(node):
             continue
+        cls = ControllerClass(
+            name=node.name,
+            bases=[(_dotted_name(b) or "").rsplit(".", 1)[-1] for b in node.bases],
+        )
         for item in node.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             route_info = _extract_route(item)
             if route_info is None:
                 continue
-            route, auth = route_info
-            uses_sudo = _body_uses_sudo(item, source)
-            guarded = _body_checks_access(item)
-            controllers.append(
-                ControllerInfo(
-                    method_name=item.name,
-                    route=route,
-                    auth=auth,
-                    uses_sudo=uses_sudo,
-                    guarded=guarded,
-                    file_path=str(file_path),
-                    line=item.lineno,
-                )
+            route, declared = route_info
+            cls.routes[item.name] = ControllerInfo(
+                method_name=item.name,
+                route=route,
+                auth=declared or "user",
+                declared_auth=declared,
+                uses_sudo=_body_uses_sudo(item, source),
+                guarded=_body_checks_access(item),
+                file_path=str(file_path),
+                line=item.lineno,
             )
-    return controllers
+        if cls.routes or cls.bases:
+            classes.append(cls)
+    return classes
+
+
+def parse_controllers(file_path: Path) -> list[ControllerInfo]:
+    """Parse all http.route controllers from a Python file.
+
+    A route that declares no ``auth`` is resolved against the parents found in this file only;
+    the project graph resolves it across files and modules.
+    """
+    classes = parse_controller_classes(file_path)
+    resolve_route_auth(classes)
+    return [route for cls in classes for route in cls.routes.values()]
+
+
+_END_OF_CHAIN = {"Controller", "object"}
+
+
+def resolve_route_auth(classes: list[ControllerClass]) -> None:
+    """Give every route without ``auth`` the auth of the route it overrides.
+
+    Odoo merges the routing of an overridden handler into the override, so ``@route()`` or
+    ``@route('/x', website=True)`` keeps the parent's ``auth='public'``. Parents are found
+    by class name among ``classes``, in base order. A base that is not among them (a class
+    of an addon that is not scanned) may define the route, so the auth is "unknown"; a chain
+    that ends at ``http.Controller`` without a parent route runs with the default, "user".
+    """
+    by_name: dict[str, list[ControllerClass]] = {}
+    for cls in classes:
+        by_name.setdefault(cls.name, []).append(cls)
+    memo: dict[tuple[int, str], str | None] = {}
+    in_progress: set[tuple[int, str]] = set()
+    # What a class that is being resolved answers when it is reached again: no evidence.
+    # (Not "user", not "unknown": the other parents of the class that reaches it decide.)
+    cycle = object()
+
+    def effective(cls: ControllerClass, method: str):
+        info = cls.routes[method]
+        if info.declared_auth is not None:
+            return info.declared_auth
+        found = inherited(cls, method)
+        return found if found is cycle else (found or "user")
+
+    def inherited(cls: ControllerClass, method: str):
+        """Auth of the route ``method`` that ``cls`` overrides; None if it has no parent."""
+        key = (id(cls), method)
+        if key in memo:
+            return memo[key]
+        if key in in_progress:
+            return cycle
+        in_progress.add(key)
+        found: str | None = None
+        for base in cls.bases:
+            parents = [c for c in by_name.get(base, []) if c is not cls]
+            if not parents and base in _END_OF_CHAIN:
+                continue
+            if not parents:
+                found = "unknown"
+                break
+            seen = [
+                effective(p, method) if method in p.routes else inherited(p, method)
+                for p in parents
+            ]
+            autos = {a for a in seen if isinstance(a, str)}
+            if autos:
+                found = autos.pop() if len(autos) == 1 else "unknown"
+                break
+            if cycle in seen:  # parents exist but none of them could tell
+                found = "unknown"
+                break
+        in_progress.discard(key)
+        memo[key] = found
+        return found
+
+    for cls in classes:
+        for method, info in cls.routes.items():
+            info.auth = effective(cls, method)
 
 
 # --- Helpers ---
@@ -204,13 +299,12 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
                     elif target.id == "_auto" and isinstance(item.value, ast.Constant):
                         model.auto_table = bool(item.value.value)
                     elif target.id == "_inherit":
-                        model.inherit = _extract_inherit(item.value)
-                    elif target.id == "_inherits" and isinstance(item.value, ast.Dict):
-                        for k, v in zip(item.value.keys, item.value.values):
-                            if isinstance(k, ast.Constant) and isinstance(
-                                v, ast.Constant
-                            ):
-                                model.inherits[k.value] = v.value
+                        model.inherit, literal = _extract_inherit(item.value)
+                        model.inherit_unresolved |= not literal
+                    elif target.id == "_inherits":
+                        model.inherit_unresolved |= not _extract_inherits(
+                            item.value, model.inherits
+                        )
 
         # Field definitions
         if isinstance(item, ast.Assign) and len(item.targets) == 1:
@@ -239,16 +333,43 @@ def _extract_model(cls: ast.ClassDef, file_path: str) -> ModelInfo:
     return model
 
 
-def _extract_inherit(node: ast.expr) -> list[str]:
+def _extract_inherit(node: ast.expr) -> tuple[list[str], bool]:
+    """The parents named by ``_inherit`` (string, list or tuple), and whether all are literal.
+
+    A computed value (``['x.base'] + MIXINS``) still yields the names it spells out, with
+    ``False``: the first of them is the model an extension without ``_name`` extends.
+    """
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return [node.value]
-    if isinstance(node, ast.List):
-        return [
+        return [node.value], True
+    if isinstance(node, (ast.List, ast.Tuple)):
+        names = [
             e.value
             for e in node.elts
             if isinstance(e, ast.Constant) and isinstance(e.value, str)
         ]
-    return []
+        return names, len(names) == len(node.elts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, _ = _extract_inherit(node.left)
+        right, _ = _extract_inherit(node.right)
+        return left + right, False
+    return [], isinstance(node, ast.Constant) and node.value is None
+
+
+def _extract_inherits(node: ast.expr, into: dict[str, str]) -> bool:
+    """Fill ``into`` from a literal ``_inherits`` dict; False when some entry is not literal."""
+    if not isinstance(node, ast.Dict):
+        return False
+    literal = True
+    for k, v in zip(node.keys, node.values):
+        if (
+            isinstance(k, ast.Constant)
+            and isinstance(k.value, str)
+            and isinstance(v, ast.Constant)
+        ):
+            into[k.value] = v.value
+        else:
+            literal = False
+    return literal
 
 
 def _extract_field(name: str, call: ast.Call, line: int = 0) -> FieldInfo | None:
@@ -354,21 +475,33 @@ def _extract_method(func: ast.FunctionDef | ast.AsyncFunctionDef) -> MethodInfo:
     )
 
 
+def _is_super_call(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "super"
+    )
+
+
 def _body_calls_super(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """``super().<func.name>`` is reached; ``super().write()`` inside ``create`` is not.
+
+    shortcut: a ``super()`` that is stored or passed on (``parent = super()``) is trusted
+    to be used for this method, when it could be followed through the local.
+    """
+    accessed: set[int] = set()  # super() calls used as `super().<attr>`
     for node in ast.walk(func):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "super"
-        ):
-            return True
+        if isinstance(node, ast.Attribute) and _is_super_call(node.value):
+            if node.attr == func.name:
+                return True
+            accessed.add(id(node.value))
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "super"
         ):
             return True
-    return False
+    return any(_is_super_call(n) and id(n) not in accessed for n in ast.walk(func))
 
 
 def _body_always_raises(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -549,8 +682,8 @@ def _body_checks_access(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 def _extract_route(
     func: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> tuple[str, str] | None:
-    """Extract route and auth from @http.route decorator."""
+) -> tuple[str, str | None] | None:
+    """Route and declared auth of an @http.route decorator (auth None when not written)."""
     for dec in func.decorator_list:
         if not isinstance(dec, ast.Call):
             continue
@@ -558,12 +691,15 @@ def _extract_route(
         if dec_name not in ("http.route", "route"):
             continue
         route = ""
-        auth = "user"
+        auth: str | None = None
         if dec.args and isinstance(dec.args[0], ast.Constant):
             route = dec.args[0].value
         for kw in dec.keywords:
-            if kw.arg == "auth" and isinstance(kw.value, ast.Constant):
-                auth = kw.value.value
+            if kw.arg == "auth":
+                is_literal = isinstance(kw.value, ast.Constant) and isinstance(
+                    kw.value.value, str
+                )
+                auth = kw.value.value if is_literal else "unknown"  # type: ignore[attr-defined]
             elif kw.arg == "route" and isinstance(kw.value, ast.Constant):
                 route = kw.value.value
         return route, auth

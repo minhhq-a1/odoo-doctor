@@ -12,11 +12,16 @@ from __future__ import annotations
 
 import ast
 import io
+import os
+import stat
 import tokenize
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
 
 import typer
+
+from odoo_doctor.core.text import safe_text
 
 # Enough for the file being scanned plus the few neighbours parsers touch in turn.
 _CACHE_SIZE = 16
@@ -41,7 +46,103 @@ def warn_skipped(path: Path | str, reason: str, *, read_anyway: bool = False) ->
     _skipped.add(key)
     if len(_skipped) <= _WARN_CAP:
         what = f"{key}: {reason}" if read_anyway else f"skipped {key}: {reason}"
-        typer.echo(f"[WARN] {what}", err=True)
+        typer.echo(f"[WARN] {safe_text(what)}", err=True)
+
+
+# A scanned file larger than this is skipped with a warning; real addon sources are far smaller.
+MAX_FILE_BYTES = 16 * 1024 * 1024
+
+
+def is_scannable(path: Path | str, root: Path | str | None = None) -> bool:
+    """True when ``path`` is a regular file that is safe to open and read.
+
+    Looks at the type with ``os.stat`` *before* any ``open`` (opening a FIFO blocks
+    forever, ``/dev/zero`` never ends). A FIFO, device or socket, a file over
+    :data:`MAX_FILE_BYTES`, and (with ``root``) a symlink or ``..`` path that leaves
+    ``root`` are skipped with a :func:`warn_skipped` line. A directory or a missing or
+    broken path is skipped silently.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    if stat.S_ISDIR(st.st_mode):
+        return False
+    if not stat.S_ISREG(st.st_mode):
+        warn_skipped(path, "not a regular file")
+        return False
+    if st.st_size > MAX_FILE_BYTES:
+        warn_skipped(path, f"larger than {MAX_FILE_BYTES // 2**20} MiB")
+        return False
+    if root is not None and not path_within(path, root):
+        warn_skipped(path, "points outside the scanned directory")
+        return False
+    return True
+
+
+def path_within(path: Path | str, root: Path | str) -> bool:
+    """True when ``path`` (symlinks resolved) lies inside ``root`` (symlinks resolved).
+
+    Lexically inside and no symlink or ``..`` involved is the cheap common case; an
+    absolute path outside ``root`` (``root / "/etc/x"``) takes the resolving branch.
+    """
+    try:
+        if (
+            not os.path.islink(path)
+            and ".." not in Path(path).parts
+            and os.path.commonpath([os.path.abspath(path), os.path.abspath(root)])
+            == os.path.abspath(root)
+        ):
+            return True
+        real_root = os.path.realpath(root)
+        return os.path.commonpath([os.path.realpath(path), real_root]) == real_root
+    except ValueError:  # another drive (Windows)
+        return False
+
+
+# Tooling directories: rewritten by git, ruff, mypy, pytest and the interpreter, and never
+# holding addon code. Neither the scan walkers nor the scan-cache fingerprint look into them
+# (one constant, so a hit cannot hide a file the scan would read).
+SKIP_DIRS = frozenset(
+    {".git", ".ruff_cache", ".mypy_cache", ".pytest_cache", "__pycache__"}
+)
+
+
+def in_tooling_dir(path: Path | str, root: Path | str) -> bool:
+    """True when *path* sits below a :data:`SKIP_DIRS` directory of *root*."""
+    try:
+        parts = Path(path).relative_to(root).parts[:-1]
+    except ValueError:
+        return False
+    return not SKIP_DIRS.isdisjoint(parts)
+
+
+def scannable_files(root: Path, pattern: str = "*.py") -> Iterator[Path]:
+    """``root.rglob(pattern)`` limited to files :func:`is_scannable` accepts, outside
+    the tooling directories (:data:`SKIP_DIRS`)."""
+    for path in root.rglob(pattern):
+        if not in_tooling_dir(path, root) and is_scannable(path, root):
+            yield path
+
+
+_LINT_SUFFIXES = (".py", ".pyi", ".pyw", ".ipynb")
+
+
+def lint_targets(root: Path) -> list[Path]:
+    """What to hand an external linter (ruff, pylint): ``[root]``, or the regular ``.py`` files.
+
+    A linter walks the directory and opens everything it finds, so a FIFO named ``x.py``
+    would hang it. When the tree holds such a file (see :func:`is_scannable`) the linter
+    gets the other ``.py`` files one by one instead; an ordinary tree is unchanged.
+    """
+    for dirpath, _dirs, names in os.walk(root):
+        for name in names:
+            path = Path(dirpath, name)
+            if name.endswith(_LINT_SUFFIXES) and (
+                in_tooling_dir(path, root) or not is_scannable(path, root)
+            ):
+                return sorted(scannable_files(root))
+    return [root]
 
 
 def flush_skipped() -> None:
@@ -49,6 +150,11 @@ def flush_skipped() -> None:
     extra = len(_skipped) - _WARN_CAP
     if extra > 0:
         typer.echo(f"[WARN] ... and {extra} more skipped", err=True)
+
+
+def skipped_count() -> int:
+    """How many files this scan has warned about so far."""
+    return len(_skipped)
 
 
 def reset_skipped() -> None:
@@ -114,20 +220,61 @@ def chain_too_long(source: str) -> bool:
     return False
 
 
-def _signature(path: Path) -> _Signature | None:
+def _signature(path: Path, root: Path | None = None) -> _Signature | None:
+    if not is_scannable(path, root):
+        return None
     try:
-        stat = path.stat()
+        st = path.stat()
     except OSError:
         return None
-    return (str(path), stat.st_mtime_ns, stat.st_size)
+    return (str(path), st.st_mtime_ns, st.st_size)
+
+
+def _open_regular(path: str) -> int | None:
+    """A read descriptor, or None when ``path`` is not (any longer) a regular file.
+
+    ``is_scannable`` and the read are two steps: a file swapped for a FIFO in between
+    would block ``open``. Opening non-blocking and checking ``fstat`` on the descriptor
+    closes that window.
+    """
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    if stat.S_ISREG(os.fstat(fd).st_mode):
+        return fd
+    os.close(fd)
+    warn_skipped(path, "not a regular file")
+    return None
+
+
+def read_bytes(path: Path | str, root: Path | str | None = None) -> bytes | None:
+    """The bytes of a regular file up to :data:`MAX_FILE_BYTES`, else None (never blocks)."""
+    if not is_scannable(path, root):
+        return None
+    try:
+        fd = _open_regular(str(path))
+        if fd is None:
+            return None
+        with os.fdopen(fd, "rb") as fh:
+            data = fh.read(MAX_FILE_BYTES + 1)
+    except OSError:
+        return None
+    return data if len(data) <= MAX_FILE_BYTES else None
 
 
 @lru_cache(maxsize=_CACHE_SIZE)
 def _read(signature: _Signature) -> str | None:
     try:
-        return Path(signature[0]).read_text(encoding="utf-8", errors="replace")
+        fd = _open_regular(signature[0])
+        if fd is None:
+            return None
+        # bounded even if the file grew or lies about its size since is_scannable
+        with os.fdopen(fd, encoding="utf-8", errors="replace") as fh:
+            text = fh.read(MAX_FILE_BYTES + 1)
     except OSError:
         return None
+    if len(text) > MAX_FILE_BYTES:
+        warn_skipped(signature[0], f"larger than {MAX_FILE_BYTES // 2**20} MiB")
+        return None
+    return text
 
 
 @lru_cache(maxsize=_CACHE_SIZE)
@@ -147,14 +294,15 @@ def _parse(signature: _Signature) -> ast.Module | None:
         return None
 
 
-def read_source(path: Path) -> str | None:
+def read_source(path: Path, root: Path | None = None) -> str | None:
     """Read a text file for static analysis without ever raising on content.
 
     Decodes as UTF-8 with undecodable bytes replaced (U+FFFD), so a non-UTF-8
     file never raises UnicodeDecodeError. Returns None only when the file
-    cannot be read at all (OSError), so callers skip it instead of aborting.
+    cannot be read at all (OSError), so callers skip it instead of aborting. With
+    ``root`` a path that resolves outside it (a symlinked manifest) is skipped too.
     """
-    signature = _signature(Path(path))
+    signature = _signature(Path(path), root)
     return None if signature is None else _read(signature)
 
 

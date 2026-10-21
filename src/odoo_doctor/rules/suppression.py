@@ -10,7 +10,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from odoo_doctor.core.source import warn_skipped
+from odoo_doctor.core.source import is_scannable, read_bytes, warn_skipped
 
 _SUPPRESS_RE = re.compile(r"odoo-doctor:\s*disable=([a-z0-9_-]+(?:,\s*[a-z0-9_-]+)*)")
 _SUPPRESS_FILE_RE = re.compile(
@@ -24,9 +24,8 @@ def scan_python_suppressions(file_path: Path) -> Suppressions:
     """Scan a Python file for inline suppression comments."""
     suppressions: Suppressions = set()
 
-    try:
-        data = Path(file_path).read_bytes()
-    except OSError:
+    data = read_bytes(file_path)
+    if data is None:
         return suppressions
     if b"odoo-doctor:" not in data:  # nothing to find: skip the (slow) tokenizer
         return suppressions
@@ -63,6 +62,8 @@ def scan_xml_suppressions(file_path: Path) -> Suppressions:
     """Scan an XML file for inline suppression comments."""
     suppressions: Suppressions = set()
 
+    if not is_scannable(file_path):
+        return suppressions
     try:
         tree = etree.parse(str(file_path))
     except etree.XMLSyntaxError:

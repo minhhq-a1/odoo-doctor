@@ -51,3 +51,11 @@ def test_action_pr_comment_input_controls_the_comment_itself():
         step for step in data["runs"]["steps"] if step.get("name") == "Run odoo-doctor"
     )
     assert "--no-pr-comment" in run_step["run"]
+
+
+def test_action_inputs_are_not_spliced_into_the_shell_script():
+    with open("action.yml") as f:
+        data = yaml.safe_load(f)
+    for step in data["runs"]["steps"]:
+        if "run" in step:
+            assert "${{ inputs." not in step["run"], step.get("name")

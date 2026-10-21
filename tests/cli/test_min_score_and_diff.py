@@ -217,7 +217,15 @@ def test_get_changed_files_empty_diff_returns_empty_set(tmp_path: Path, monkeypa
             subprocess.CompletedProcess([], 0, stdout="", stderr=""),  # diff (empty)
         ]
     )
-    monkeypatch.setattr(appmod.subprocess, "run", lambda *a, **k: next(calls))
+
+    def fake_run(cmd, **kwargs):
+        if (
+            "config" in cmd or "--version" in cmd
+        ):  # the helper's look-up of configured filter drivers
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        return next(calls)
+
+    monkeypatch.setattr(appmod.subprocess, "run", fake_run)
     assert appmod._get_changed_files(tmp_path, "main") == set()
 
 

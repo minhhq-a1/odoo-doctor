@@ -6,22 +6,309 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- The terminal report (the default format, which lands in CI logs) wrapped a repo-chosen `::error::`
+  word onto a line of its own, where GitHub treats it as a workflow command. Every `::` in repo-derived
+  text now has an invisible zero-width space between the colons. In the PR comment, `@name` in a module name
+  or finding title no longer mentions (notifies) anyone.
+- The GitHub Action passed its inputs (`diff-base`, `paths` ...) into the shell script text; they now reach
+  it as environment variables. `--diff` follows the ref with `--` so a ref that is also a path is never read
+  as a path.
+- `fix --fix` and discovery no longer follow a symlinked `__manifest__.py` (or any fixed file) out of the
+  addon directory: a manifest that resolves outside its addon directory is skipped with one warning (the
+  whole addon is then skipped) and is never read as a manifest or written, so a manifest symlinked to a shared
+  file elsewhere in the same repository is skipped too, and `fix` then reports "Applied 0". An absolute path
+  in a manifest `data` list that points outside the addon is skipped as well. A hard link cannot be
+  detected: a manifest that is a hard link to a file outside the repository is still read and rewritten
+  by `fix`.
+- `scan --cache` no longer trusts `.odoo_doctor_cache/` in the scanned repo: a FIFO there hung the scan, and a
+  symlinked cache file or directory let the cache write overwrite a file elsewhere. The cache is read only
+  if it is a regular file inside the repo (and under 16 MiB, else ignored with a warning and rewritten) and
+  is written through a temporary file plus rename. This does not stop a forged hit: a
+  `.odoo_doctor_cache/scan_cache.json` committed to a repository carries a key its author can compute, so
+  use `--cache` only on repositories you trust (CI on your own repository is fine).
+- Repo-derived names (files, modules, versions, git's stderr) in the warning and error lines printed to
+  stderr and stdout (skipped-file warnings, `[FAIL] <module>`, rule-crash warnings, `--diff`, `--score-delta`,
+  `--history` and `--upgrade-report` messages, the `fix` diff header) go through the same sanitiser as the
+  terminal report: control characters are shown escaped and `::` gets a zero-width space, so a file named
+  `a<newline>::error::x.py` can no longer start a GitHub workflow command in a CI log.
+- A git older than 2.31 cannot be told to ignore a repository filter driver whose name contains `=`; git is
+  then skipped with one warning per run (not one per call), and `--score-delta` says so instead of
+  "Not a git repository".
+- Files are opened non-blocking and re-checked on the open descriptor, closing the gap between the file-type
+  check and the read.
+- A scan no longer blocks or exhausts memory on a special or huge file in the scanned repo. A FIFO
+  named `*.py` (opening it blocks forever), a symlink to `/dev/zero` or to a FIFO, and a file over
+  16 MiB are now skipped with one `[WARN] skipped <file>: ...` line on stderr; only regular files
+  are read, the type being checked with `stat` before any `open`. A symlink (or `..` path) that
+  leaves the addon directory is skipped too. This covers Python, XML and CSV files, manifests,
+  inline suppressions, the scan-cache fingerprint, the Odoo source index, the language server and
+  `fix`. A symlink to a regular file inside the addon is still scanned.
+- git no longer runs code chosen by the scanned repo. `scan --diff`, `--score-delta`, `--history`,
+  `--badge` and the HTML report's dirty flag ran git inside the repo, whose `.git/config` or hooks
+  could name a program: `core.fsmonitor` (run by `status` and `diff`), `core.hooksPath` or a
+  `post-checkout` hook (run by `worktree add`), a clean/smudge filter driver selected by
+  `.gitattributes`, `core.sshCommand`, `diff.external`. Every git call now goes through one helper
+  (`core/git.py`) that sets `core.fsmonitor=false`, `core.hooksPath` to the null device, an empty
+  `core.sshCommand`, `--no-optional-locks`, blanks every configured filter driver, passes
+  `--no-ext-diff --no-textconv` to `diff`, and runs git with a minimal environment (no tokens, no
+  `GIT_*` variables except `GIT_CONFIG_GLOBAL` and the ones it sets itself: `GIT_TERMINAL_PROMPT`,
+  `GIT_OPTIONAL_LOCKS`, `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n`). Your own global and system git
+  config still applies, and so do your own filter drivers (git-lfs): only drivers the repository itself
+  defines are blanked, through `GIT_CONFIG_COUNT` (git 2.31 or newer; older git is refused with a warning when
+  a driver name holds `=`). git output is decoded leniently, so a non-UTF-8 config value or file name no
+  longer crashes a scan.
+- The Ruff adapter is hardened without giving up the repo's own Ruff configuration. A repo `ruff.toml` or
+  `pyproject.toml` `[tool.ruff]` is still honoured (ruff finds it from the linted paths, so the team's rules
+  and `ignore` apply), but ruff now runs with `--no-cache` (no `.ruff_cache` folder in the scanned repo, and a
+  `cache-dir` in the repo config cannot make ruff write elsewhere), from a temporary working directory with
+  `HOME`/`TMPDIR` there (no user-level config is read, nothing is written to the repo) and with a minimal
+  environment (no tokens, no `RUFF_*`). A `required-version` the installed ruff does not satisfy gives a
+  clear `adapter-ruff-warning` naming the cause instead of silence. Ruff config cannot run code (checked in
+  ruff's documentation and by probes: `extend`, `per-file-ignores`, `exclude`, `src`, `preview` and
+  `select` only change what ruff reads or reports). Residual risk: a hostile repo's ruff config can
+  disable or change ruff's own findings (never odoo-doctor's native rules); the cache key already holds the
+  repo's ruff configuration. Pylint is different and stays isolated: its configuration is ignored because
+  pylint executes `init-hook` from it (see the Pylint-Odoo entry under Security in 0.11.0).
+  Ruff and Pylint-Odoo also open every Python file they find, so a FIFO named `*.py` hung them; when
+  the addon holds a file that must not be opened, they now get the regular `.py` files one by one.
+  Ruff also opens the config files and every `extend` target itself: `extend = "evil.toml"` with a FIFO
+  there (or a symlink to `/dev/zero`) held it until the 60 s adapter timeout, per addon. Before running
+  Ruff the adapter now walks the config files it would find and their `extend` chain; if a link is not a
+  regular file, is over 16 MiB or cannot be read, Ruff runs with `--isolated` for that addon and one
+  `[WARN]` line names the file and says the repo's Ruff configuration is ignored. Any other config is
+  honoured as before.
+- A file name in the scanned repo can no longer inject GitHub workflow commands. `--format github`
+  wrote the path into `file=` unescaped, so a name holding a newline and `::stop-commands::` or
+  `::error::` ended the annotation and started a command of its own (the title and message were
+  already escaped). The path now gets the same property escaping (`%`, `\r`, `\n`, `:`, `,`) as
+  the title. The same hostile names are also neutralised in the other places that echo a path
+  into a line-based channel: the terminal report (a newline could start a `::` line in a CI log, a
+  raw ESC could drive the terminal; control characters now print as `\n`, `\x1b`) and the PR
+  comment (the module table cell, the finding's code span and title could break out of the
+  markdown table, list or code span). SARIF and the HTML report were already safe (JSON, hashed
+  CSP, `textContent`).
+- `--diff` and `--score-delta` no longer hand the ref to git as a possible option. `--diff=--output=<file>`
+  made `git diff` write its output to that file (any path the user can write); a ref starting with `-`
+  is now refused with exit 3 and a message before git runs. A ref that git itself can resolve is
+  unchanged. `--end-of-options` is not used: it needs git 2.24 and the check above already leaves
+  nothing for git to read as an option.
+
+- Residual, not fixed here (backlog): the PR comment (`--format github` in a pull request) runs `gh pr view` /
+  `gh api` / `gh pr comment` with the scanned repository as working directory and the inherited
+  environment, and `gh` finds the repository (`{owner}/{repo}`) through `git` there, so the repo's own git
+  config can apply to those calls; pinning `--repo` and the PR number needs the CI event data and was left
+  alone to keep the behaviour on GitHub Actions. Use `--no-pr-comment` on a repository you do not trust.
+  Pylint-Odoo adds the addon's parent directory to `sys.path` when it lints, so a repo file that shadows a
+  module pylint imports lazily could be loaded (not verified here).
+
+### Changed
+
+- `raw-sql-string-interpolation` audited against Odoo 19 under the confidence policy (measured on
+  `20f5882e`; Odoo 17.0 `02d3a1d8` scanned as 19.0 for comparison; skw has no finding of the rule).
+  All 12 `high` hits on core 19 were read one by one; none is a proven injection:
+
+  | class | core 19 | core17as19 (47) | what changed |
+  |---|---|---|---|
+  | rule wrong, no longer reported | 3 | 25 | an operator checked against literal choices before use (`if op not in ('<', '='): return`); a record's `.id` and `Datetime.now()` in a string; `LIMIT %d` / `%i` / `%f` formatting; the clauses of an Odoo 14-17 `Query` (`get_sql()`, `select()`, `subselect()`); `sql.Placeholder` |
+  | core convention, now `medium` | 9 | 22 | SQL built from model metadata (`self._sequence_field`), ORM-built fragments (`self._get_seen_list_extra()`, `_select_companies_rates()`) or the parameter of a `_private` helper whose callers pass literals |
+  | true positive, `high` | 0 | 0 | |
+
+  `high` now means that the text of the query is built from something a caller outside the module
+  controls: a parameter (including `**kw` / `post`) of a public method (RPC reaches those) or of a route;
+  `request.params`, `request.httprequest`, `request.get_json_data()` and cookies; a public field of `self`
+  (`self.name`, `self.mapped('name')`, `for rec in self`: the fields of a wizard are typed in by the user);
+  and the same values passed on to a private helper of the same class or a module-level function of the
+  same file (up to 3 hops). It stays `high` even if model metadata is interpolated next to them.
+  Everything else that is dynamic is `medium`: model metadata and ORM-built fragments, `self.env.context`,
+  a private helper only literals reach, a module-level function no entry point calls, and the ORM hooks
+  with a leading underscore that the ORM feeds from RPC arguments (`_search`, `_read_group`,
+  `_name_search`, `_search_*`; an `order`, `groupby` or name typed by a client can reach them, a
+  documented limit). `medium` is listed but does not lower the score and does not trip the default
+  `--fail-on` policy (P0/P1 high confidence). Core 19: 12 `high` -> 0 `high` + 9 `medium` (3 gone);
+  core17as19: 47 `high` -> 0 `high` + 22 `medium` (25 gone); skw: no finding of the rule, as before.
+  The message of a `high` finding now reads "... uses dynamic SQL string construction from a parameter a
+  caller controls" (a `medium` one says it comes from model metadata, ORM-built fragments or a private
+  helper's parameter); it appears in JSON, SARIF, GitHub annotations and the HTML report. Odoo 17+
+  `env.execute_query(SQL(f"...{x}"))` (on `self.env`, `env`, `request.env`) and `cr.copy_expert(...)` are
+  checked like `cr.execute`; this adds no `high` on core 19, core 17 scanned as 19 or skw.
+  The shared taint analysis (`rules/_taint.py`) also follows `with ... as` targets and unpacking of a
+  constant value, which `eval-usage` gets too. Scores of 7 core 19 modules rise (`phone_validation`
+  64.4 -> 100.0, `product_margin` 64.4 -> 100.0, `mass_mailing_sms` 59.8 -> 77.9); none falls.
+- The language server no longer redoes everything on each save. It keeps, per workspace folder and in
+  memory only, the results of the previous scan and reuses what cannot have changed: the whole scan when no
+  file moved, the file-based native rules per unchanged file, Ruff and Pylint-Odoo per addon (an addon is
+  linted again when one of its files, or a file of an addon it depends on, changed) and the index of
+  `odoo_source_path`. Cross-module rules and the graph are still rebuilt on every changed scan, so the
+  findings and scores equal a scan from scratch (`tests/test_scan_reuse.py` backs this). A file is told apart
+  by size, mtime, ctime and inode (plus a content hash for files written in the last 2 s); the whole result
+  is never reused while a plugin rule is registered. Saves arriving within 0.3 s
+  of each other share one scan. Measured on a copy of the 14-addon skw repo (save of one file, median):
+  1.5 s -> 0.6 s without linters, 10.6 s -> 1.9 s (p95 11.2 s -> 3.1 s) with Ruff and Pylint-Odoo,
+  12.6 s -> 0.8 s with `odoo_source_path` set; a save that changes nothing relevant takes about 0.01 s.
+  On a 29-addon slice of Odoo 19 core: 29.7 s -> 13.3 s. Set `ODOO_DOCTOR_LSP_REUSE=0` to turn it off.
+  The command line is unchanged. *Rescan workspace* forgets the kept state first (the escape hatch if a result looks stale), and forgetting
+  never waits for a running scan.
+- `public-controller-sudo-risk` grades a route by whether `auth=` is written on it. `auth='public'` or
+  `'none'` on the route stays `high` (`medium` after an access check). A route that omits `auth` now takes
+  the auth of the route it overrides (see Fixed) and is `medium` (`low` after an access check) when that
+  auth is public or cannot be resolved: Odoo's own addons override public routes and elevate in them as a
+  convention. Measured on Odoo 19 community: 7 routes (6 public, 1 unresolved) newly reported, all reviewed as
+  conventions (`cloud_storage` `mail_attachment_upload` elevates the attachment its own `super()` call just
+  created, `im_livechat` `channel_call_join` a documented read-only `search` that raises `NotFound`,
+  `website_crm_partner_assign` `partners_detail` shows only published partners, `website_event_sale` and
+  `website_sale_collect` read the session's own cart and website configuration,
+  `pos_online_payment_self_order` `pos_order_pay_confirmation` reads one transaction after `super()` checked
+  the access token). Hence no new `high` on core 19 (151 high stay, medium 68 -> 74, low 0 -> 1) or on core 17
+  scanned as 19 (medium 57 -> 62, low 0 -> 2). `scripts/measure.py` shows no new `high` for any rule and no
+  change on the working repository. The grade of an explicit `auth='public'` with `sudo()` (`high`, 151 hits in
+  Odoo 19 community, mostly conventions like the above) is a pre-existing choice and is not touched here; the
+  inherited grade is deliberately `medium`.
+- `search-in-loop`, `create-in-loop` and `write-in-loop` report a finding as `medium` (not `high`, no effect on
+  the score) when it rests on an inferred receiver or an aggregate query: a local that was assigned a recordset
+  (`recs = self.env['x'].search([])` then `recs.write(..)`, or the model handle `Model = self.env['x']`), a
+  comprehension, or `search_read` / `search_fetch` / `read_group` / `_read_group`. `self` and `env[...]`
+  receivers in a `for` / `while` loop stay `high` and are unchanged (no `high` finding of these rules changed
+  on core 19, core 17 scanned as 19, or the working repository; the rule that treats a clearly ORM-local
+  recordset as `medium` lost 8 `medium` findings on core 19 (5 on core 17 scanned as 19) and 0 `high`;
+  otherwise `scripts/measure.py` shows only `medium` increases). Odoo's own addons query per company or per group inside loops: of the 145 new core 19
+  findings 35 are `_read_group` / `search_fetch` / `search_read` calls (often per entry of a `grouped(..).items()`
+  dict or per company), 107 follow a local (many are `Model = self.env['x']` handles used per file, warehouse or
+  company) and 3 are in comprehensions, so the policy keeps them out of `high`. Measured: Odoo 19 community
+  75 + 27 + 43 new `medium`
+  (`search` / `create` / `write`; `high` 405 / 185 / 138 unchanged), core 17 scanned as 19 61 + 30 + 35, the
+  working repository 3 + 2 + 2.
+
 ### Fixed
 
+- `view-field-not-in-model` reported `message_ids`, `activity_ids` and every field of a parent as unknown (error,
+  high) for a model whose `_inherit` is a tuple (`_inherit = ("mail.thread", "mail.activity.mixin")`): the
+  parser read only strings and lists, so the model looked complete. `_inherit` and `_inherits` are now read as
+  a string, a list or a tuple (an extension written with a tuple adds its fields too), and a parent that is not
+  written out (`_inherit = MIXINS`, `_inherit = _name`, `*args`, a computed entry) makes the model incomplete,
+  so no field is reported missing. Parents that an extension in another module adds (`_inherit = ['x.base',
+  'mail.thread']` without `_name`, in a module that does not define `x.base`) now count for `x.base`: a view on
+  it using `message_ids` was still reported. An extension whose `_inherit` is computed (`['x.base'] + MIXINS`)
+  still names `x.base` and makes it unresolved; one that names no model (`_inherit = MIXINS`, no `_name`) used to
+  lose its fields, which are now never reported missing. On Odoo 17 scanned as 19, 11 false `high` findings go (24 -> 13): the 9
+  `ir.module.module` views of `website`, whose model is declared with `_inherit = _name`, and 2 `res.company`
+  views using `message_follower_ids` / `message_ids`, a model that `account` extends with `mail.thread`; none change on Odoo 19.
+- A route that omits `auth` (a bare `@http.route()` override, or `@http.route('/x', website=True)`) was
+  recorded as `auth='user'`, although Odoo merges the parent route's routing into the override. Overridden
+  public routes (`/shop`, portal pages) therefore escaped `public-controller-sudo-risk`. The auth is now taken
+  from the route of the same name in the class's bases, found by class name through every scanned addon
+  (several levels, an explicit `auth=` wins). A parent that is not among the scanned classes (an addon that is
+  not scanned) or a computed `auth=` leaves it `unknown` rather than `user`; a route with no parent at all
+  still runs as `user`. Several scanned classes of one name (two addons that each override `WebsiteSale`) no
+  longer make each other `user`: a class reached again while it is being resolved gives no evidence, and the
+  route is `unknown` when nothing else answers (a cycle `A(B)`/`B(A)` too). On Odoo 19 community this moves 6
+  routes from `unknown` to `public` (undeclared routes: public 20 -> 25, unknown 18 -> 13) and one public to
+  unknown (`website` `bundle`, behind two same-named `WebClient` classes). Limits: only `auth` is inherited,
+  not `csrf`, `type` or `methods`; a parent is found by class NAME, so an unrelated scanned
+  `class Main(http.Controller)` with `auth='user'` can capture a subclass that imports another addon's `Main`,
+  and an import alias (`import X as Y`) is an unresolved parent; `[target_modules]` limits discovery, so a
+  parent in a module that is not a target is not found (unknown).
+- `rpc-sudo-without-access-check` treated a class as a controller only when a base was literally named
+  `Controller`, so routes of a `CustomerPortal` or `WebsiteSale` subclass were never looked at. A class with a
+  `@http.route` method is now a controller whatever its base is called (a method needs a route to be reachable,
+  so resolving the base would add nothing). The rule takes each route's auth from the same resolution; a route
+  whose auth is public or unknown is left to `public-controller-sudo-risk`, so the rule is silent on a bare
+  override of a parent route that is not scanned and on a computed `auth=CONST`. Measured: no new `high` on core;
+  4 new `medium` on core 19 (6 -> 10) and 3 on core 17 scanned as 19 (4 -> 7).
+- `scan --diff` missed changed files whose name has non-ASCII characters (`modèle.py`), a tab or a
+  newline: git prints such names quoted and escaped (`"mod\303\250le.py"`), which matched no file, so
+  their findings were silently left out of the diff scan. Changed files are now read with `-z`
+  (NUL-separated, never quoted).
+- `--cache` could answer differently from an uncached scan, or keep answering after an input changed:
+  - A cache hit scored with the Odoo version from the config (often `unknown`) instead of the one the
+    live scan detected from the manifests, so the in-scope categories, and with them the scores, could
+    differ for a ruleset with version- or capability-gated rules. The entry now stores each module's
+    Odoo version and a hit scores every module with its own (the same fix as the per-module gating below).
+  - A hit listed modules in an order set by the process's hash seed, not the scan order, so `--json`
+    differed byte for byte between a live run and a hit. The order is now the scan's.
+  - The key held only `name@min_version` of each rule, so a plugin rule whose code changed kept
+    returning the old findings. It now also holds, for every rule that is not built in, the
+    distribution name and version that ships it (when installed) and a hash of the rule module's
+    source file.
+  - The key did not hold the version of `ruff` or `pylint`, so upgrading a linter kept the old
+    findings. It now holds the output of `<tool> --version` (run once per process; `unavailable` when
+    the tool is missing) for every enabled adapter. The enabled flags were already in the key.
+  - The config part of the key put a Python `set` (`explicit_adapters`) through `repr()`, whose order
+    changes with the hash seed, so a config with two or more `[adapters]` entries could miss on every
+    run. It is now serialised in sorted order.
+  - The key also holds the pylint-odoo distribution version, read by the interpreter behind the `pylint`
+    executable (`pylint --version` does not name its plugins); `unknown` when that interpreter cannot be
+    found.
+  - Known limit of the key: a rule registered outside `[plugins] enabled` (library use) is identified by its
+    distribution version and a hash of the rule's own module file only, so another file of that package is
+    not hashed. Rule plugins loaded through `[plugins] enabled` bypass the cache altogether.
+
+  `CACHE_VERSION` is now 5 (4 on main stored the per-module versions, 4 on this branch the scan's
+  version and the new key parts; 5 rebuilds either), so older cache files are rebuilt once.
+- `override-missing-super` accepted any `super()` call in the body: `super().write(..)` inside `create` counted as
+  the call chain, so the missing `create` super was never reported. The call must now be
+  `super().<same method>` (`super().create(..)`, `super(Cls, self).create(..)`); a `super()` kept in a variable
+  (`parent = super()`) is still trusted. The raise-only skip, the delegation `medium` and the `_auto = False`
+  `medium` of 0.10.1 are unchanged. No finding of this rule changes on Odoo 19 community (3 medium), core 17
+  scanned as 19 (2 medium) or the working repository: core uses `super().<same method>` everywhere.
+- `search-in-loop`, `create-in-loop` and `write-in-loop` (one shared walker in `rules/_ast_helpers.py`,
+  `orm_calls_in_loops`): they never looked inside a comprehension (`[self.env['x'].search(..) for r in recs]`,
+  dict/set comprehensions and generator expressions: the element, the conditions and the iterables after the
+  first run once per item; the first iterable runs once); they did not follow a local assigned from an ORM
+  expression, so `recs = self.env['x'].search([]); for r in recs: r.write(..)` was missed (the iterable of a
+  `for` over a search result, `for r in self.env['x'].search([]):`, was already correct and is not reported:
+  it runs once); `search_read`, `search_fetch`, `read_group` and `_read_group` were not in the method set of
+  `search-in-loop`; and any `self.<attr>` was treated as a recordset, so `self.client.search(..)` on a service
+  object was a false `high`. An attribute that `__init__` sets (`self.client = client`) or that the class body
+  assigns something other than a `fields.X(..)` declaration is now a plain object; a field, or an attribute
+  inherited from a plain base class that is not scanned, is still taken for a recordset. New golden corpus
+  case `loop_forms`. The new detections are `medium`, see Changed.
+- `view-attrs-states-removed` never checked a kanban view outside its `<templates>`: any `t-*` attribute made the
+  whole view QWeb, so `attrs` / `states` on the `<field>` and `<button>` elements of a kanban were not
+  reported, although Odoo 17 and later reject them. Only the QWeb parts are skipped now (a `qweb` view, a
+  `<templates>` block, an element with a `t-*` directive, and an xpath whose `expr` names `templates` or `@t-`
+  into them), and an xpath into a template is no longer reported. No change on Odoo 19 community, core 17
+  scanned as 19 or the working repository (none has the pattern). New golden corpus case `kanban_attrs`.
+- `manual-cr-commit` exempted every `cr.commit()` on a name that the file bound to its own cursor or
+  environment anywhere (`with self.pool.cursor() as cr:` in one method silenced `cr.commit()` and
+  `env.cr.commit()` of every other function, including the request's own cursor passed as a parameter).
+  The exemption now follows scope: the function that opens the cursor and the functions nested in it, and the
+  module level; a parameter with the same name shadows an outer binding. `self.env.cr.commit()` was never
+  exempt. No change on Odoo 19 community (23 medium), core 17 scanned as 19 (30 medium) or the working
+  repository (1 medium). New golden corpus case `cr_commit_scope`.
 - Keep distinct violations of one rule at the same location, including missing
   manifest fields and dependencies; only matching titles are deduplicated.
 - Apply version/capability gates and category scope per module in mixed-version
   projects. Cache entries retain module versions so cached scores match fresh scans.
-- Write portable v3 baselines using paths relative to the scan root. Existing v1/v2
+- Write portable v3 baselines using paths relative to the scan root (`--write-baseline` now writes
+  `"version": 3`). Existing v1/v2
   baselines remain readable with their original identities; regenerate them to move
-  between checkout paths.
+  between checkout paths. An older odoo-doctor reading a v3 baseline does not recognise its identities
+  and treats every finding as new.
 - Invalidate scan caches for Ruff configuration changes, including ancestor and
   recursive `extend` configs, linter availability/versions and configured Odoo source
   changes. Plugins with arbitrary input dependencies bypass the built-in cache.
+- Tooling directories are not scanned: `.git`, `.ruff_cache`, `.mypy_cache`, `.pytest_cache` and
+  `__pycache__` (anywhere below an addon). The scan-cache fingerprint already skipped them, while the scan
+  still read Python and data files inside them, so a warm `--cache` run could report fewer findings than an
+  uncached one. Both now share one list (`core/source.py::SKIP_DIRS`); it also applies to the line counts,
+  the module graph, the orphan-view text search, the language server's file stamps, and Ruff/Pylint are
+  handed explicit files when such a directory holds Python.
+- The language server did not see a change to the Ruff configuration while it ran: after creating, editing
+  or deleting `ruff.toml`, `.ruff.toml`, `pyproject.toml`, a file they `extend`, or a `.gitignore`, Ruff
+  findings stayed stale until a restart. These files and the Ruff/Pylint executables are now stamped into
+  the reuse key and the per-addon lint signature.
 - Use the same default P0/P1 high-confidence CI failure policy with absent, empty
   and partial configurations.
 - Collect context-rule generators once so plugin findings are retained in full and
   diff scans.
+- Known limits, not audited yet (backlog): `csrf-disabled-authenticated-route` has the same inherited-auth
+  gap as the route-auth bug fixed above (a bare override of a route with `csrf=False` is read as `user`);
+  and the pre-existing `high` loop findings (core 19: `search-in-loop` 405, `create-in-loop` 185,
+  `write-in-loop` 138) are against the confidence policy (Odoo's own addons write such loops) and have not
+  been audited like `raw-sql-string-interpolation`.
+
 
 ## [0.11.0] — 2026-10-19
 

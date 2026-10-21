@@ -116,13 +116,13 @@ access_my_model_user,my.model user,model_my_model,base.group_user,1,1,1,0
 
 **Tier**: P0 (critical) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `execute()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, `registry.cursor()` / `self.pool.cursor()` and names bound to them) that build the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. Tuple unpacking and `:=` carry the state.
+**Detects**: `execute()`, `executemany()` and `copy_expert()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, `registry.cursor()` / `self.pool.cursor()` and names bound to them), and Odoo 17+ `env.execute_query(...)` on `self.env` / `env` / `request.env`, that build the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. Tuple unpacking and `:=` carry the state.
 
 **Why**: Interpolating values into SQL leads to SQL injection.
 
 **Fix**: Pass values as query parameters.
 
-**Note**: `<anything>._table` is a trusted identifier (set by the model author and validated by the registry), and scripts under `tests/`, `migrations/` and `upgrades/` (Odoo 18+) are skipped. When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL("... %s", x)` (parameters passed separately) or `','.join(['%s'] * n)` placeholder lists is not reported, while `SQL(f"...{x}")` (or `+`, `%`, `.format()` building the SQL string) and a fragment that reaches the query through a list or a branch is. Test code (`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` that take only `self` (where SQL views are created) are skipped: nothing a request controls reaches them. Known limits: `SQL` is recognised by its name, so an import alias (`from odoo.tools import SQL as S`) is not followed, and a statement that starts with a SQL comment (`-- ...` or `/* ... */`) defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics.
+**Note**: `<anything>._table` is a trusted identifier (set by the model author and validated by the registry), and scripts under `tests/`, `migrations/` and `upgrades/` (Odoo 18+) are skipped. When the dynamic part is not user data (for example a WHERE fragment whose values are bound through parameters), assert it with pylint-odoo's marker `# pylint: disable=sql-injection`, which this rule honours: a trailing comment covers its line, a comment on its own line covers the rest of the enclosing function. `# odoo-doctor: disable=raw-sql-string-interpolation` also works. The rule follows values through local variables, lists (`append`, `extend`, `+=`), `if`/`try`/loop branches and module constants: SQL built only from constants, `int()` casts, `self._table`, `SQL("... %s", x)` (parameters passed separately) or `','.join(['%s'] * n)` placeholder lists is not reported, while `SQL(f"...{x}")` (or `+`, `%`, `.format()` building the SQL string) and a fragment that reaches the query through a list or a branch is. Test code (`tests/`), `migrations/` and the install-time hooks `init` / `_auto_init` that take only `self` (where SQL views are created) are skipped: nothing a request controls reaches them. Known limits: `SQL` is recognised by its name, so an import alias (`from odoo.tools import SQL as S`) is not followed, and a statement that starts with a SQL comment (`-- ...` or `/* ... */`) defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics. Also not reported: `%d` / `%i` / `%f` formatting (a non-number raises, so `"... LIMIT %d" % n` cannot inject), the clauses of an Odoo `Query` (`query.get_sql()`, `query.select()` / `.subselect()` with constant arguments), a record's `.id`, `Datetime.now()`-style calls, and a name checked with `if op not in ("<", "="): return` (or `raise`) before it is used. Confidence: `high` when the text of the query is built from something a caller outside the module controls: a parameter (including `**kw` / `post`) of a public method (RPC reaches those) or of a route, what the request carries (`request.params`, `request.httprequest`, `request.get_json_data()`, cookies), a public field of `self` (`self.name`: a wizard's fields are typed in by the user, also through `self.mapped('name')` and `for rec in self`), and the same values handed on to a private helper of the same class or a module-level function of the same file (`self._q(term)`, up to 3 hops), whatever else is interpolated next to them. Everything else that is dynamic is `medium`: model metadata and ORM-built fragments (`self._where()`, `self._sequence_field`, `self.env.context`), a private helper that only literals reach, a module-level function no entry point calls, and the ORM hooks with a leading underscore that the ORM feeds from RPC arguments (`_search`, `_read_group`, `_name_search`, `_search_*` field search methods: an `order`, `groupby` or name typed by a client can reach them; this is a documented limit, review them). Odoo's own addons write dynamic SQL that way (Odoo 19: 0 `high`, 9 `medium`). A `medium` finding is listed but does not lower the score and does not trip the default `--fail-on` policy (P0/P1 high confidence). Calls on another class's helper, through inheritance or a callback are not followed.
 
 Bad:
 
@@ -251,7 +251,7 @@ Good:
 
 **Fix**: Require authentication, or restrict what the sudo call can reach and validate the input.
 
-**Note**: A route that also calls an access check (`consteq` on an access token, `_document_check_access`, a signature or `check_access*` call) is reported at medium confidence and does not affect the score; without one it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo().get_param('<constant>')` are not elevations. Public website routes legitimately use `sudo()`: about one in five routes of Odoo 19 community does, so review rather than ban.
+**Note**: A route that also calls an access check (`consteq` on an access token, `_document_check_access`, a signature or `check_access*` call) is reported at medium confidence and does not affect the score; without one it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo().get_param('<constant>')` are not elevations. Public website routes legitimately use `sudo()`: about one in five routes of Odoo 19 community does, so review rather than ban. A route that omits `auth` (a bare `@http.route()` override) keeps the auth of the route it overrides, found through the classes of the scanned addons; when the parent is not among them (`WebsiteSale`, `CustomerPortal` of an addon that is not scanned) the auth is unknown. A `sudo()` in such a route is reported at medium (low after an access check), whether the inherited auth is public or unknown: Odoo's own addons override public routes and elevate in them as a convention. State `auth=` on the route to grade it like any other. Parents are matched by class NAME, in base order: an unrelated scanned `class Main(http.Controller)` with `auth='user'` can capture a subclass that imports another addon's `Main`, and several scanned classes of one name with different autos give unknown. `[target_modules]` limits discovery, so a parent in a module that is not a target is not found and the auth is unknown, as is a computed `auth=CONST`. The grade of an explicit `auth='public'` with `sudo()` (high; 151 hits in Odoo 19 community, mostly conventions) is a pre-existing choice; the inherited grade is deliberately medium.
 
 Bad:
 
@@ -302,7 +302,7 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: Public model methods (no leading underscore) and authenticated routes that call `.sudo()` on records or values chosen by their parameters, with no access check in the method: `check_access*`, `has_access`, a token or group test, a check-style helper, or a `raise` that refuses the caller. Public routes (`auth='public'`) are left to `public-controller-sudo-risk`.
+**Detects**: Public model methods (no leading underscore) and authenticated routes (of any controller class, whatever its base is called) that call `.sudo()` on records or values chosen by their parameters, with no access check in the method: `check_access*`, `has_access`, a token or group test, a check-style helper, or a `raise` that refuses the caller. Public routes (`auth='public'`, also inherited from the overridden route) and routes whose auth cannot be resolved are left to `public-controller-sudo-risk`. So the rule is silent on a bare override of a parent route that is not scanned, or with a computed `auth=CONST`: the tainted-parameter signal is lost there.
 
 **Why**: A public method is reachable with any record ids and arguments. Elevating with `sudo()` on what the caller picked lets them read or change records their rights and record rules would refuse (an IDOR).
 
@@ -468,7 +468,7 @@ amount = fields.Monetary(string="Amount")
 
 **Fix**: Call and return the parent implementation.
 
-**Note**: Not reported: a method whose body raises and never returns (`def copy(self, default=None): raise UserError(...)`) blocks the operation on purpose. Medium confidence, not high: the method calls its own name on records of another model that it maps out of `self` (`self.mapped('tmpl_id').copy(...)`, `self.line_ids.copy(...)`); calling it on `self`, on `self.sudo()` / `self.with_context(..)` or on an `env` lookup stays high. Also medium: `create`/`write` on a model with `_auto = False`, which has no ORM table for `super()` to write into.
+**Note**: The `super()` call must be for the same method: `super().write(..)` inside `create` is not the call chain (a `super()` kept in a variable is trusted). Not reported: a method whose body raises and never returns (`def copy(self, default=None): raise UserError(...)`) blocks the operation on purpose. Medium confidence, not high: the method calls its own name on records of another model that it maps out of `self` (`self.mapped('tmpl_id').copy(...)`, `self.line_ids.copy(...)`); calling it on `self`, on `self.sudo()` / `self.with_context(..)` or on an `env` lookup stays high. Also medium: `create`/`write` on a model with `_auto = False`, which has no ORM table for `super()` to write into.
 
 Bad:
 
@@ -517,7 +517,7 @@ access_x,x,model_my_model,base.group_user,1,0,0,0
 
 **Fix**: Add the field to the model or remove it from the view.
 
-**Note**: Fires with high confidence only when the model is known (stubs or this repository) and the field provably does not exist.
+**Note**: Fires with high confidence only when the model is known (stubs or this repository) and the field provably does not exist. `_inherit` and `_inherits` are read as a string, a list or a tuple. A model with a parent that is not packaged (the mixins of a stub-known module, a model of an addon that is not scanned) or not written out (`_inherit = MIXINS`) may have any field, so nothing is reported. Parents added to a model by an extension in another module (`_inherit = ['x.base', 'mail.thread']`, no `_name`) count. Fields and methods of an extension that names no model (`_inherit = MIXINS`, no `_name`) are never reported missing.
 
 ### compute-missing-depends
 
@@ -579,7 +579,7 @@ company = self.env.company
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `create()` called inside a loop (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped).
+**Detects**: `create()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules and confidence tiers of `search-in-loop` apply).
 
 **Why**: Each call triggers its own INSERT and recomputation round trip.
 
@@ -628,13 +628,13 @@ for partner in self.env['res.partner'].browse(partner_ids):
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: ORM queries (`search`, `search_count`, `read`) inside `for` or `while` loops. `browse()` is not flagged: it only wraps ids and does not query the database.
+**Detects**: ORM queries (`search`, `search_count`, `read`, `search_read`, `search_fetch`, `read_group`) inside `for` or `while` loops and comprehensions. `browse()` is not flagged: it only wraps ids and does not query the database.
 
 **Why**: One query per iteration scales badly with record count.
 
 **Fix**: Move the call out of the loop and batch the results.
 
-**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported.
+**Note**: The performance rules skip files inside an addon's `tests/` directory. Only what runs on every iteration counts: the loop's own iterable (`for rec in self.env[...].search(...)`) and its `else` clause run once. Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are not reported. The receiver must be a recordset: `self`, an `env[...]` lookup, a loop variable over records and a local assigned from one (`recs = self.env['x'].search([])`), but not an attribute that `__init__` or the class body sets to a plain object (`self.client = Client()`). Medium confidence, not high: the receiver is a local (`recs.search(..)`, `Model = self.env['x']`), the loop is a comprehension, or the query is `search_read` / `search_fetch` / `read_group` (Odoo's own addons run those per company or per group); `self` / `env[...]` receivers in a `for` or `while` stay high.
 
 Bad:
 
@@ -654,7 +654,7 @@ by_id = {p.id: p for p in partners}
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 14.0
 
-**Detects**: `write()` called inside a loop (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped).
+**Detects**: `write()` called inside a loop or comprehension (its iterable and `else` clause excluded; chunked and constant-literal loops are skipped; the receiver rules and confidence tiers of `search-in-loop` apply).
 
 **Why**: Each call triggers its own UPDATE and recomputation round trip.
 
@@ -770,7 +770,7 @@ records = self.env['res.partner'].search(
 
 **Fix**: Remove the commit and let Odoo commit when the request succeeds. Run batch work from a cron or a queue job, or in its own cursor (`with self.pool.cursor() as cr:`).
 
-**Note**: Not reported: a cursor or environment the code opened itself (`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`), cron methods (a function with `cron` in its name), install hooks (`init`, `_auto_init`, `post_init_hook`...), a commit under an `if` that tests `test_enable` / `testing`, and a line marked `# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` are skipped.
+**Note**: Not reported: a cursor or environment the code opened itself (`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`) in the function that commits it or an enclosing one (or at module level), not elsewhere in the file and not under a parameter of the same name, cron methods (a function with `cron` in its name), install hooks (`init`, `_auto_init`, `post_init_hook`...), a commit under an `if` that tests `test_enable` / `testing`, and a line marked `# pylint: disable=invalid-commit`. Scripts under `tests/` and `migrations/` are skipped.
 
 Bad:
 
@@ -1090,7 +1090,7 @@ _name_uniq = models.Constraint('UNIQUE(name)', 'Name must be unique')
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 17.0
 
-**Detects**: Elements with `attrs` or `states` (or an `<attribute name="attrs">` xpath edit) in the architecture of an `ir.ui.view` record, on Odoo 17 and later. One finding per view. QWeb templates are not checked.
+**Detects**: Elements with `attrs` or `states` (or an `<attribute name="attrs">` xpath edit) in the architecture of an `ir.ui.view` record, on Odoo 17 and later. One finding per view. QWeb is not checked: a view of type `qweb`, a kanban view's `<templates>` block, an element with a `t-*` directive and an xpath into either. The `<field>` and `<button>` elements of the rest of a kanban view are.
 
 **Why**: Odoo 17 and later refuse such a view ("Since 17.0, the attrs and states attributes are no longer used"), so the module cannot be installed or updated.
 

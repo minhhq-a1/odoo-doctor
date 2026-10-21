@@ -1,0 +1,36 @@
+<odoo>
+    <!-- attrs/states outside <templates> are validated: a finding -->
+    <record id="view_bad_kanban" model="ir.ui.view">
+        <field name="name">ka.bad.kanban</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <field name="name" attrs="{'invisible': [('name', '=', False)]}"/>
+                <templates>
+                    <t t-name="card">
+                        <div t-if="record.name.raw_value">
+                            <field name="name"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+    <!-- the same attributes inside the QWeb templates are not validated: clean -->
+    <record id="view_qweb_only_kanban" model="ir.ui.view">
+        <field name="name">ka.qweb.kanban</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <field name="name"/>
+                <templates>
+                    <t t-name="card">
+                        <div attrs="{'invisible': []}">
+                            <button name="go" type="object" states="draft"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+</odoo>

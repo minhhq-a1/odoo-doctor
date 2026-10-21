@@ -30,3 +30,37 @@ def test_read_source_returns_none_for_missing_file(tmp_path: Path):
 def test_read_source_returns_none_for_directory(tmp_path: Path):
     # Reading a directory raises OSError → None, never propagates
     assert read_source(tmp_path) is None
+
+
+def test_read_source_skips_a_file_over_the_size_cap(tmp_path: Path, monkeypatch):
+    from odoo_doctor.core import source
+
+    monkeypatch.setattr(source, "MAX_FILE_BYTES", 10)
+    big = tmp_path / "big.py"
+    big.write_text("x = 1\n" * 5)
+    assert read_source(big) is None
+    small = tmp_path / "small.py"
+    small.write_text("x = 1")
+    assert read_source(small) == "x = 1"
+
+
+def test_is_scannable_directory_is_silent(tmp_path: Path, capsys):
+    from odoo_doctor.core.source import is_scannable
+
+    (tmp_path / "pkg.py").mkdir()
+    assert not is_scannable(tmp_path / "pkg.py")
+    assert capsys.readouterr().err == ""
+
+
+def test_is_scannable_rejects_an_absolute_path_outside_the_root(tmp_path: Path):
+    from odoo_doctor.core.source import is_scannable
+
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "outside.xml"
+    outside.write_text("<odoo/>")
+    assert not is_scannable(
+        root / str(outside), root
+    )  # pathlib join: the absolute wins
+    (root / "in.xml").write_text("<odoo/>")
+    assert is_scannable(root / "in.xml", root)

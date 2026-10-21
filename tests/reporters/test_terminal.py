@@ -196,3 +196,56 @@ def test_render_terminal_shows_a_difference_of_exactly_one_tenth():
     a = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
     b = ScoreResult(90.0, "Excellent", [], [], 0, overall_with_medium=89.9)
     assert "Counting medium findings: 89.9" in render_terminal([], {"a": a, "b": b})
+
+
+def test_hostile_names_cannot_start_a_workflow_command_line():
+    """CI logs are parsed for lines starting with `::`; a newline in a repo-chosen
+    name must not be able to start one, nor may a raw ESC reach the terminal."""
+    hostile = "a\n::error::boom\x1b[2J.py"
+    d = _diag(
+        module="m\n::error::mod",
+        file_path=hostile,
+        title="t\n::error::title",
+        message="msg\n::error::msg",
+    )
+    score = ScoreResult(50.0, "Needs work", [], [d], 1)
+    out = render_terminal([d], {d.module: score})
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", out)  # rich's own styling
+    assert "\x1b" not in plain
+    assert not [line for line in plain.splitlines() if line.lstrip().startswith("::")]
+    assert "\\n:\u200b:error:\u200b:boom" in plain  # still visible, as text
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def _score() -> ScoreResult:
+    return ScoreResult(
+        overall=75.0,
+        label="Good",
+        categories=[CategoryScore("Security", 75, 1, 25.0)],
+        in_scope_categories=["Security"],
+        diagnostics_counted=1,
+    )
+
+
+def test_no_wrapped_line_starts_with_a_workflow_command():
+    """Rich word-wraps at 120: a repo-chosen `::error::` word must never open a line."""
+    for pad in range(40, 121):
+        filler = "x" * pad
+        d = _diag(
+            file_path=f"{filler} ::error::boom.py",
+            title=f"{filler} ::warning::t",
+            message=f"{filler} ::error::boom",
+            help=f"{filler} ::error::h",
+            module=f"m{filler} ::error::mod",
+        )
+        output = _strip_ansi(render_terminal([d], {d.module: _score()}))
+        for line in output.splitlines():
+            assert not line.lstrip(" ").startswith("::"), (pad, line)
+
+
+def test_double_colon_is_still_readable_in_normal_text():
+    output = _strip_ansi(render_terminal([_diag(message="call a::b here")], {}))
+    assert "a:\u200b:b" in output

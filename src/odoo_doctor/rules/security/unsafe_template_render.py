@@ -6,7 +6,7 @@ from __future__ import annotations
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import warn_skipped
+from odoo_doctor.core.source import is_scannable, warn_skipped
 from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.rules.registry import rule
 
@@ -35,7 +35,7 @@ def check_unsafe_template_render(ctx: ModuleContext) -> list[Diagnostic]:
 
     for data_file in ctx.manifest.data:
         xml_path = ctx.path / data_file
-        if xml_path.suffix != ".xml" or not xml_path.exists():
+        if xml_path.suffix != ".xml" or not is_scannable(xml_path, ctx.path):
             continue
         try:
             tree = etree.parse(str(xml_path))

@@ -115,3 +115,55 @@ def test_tests_and_migrations_are_skipped(tmp_path: Path):
     body = "    def write(self, vals):\n        self.env.cr.commit()\n"
     assert _check(tmp_path, body, where="tests/test_a.py") == []
     assert _check(tmp_path, body, where="migrations/17.0.1.0/post.py") == []
+
+
+def test_own_cursor_exempts_only_the_function_that_opens_it(tmp_path: Path):
+    body = (
+        "    def own(self):\n"
+        "        with self.pool.cursor() as cr:\n"
+        "            cr.commit()\n"
+        "        env = api.Environment(self.pool.cursor(), 1, {})\n"
+        "        env.cr.commit()\n"
+        "\n"
+        "    def borrowed(self, cr, env):\n"
+        "        cr.commit()\n"
+        "        env.cr.commit()\n"
+    )
+    diags = _check(tmp_path, body)
+    assert [(d.line, d.confidence) for d in diags] == [(14, "medium"), (15, "medium")]
+
+
+def test_own_cursor_is_visible_to_a_nested_function(tmp_path: Path):
+    body = (
+        "    def own(self):\n"
+        "        with self.pool.cursor() as cr:\n"
+        "            def flush():\n"
+        "                cr.commit()\n"
+        "            flush()\n"
+    )
+    assert _check(tmp_path, body) == []
+
+
+def test_own_cursor_of_a_nested_function_does_not_leak_to_the_outer_one(
+    tmp_path: Path,
+):
+    body = (
+        "    def outer(self, cr):\n"
+        "        def inner():\n"
+        "            with self.pool.cursor() as cr:\n"
+        "                cr.commit()\n"
+        "        cr.commit()\n"
+    )
+    assert [d.line for d in _check(tmp_path, body)] == [11]
+
+
+def test_module_level_cursor_is_visible_to_every_function(tmp_path: Path):
+    path = tmp_path / "mod" / "models" / "m.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "env = api.Environment(registry.cursor(), 1, {})\n\n\n"
+        "def flush():\n    env.cr.commit()\n\n\n"
+        "def other(self, env):\n    env.cr.commit()\n"
+    )
+    diags = check_manual_cr_commit(path, "mod", "17.0")
+    assert [d.line for d in diags] == [9]  # `env` is a parameter there

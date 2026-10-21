@@ -37,8 +37,10 @@ def rule_doc_url(rule_name: str) -> str | None:
 RULE_DOCS: dict[str, RuleDoc] = {
     # ------------------------------------------------------------- Security
     "raw-sql-string-interpolation": RuleDoc(
-        detects="`execute()` calls on a cursor (`cr`, `env.cr`, `request.env.cr`, `request.cr`, "
-        "`registry.cursor()` / `self.pool.cursor()` and names bound to them) that build "
+        detects="`execute()`, `executemany()` and `copy_expert()` calls on a cursor (`cr`, "
+        "`env.cr`, `request.env.cr`, `request.cr`, `registry.cursor()` / `self.pool.cursor()` "
+        "and names bound to them), and Odoo 17+ `env.execute_query(...)` on `self.env` / "
+        "`env` / `request.env`, that build "
         "the query (SELECT, DML or DDL such as DROP / ALTER / TRUNCATE / WITH) with "
         "f-strings, `%`-formatting, `.format()` or concatenation, also inside `SQL(...)`. "
         "Tuple unpacking and `:=` carry the state.",
@@ -67,7 +69,31 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "request controls reaches them. Known limits: `SQL` is recognised by its "
         "name, so an import alias (`from odoo.tools import SQL as S`) is not followed, "
         "and a statement that starts with a SQL comment (`-- ...` or `/* ... */`) "
-        "defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics.",
+        "defeats the statement-start check of the DDL/`WITH`/`COPY` heuristics. "
+        "Also not reported: `%d` / `%i` / `%f` formatting (a non-number raises, so "
+        '`"... LIMIT %d" % n` cannot inject), the clauses of an Odoo `Query` '
+        "(`query.get_sql()`, `query.select()` / `.subselect()` with constant arguments), "
+        "a record's `.id`, `Datetime.now()`-style calls, and a name checked with "
+        '`if op not in ("<", "="): return` (or `raise`) before it is used. '
+        "Confidence: `high` when the text of the query is built from something a "
+        "caller outside the module controls: a parameter (including `**kw` / `post`) of a "
+        "public method (RPC reaches those) or of a route, what the request carries "
+        "(`request.params`, `request.httprequest`, `request.get_json_data()`, cookies), "
+        "a public field of `self` (`self.name`: a wizard's fields are typed in by the user, "
+        "also through `self.mapped('name')` and `for rec in self`), and the same values "
+        "handed on to a private helper of the same class or a module-level function of the "
+        "same file (`self._q(term)`, up to 3 hops), whatever else is interpolated next to "
+        "them. Everything else that is dynamic is `medium`: model metadata and ORM-built "
+        "fragments (`self._where()`, `self._sequence_field`, `self.env.context`), a "
+        "private helper that only literals reach, a module-level function no entry point "
+        "calls, and the ORM hooks with a leading underscore that the ORM feeds from RPC "
+        "arguments (`_search`, `_read_group`, `_name_search`, `_search_*` field search "
+        "methods: an `order`, `groupby` or name typed by a client can reach them; this is a "
+        "documented limit, review them). Odoo's own addons write dynamic SQL that way "
+        "(Odoo 19: 0 `high`, 9 `medium`). A `medium` finding is listed but does not lower "
+        "the score and does not trip the default `--fail-on` policy (P0/P1 high "
+        "confidence). Calls on another class's helper, through inheritance or a callback "
+        "are not followed.",
     ),
     "missing-access-csv": RuleDoc(
         detects="Models defined in the module with no row in "
@@ -120,7 +146,22 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "it is high. `.sudo(False)` and `env['ir.config_parameter'].sudo()"
         ".get_param('<constant>')` are not elevations. Public website routes "
         "legitimately use `sudo()`: about one in five routes of Odoo 19 community "
-        "does, so review rather than ban.",
+        "does, so review rather than ban. A route that omits `auth` (a bare "
+        "`@http.route()` override) keeps the auth of the route it overrides, found "
+        "through the classes of the scanned addons; when the parent is not among "
+        "them (`WebsiteSale`, `CustomerPortal` of an addon that is not scanned) the "
+        "auth is unknown. A `sudo()` in such a route is reported at medium (low after "
+        "an access check), whether the inherited auth is public or unknown: Odoo's "
+        "own addons override public routes and elevate in them as a convention. "
+        "State `auth=` on the route to grade it like any other. Parents are matched by "
+        "class NAME, in base order: an unrelated scanned `class Main(http.Controller)` "
+        "with `auth='user'` can capture a subclass that imports another addon's "
+        "`Main`, and several scanned classes of one name with different autos give "
+        "unknown. `[target_modules]` limits discovery, so a parent in a module that "
+        "is not a target is not found and the auth is unknown, as is a computed "
+        "`auth=CONST`. The grade of an explicit `auth='public'` with `sudo()` (high; "
+        "151 hits in Odoo 19 community, mostly conventions) is a pre-existing "
+        "choice; the inherited grade is deliberately medium.",
     ),
     "access-write-without-group": RuleDoc(
         detects="Rows in `ir.model.access.csv` with an empty `group_id:id` that grant "
@@ -161,10 +202,15 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     "rpc-sudo-without-access-check": RuleDoc(
         detects="Public model methods (no leading underscore) and authenticated "
-        "routes that call `.sudo()` on records or values chosen by their parameters, "
+        "routes (of any controller class, whatever its base is called) that call "
+        "`.sudo()` on records or values chosen by their parameters, "
         "with no access check in the method: `check_access*`, `has_access`, a token "
         "or group test, a check-style helper, or a `raise` that refuses the caller. "
-        "Public routes (`auth='public'`) are left to `public-controller-sudo-risk`.",
+        "Public routes (`auth='public'`, also inherited from the overridden route) "
+        "and routes whose auth cannot be resolved are left to "
+        "`public-controller-sudo-risk`. So the rule is silent on a bare override of "
+        "a parent route that is not scanned, or with a computed `auth=CONST`: the "
+        "tainted-parameter signal is lost there.",
         why="A public method is reachable with any record ids and arguments. Elevating "
         "with `sudo()` on what the caller picked lets them read or change records "
         "their rights and record rules would refuse (an IDOR).",
@@ -270,7 +316,14 @@ RULE_DOCS: dict[str, RuleDoc] = {
         why="Odoo rejects the view at load time.",
         fix="Add the field to the model or remove it from the view.",
         notes="Fires with high confidence only when the model is known (stubs or "
-        "this repository) and the field provably does not exist.",
+        "this repository) and the field provably does not exist. `_inherit` and "
+        "`_inherits` are read as a string, a list or a tuple. A model with a parent "
+        "that is not packaged (the mixins of a stub-known module, a model of an "
+        "addon that is not scanned) or not written out (`_inherit = MIXINS`) may have "
+        "any field, so nothing is reported. Parents added to a model by an extension "
+        "in another module (`_inherit = ['x.base', 'mail.thread']`, no `_name`) "
+        "count. Fields and methods of an extension that names no model "
+        "(`_inherit = MIXINS`, no `_name`) are never reported missing.",
     ),
     "button-method-not-found": RuleDoc(
         detects='Buttons with `type="object"` calling a method that does not '
@@ -288,7 +341,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="def create(self, vals):\n"
         "    record = super().create(vals)\n"
         "    return record",
-        notes="Not reported: a method whose body raises and never returns "
+        notes="The `super()` call must be for the same method: `super().write(..)` "
+        "inside `create` is not the call chain (a `super()` kept in a variable is "
+        "trusted). Not reported: a method whose body raises and never returns "
         "(`def copy(self, default=None): raise UserError(...)`) blocks the "
         "operation on purpose. Medium confidence, not high: the method calls its own "
         "name on records of another model that it maps out of `self` "
@@ -314,8 +369,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
     ),
     # ---------------------------------------------------------- Performance
     "search-in-loop": RuleDoc(
-        detects="ORM queries (`search`, `search_count`, `read`) inside `for` or "
-        "`while` loops. `browse()` is not flagged: it only wraps ids and does "
+        detects="ORM queries (`search`, `search_count`, `read`, `search_read`, "
+        "`search_fetch`, `read_group`) inside `for` or `while` loops and "
+        "comprehensions. `browse()` is not flagged: it only wraps ids and does "
         "not query the database.",
         why="One query per iteration scales badly with record count.",
         fix="Move the call out of the loop and batch the results.",
@@ -328,19 +384,29 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "(`for rec in self.env[...].search(...)`) and its `else` clause run once. "
         "Loops over chunks (`split_every(...)`, `range(a, b, step)`), over a literal "
         "tuple/list of constants, and `while` loops paged with `limit=N` (N > 1) are "
-        "not reported.",
+        "not reported. The receiver must be a recordset: `self`, an `env[...]` "
+        "lookup, a loop variable over records and a local assigned from one "
+        "(`recs = self.env['x'].search([])`), but not an attribute that `__init__` "
+        "or the class body sets to a plain object (`self.client = Client()`). "
+        "Medium confidence, not high: the receiver is a local (`recs.search(..)`, "
+        "`Model = self.env['x']`), the loop is a comprehension, or the query is "
+        "`search_read` / `search_fetch` / `read_group` (Odoo's own addons run those "
+        "per company or per group); `self` / `env[...]` receivers in a `for` or "
+        "`while` stay high.",
     ),
     "create-in-loop": RuleDoc(
-        detects="`create()` called inside a loop (its iterable and `else` clause "
-        "excluded; chunked and constant-literal loops are skipped).",
+        detects="`create()` called inside a loop or comprehension (its iterable and "
+        "`else` clause excluded; chunked and constant-literal loops are skipped; "
+        "the receiver rules and confidence tiers of `search-in-loop` apply).",
         why="Each call triggers its own INSERT and recomputation round trip.",
         fix="Collect the values and call `create()` once with a list.",
         bad="for vals in vals_list:\n    self.env['my.model'].create(vals)",
         good="self.env['my.model'].create(vals_list)",
     ),
     "write-in-loop": RuleDoc(
-        detects="`write()` called inside a loop (its iterable and `else` clause "
-        "excluded; chunked and constant-literal loops are skipped).",
+        detects="`write()` called inside a loop or comprehension (its iterable and "
+        "`else` clause excluded; chunked and constant-literal loops are skipped; "
+        "the receiver rules and confidence tiers of `search-in-loop` apply).",
         why="Each call triggers its own UPDATE and recomputation round trip.",
         fix="Write once on the whole recordset when the values are identical.",
         bad="for rec in records:\n    rec.write({'state': 'done'})",
@@ -674,7 +740,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
     "view-attrs-states-removed": RuleDoc(
         detects='Elements with `attrs` or `states` (or an `<attribute name="attrs">` '
         "xpath edit) in the architecture of an `ir.ui.view` record, on Odoo 17 and "
-        "later. One finding per view. QWeb templates are not checked.",
+        "later. One finding per view. QWeb is not checked: a view of type `qweb`, a "
+        "kanban view's `<templates>` block, an element with a `t-*` directive and an "
+        "xpath into either. The `<field>` and `<button>` elements of the rest of a "
+        "kanban view are.",
         why='Odoo 17 and later refuse such a view ("Since 17.0, the attrs and states '
         'attributes are no longer used"), so the module cannot be installed or updated.',
         fix="Put the condition in the attribute itself: `invisible`, `readonly` or "
@@ -770,7 +839,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "        self.env.cr.commit()",
         good="def action_import(self):\n    self.create(rows)",
         notes="Not reported: a cursor or environment the code opened itself "
-        "(`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`), cron "
+        "(`registry.cursor()`, `self.pool.cursor()`, `api.Environment(...)`) in the "
+        "function that commits it or an enclosing one (or at module level), not "
+        "elsewhere in the file and not under a parameter of the same name, cron "
         "methods (a function with `cron` in its name), install hooks (`init`, "
         "`_auto_init`, `post_init_hook`...), a commit under an `if` that tests "
         "`test_enable` / `testing`, and a line marked "

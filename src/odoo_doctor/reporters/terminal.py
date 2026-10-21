@@ -7,15 +7,21 @@ from io import StringIO
 from typing import TYPE_CHECKING
 
 from rich.console import Console
-from rich.markup import escape
+from rich.markup import escape as _rich_escape
 from rich.table import Table
 
 from odoo_doctor.core.scoring import score_label, secondary_scores
 from odoo_doctor.core.suppression_stats import actionable_count
+from odoo_doctor.core.text import safe_text
 
 if TYPE_CHECKING:
     from odoo_doctor.core.diagnostics import Diagnostic
     from odoo_doctor.core.scoring import ScoreResult
+
+
+def escape(text: str) -> str:
+    """Rich-escape repo-derived text after :func:`safe_text` (control characters, ``::``)."""
+    return _rich_escape(safe_text(text))
 
 
 _LABEL_COLORS = {

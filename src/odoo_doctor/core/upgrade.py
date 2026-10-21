@@ -37,6 +37,7 @@ from collections.abc import Iterable
 
 from odoo_doctor.core.diagnostics import TIER_IMPACT, Diagnostic
 from odoo_doctor.core.roi import DEFAULT_EFFORT, EFFORT_BY_RULE
+from odoo_doctor.core.text import safe_text
 
 READINESS_SCHEMA_VERSION = 1
 CATEGORY = "Upgrade Safety"
@@ -182,7 +183,7 @@ def render_upgrade_report(report: dict) -> str:
     """Plain-text report for the terminal (no colour, safe to pipe)."""
     lines = [f"Upgrade readiness report (target Odoo {report['target_version']})"]
     for name, mod in report["modules"].items():
-        lines.append(f"\n{name}  readiness {mod['score']:.1f}/100")
+        lines.append(f"\n{safe_text(name)}  readiness {mod['score']:.1f}/100")
         if not mod["groups"]:
             lines.append("  no Upgrade Safety findings")
         for g in mod["groups"]:

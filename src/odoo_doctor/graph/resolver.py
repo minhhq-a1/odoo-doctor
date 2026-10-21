@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from odoo_doctor.graph.source_index import build_source_index
+from odoo_doctor.graph.source_index import SourceIndex, build_source_index
 from odoo_doctor.graph.stubs.loader import load_stubs
 
 if TYPE_CHECKING:
@@ -137,9 +137,11 @@ class SymbolResolver:
         source_path: str | None = None,
         extended_fields: dict[str, dict] | None = None,
         extended_methods: dict[str, dict] | None = None,
+        unattributed_members: set[str] | None = None,
         module_dependencies: dict[str, list[str]] | None = None,
         module_licenses: dict[str, str] | None = None,
         module_external_python: dict[str, set[str]] | None = None,
+        source_index: SourceIndex | None = None,
     ):
         self._repo_models = repo_models
         self._repo_xml_ids = repo_xml_ids
@@ -151,7 +153,10 @@ class SymbolResolver:
         # extended_methods: {model_name: {method_name: MethodInfo}} — symmetric with fields,
         # so an action_* button added to sale.order via _inherit resolves FOUND.
         self._extended_methods: dict[str, dict] = extended_methods or {}
-        self._source_index = build_source_index(source_path)
+        # Names declared by classes that extend a model the parser could not name: absence
+        # of one of them from a model proves nothing.
+        self._unattributed = set(unattributed_members or ())
+        self._source_index = source_index or build_source_index(source_path)
         self._rule_models: set[str] | None = None
         self._by_underscore: dict[str, list[str]] | None = None
         # module -> declared depends, for modules whose manifest we have seen
@@ -250,7 +255,7 @@ class SymbolResolver:
                 return SymbolLookup(ResolveResult.FOUND, "stub")
 
         # 5. Provable absence: only when the model is genuinely complete.
-        if self._model_is_complete(model_name):
+        if field_name not in self._unattributed and self._model_is_complete(model_name):
             return SymbolLookup(ResolveResult.NOT_FOUND)
 
         # 6. Otherwise we cannot prove absence.
@@ -285,7 +290,9 @@ class SymbolResolver:
                 return SymbolLookup(ResolveResult.FOUND, "stub")
 
         # 4. Provable absence: only when the model is genuinely complete.
-        if self._model_is_complete(model_name):
+        if method_name not in self._unattributed and self._model_is_complete(
+            model_name
+        ):
             return SymbolLookup(ResolveResult.NOT_FOUND)
 
         # 5. Otherwise we cannot prove absence.
@@ -306,6 +313,8 @@ class SymbolResolver:
 
         repo_model = self._repo_models.get(model_name)
         if repo_model is not None:
+            if repo_model.inherit_unresolved:
+                return False  # a parent that is not written out may add any field
             ancestors = list(repo_model.inherit) + list(repo_model.inherits.keys())
             for anc in ancestors:
                 if anc == model_name:

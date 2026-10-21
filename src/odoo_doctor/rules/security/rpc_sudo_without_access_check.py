@@ -5,16 +5,21 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import parse_python
+from odoo_doctor.core.source import parse_python, scannable_files
 from odoo_doctor.parsers.python_models import (
     _body_checks_access,
     _extract_route,
     _is_constant_config_read,
+    parse_controllers,
 )
 from odoo_doctor.rules._ast_helpers import is_test_file
 from odoo_doctor.rules.registry import rule
+
+if TYPE_CHECKING:
+    from odoo_doctor.graph.module_context import ModuleContext
 
 _FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 _SCOPES = (*_FUNCTIONS, ast.Lambda, ast.ClassDef)
@@ -58,11 +63,30 @@ _EXTRA_CHECKS = {
     tier="P1",
     severity="error",
     default_confidence="high",
-    needs_context=False,
+    needs_context=True,
     min_version="14.0",
 )
+def check_rpc_sudo_in_module(ctx: ModuleContext) -> list[Diagnostic]:
+    """Every file of the module, each route's auth resolved through the project graph."""
+    route_auth: dict[str, dict[int, str]] = {}
+    for ctrl in ctx.controllers:
+        route_auth.setdefault(ctrl.file_path, {})[ctrl.line] = ctrl.auth
+    diags: list[Diagnostic] = []
+    for path in scannable_files(ctx.path):
+        if path.name != "__manifest__.py":
+            diags.extend(
+                check_rpc_sudo_without_access_check(
+                    path, ctx.name, ctx.odoo_version, route_auth.get(str(path), {})
+                )
+            )
+    return diags
+
+
 def check_rpc_sudo_without_access_check(
-    file_path: Path, module_name: str, odoo_version: str
+    file_path: Path,
+    module_name: str,
+    odoo_version: str,
+    route_auth: dict[int, str] | None = None,
 ) -> list[Diagnostic]:
     """Flag public methods that elevate with ``sudo()`` on records the caller picked.
 
@@ -79,6 +103,8 @@ def check_rpc_sudo_without_access_check(
     tree = parse_python(file_path)
     if tree is None:
         return []
+    if route_auth is None:  # one file on its own: parents are looked up in that file
+        route_auth = {c.line: c.auth for c in parse_controllers(file_path)}
 
     diags: list[Diagnostic] = []
     for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
@@ -86,7 +112,7 @@ def check_rpc_sudo_without_access_check(
         if kind is None:
             continue
         for fn in cls.body:
-            if isinstance(fn, _FUNCTIONS) and _is_entry(fn, kind):
+            if isinstance(fn, _FUNCTIONS) and _is_entry(fn, kind, route_auth):
                 diag = _check_function(fn, file_path, module_name, odoo_version)
                 if diag is not None:
                     diags.append(diag)
@@ -106,13 +132,18 @@ def _class_kind(cls: ast.ClassDef) -> str | None:
             for t in node.targets
         ):
             return "model"
+    # A subclass of any controller (`CustomerPortal`, `WebsiteSale`, a class of another
+    # addon): what makes a method reachable is its route, not the name of the base.
+    if any(isinstance(n, _FUNCTIONS) and _extract_route(n) for n in cls.body):
+        return "controller"
     return None
 
 
-def _is_entry(fn, kind: str) -> bool:
+def _is_entry(fn, kind: str, route_auth: dict[int, str]) -> bool:
     if kind == "controller":
-        route = _extract_route(fn)
-        return route is not None and route[1] not in ("public", "none")
+        # public routes are left to public-controller-sudo-risk, which also takes the ones
+        # whose auth is inherited from a parent route it cannot see
+        return route_auth.get(fn.lineno, "unknown") not in ("public", "none", "unknown")
     if fn.name.startswith("_") or fn.name in _ORM_OVERRIDES:
         return False
     decorators = {ast.unparse(d).split("(")[0] for d in fn.decorator_list}

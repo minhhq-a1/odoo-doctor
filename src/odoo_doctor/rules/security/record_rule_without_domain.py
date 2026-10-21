@@ -6,6 +6,7 @@ from __future__ import annotations
 from lxml import etree
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable
 from odoo_doctor.graph.module_context import ModuleContext
 from odoo_doctor.rules.registry import rule
 
@@ -31,7 +32,7 @@ def check_record_rule_without_domain(ctx: ModuleContext) -> list[Diagnostic]:
 
     for data_file in ctx.manifest.data:
         path = ctx.path / data_file
-        if path.suffix != ".xml" or not path.exists():
+        if path.suffix != ".xml" or not is_scannable(path, ctx.path):
             continue
         try:
             tree = etree.parse(str(path))

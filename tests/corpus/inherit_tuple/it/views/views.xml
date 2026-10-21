@@ -1,0 +1,71 @@
+<odoo>
+  <record id="view_tup_form" model="ir.ui.view">
+    <field name="name">it.tup.form</field>
+    <field name="model">it.tup</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="message_ids"/>
+        <field name="message_follower_ids"/>
+        <field name="activity_ids"/>
+      </form>
+    </field>
+  </record>
+  <record id="view_lst_form" model="ir.ui.view">
+    <field name="name">it.lst.form</field>
+    <field name="model">it.lst</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="message_ids"/>
+        <field name="activity_ids"/>
+      </form>
+    </field>
+  </record>
+  <record id="view_base_form" model="ir.ui.view">
+    <field name="name">it.base.form</field>
+    <field name="model">it.base</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="code"/>
+        <field name="added"/>
+        <field name="ghost_base"/>
+      </form>
+    </field>
+  </record>
+  <record id="view_proto_form" model="ir.ui.view">
+    <field name="name">it.proto.form</field>
+    <field name="model">it.proto</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="code"/>
+        <field name="added"/>
+        <field name="extra"/>
+        <field name="ghost_proto"/>
+      </form>
+    </field>
+  </record>
+  <record id="view_dyn_form" model="ir.ui.view">
+    <field name="name">it.dyn.form</field>
+    <field name="model">it.dyn</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="message_ids"/>
+        <field name="ghost_dyn"/>
+      </form>
+    </field>
+  </record>
+  <record id="view_unknown_form" model="ir.ui.view">
+    <field name="name">it.unknown.form</field>
+    <field name="model">it.unknown</field>
+    <field name="arch" type="xml">
+      <form>
+        <field name="name"/>
+        <field name="ghost_unknown"/>
+      </form>
+    </field>
+  </record>
+</odoo>

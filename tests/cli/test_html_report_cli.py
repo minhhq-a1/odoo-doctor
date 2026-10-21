@@ -20,7 +20,7 @@ def _project(root: Path, *, bad: bool) -> Path:
         "'installable': True, 'license': 'LGPL-3'}"
     )
     (mod / "x.py").write_text(
-        'def f(self, name):\n    self.env.cr.execute(f"SELECT {name}")\n'
+        'class C:\n    def f(self, name):\n        self.env.cr.execute(f"SELECT {name}")\n'
         if bad
         else "def f(self):\n    return 1\n"
     )
@@ -158,7 +158,7 @@ def test_baseline_is_named_in_meta_and_hides_known_findings(tmp_path: Path):
     _scan(tmp_path, str(addons), "--write-baseline", str(base))
     # a new finding that the baseline does not know
     (addons / "m" / "y.py").write_text(
-        'def g(self, name):\n    self.env.cr.execute(f"SELECT {name}")\n'
+        'class C:\n    def g(self, name):\n        self.env.cr.execute(f"SELECT {name}")\n'
     )
     report = tmp_path / "r.html"
     done = _scan(tmp_path, str(addons), "--baseline", str(base), "--html", str(report))
@@ -369,7 +369,7 @@ def test_absolute_baseline_path_never_reaches_the_page(tmp_path: Path):
         (addons / "m" / "y.py").unlink(missing_ok=True)
         _scan(tmp_path, str(addons), "--write-baseline", str(base))
         (addons / "m" / "y.py").write_text(  # unknown to the baseline, else no report
-            'def g(self, name):\n    self.env.cr.execute(f"SELECT {name}")\n'
+            'class C:\n    def g(self, name):\n        self.env.cr.execute(f"SELECT {name}")\n'
         )
         report = tmp_path / "r.html"
         done = _scan(

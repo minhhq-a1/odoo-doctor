@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,7 +20,10 @@ else:
     except ImportError:
         import tomli as tomllib  # type: ignore[no-redef]
 
+from odoo_doctor.adapters.cache import ruff_config_problem
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import lint_targets, warn_skipped
+from odoo_doctor.core.text import safe_text
 
 
 @dataclass
@@ -53,14 +58,45 @@ class RuffAdapter:
                 )
             ]
 
-        try:
-            result = subprocess.run(
-                ["ruff", "check", "--output-format=json", str(module_path)],
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
+        module = Path(module_path).resolve()
+        targets = lint_targets(module)
+        if not targets:
+            return []
+        by_file = targets != [module]
+        # ruff opens the config and every `extend` target itself: a FIFO there hangs it
+        problem = ruff_config_problem(module)
+        if problem is not None:
+            warn_skipped(
+                problem[0],
+                f"{problem[1]}: the repository's ruff configuration is ignored (--isolated)",
             )
+        try:
+            # The repo's own ruff.toml / pyproject.toml [tool.ruff] is honoured (the team's
+            # rules), found by ruff from the linted paths, never from the cwd. Ruff cannot run
+            # code from config, but `cache-dir` could make it write elsewhere, so: --no-cache
+            # (also no .ruff_cache in the repo), a scratch cwd and HOME (no user-level config,
+            # nothing written to the repo) and a secret-free environment. Residual risk: a
+            # hostile config can disable or change ruff's own findings (not the native rules).
+            with tempfile.TemporaryDirectory(prefix="odoo-doctor-ruff-") as scratch:
+                result = subprocess.run(
+                    [
+                        "ruff",
+                        "check",
+                        "--no-cache",
+                        *(["--isolated"] if problem is not None else []),
+                        # ruff's default excludes (node_modules ...) for files listed one by one
+                        *(["--force-exclude"] if by_file else []),
+                        "--output-format=json",
+                        *map(str, targets),  # absolute: cwd is the scratch dir
+                    ],
+                    capture_output=True,
+                    stdin=subprocess.DEVNULL,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                    cwd=scratch,
+                    env=_safe_env(scratch),
+                )
         except subprocess.TimeoutExpired:
             return [
                 _adapter_warning(
@@ -117,7 +153,8 @@ class RuffAdapter:
                     odoo_version,
                     "process error",
                     f"Ruff exited with status {result.returncode} but produced no findings; "
-                    "the run may have failed (configuration or internal error).",
+                    "the run may have failed (configuration or internal error"
+                    f"{_cause(result.stderr)}).",
                 )
             ]
         return diags
@@ -172,6 +209,23 @@ class RuffAdapter:
                 confidence=info.get("confidence", "high"),
             )
         return result
+
+
+def _cause(stderr: str) -> str:
+    """Ruff's own complaint (last line: the root cause of a bad or `required-version` config)."""
+    lines = [ln.strip() for ln in stderr.splitlines() if ln.strip()]
+    line = lines[-1].removeprefix("Cause: ") if lines else ""
+    return f": {safe_text(line)[:200]}" if line else ""
+
+
+_ENV_KEEP = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "COMSPEC", "PATHEXT")
+
+
+def _safe_env(scratch: str) -> dict[str, str]:
+    """Only what ruff needs to start: no tokens, no ``RUFF_*`` overrides."""
+    env = {k: os.environ[k] for k in _ENV_KEEP if k in os.environ}
+    env.update(HOME=scratch, TMPDIR=scratch, TEMP=scratch)
+    return env
 
 
 def _adapter_warning(

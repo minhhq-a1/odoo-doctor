@@ -70,3 +70,67 @@ def test_iterable_of_a_loop_is_not_inside_the_loop(tmp_path: Path):
         "            rec.name\n"
     )
     assert check_create_write_in_loop(f, "m", "19.0") == []
+
+
+def _create_write(tmp_path: Path, src: str) -> list[tuple[str, int]]:
+    f = tmp_path / "m.py"
+    f.write_text(dedent(src))
+    return [(d.rule, d.line) for d in check_create_write_in_loop(f, "m", "19.0")]
+
+
+def test_create_in_a_comprehension_is_a_create_per_item(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self, vals_list):
+                a = [self.env["x"].create(v) for v in vals_list]
+                b = list(rec.write({"a": 1}) for rec in self)
+                return a, b
+        """
+    assert _create_write(tmp_path, src) == [("create-in-loop", 3), ("write-in-loop", 4)]
+
+
+def test_attribute_set_in_init_is_not_a_recordset(tmp_path: Path):
+    src = """\
+        class Service:
+            def __init__(self, client):
+                self.client = client
+
+            def f(self, items):
+                for i in items:
+                    self.client.create(i)
+                    self.client.write(i)
+        """
+    assert _create_write(tmp_path, src) == []
+
+
+def test_write_on_a_local_recordset_is_a_write_per_record(tmp_path: Path):
+    src = """\
+        class A:
+            def f(self):
+                recs = self.env["x"].search([])
+                for rec in recs:
+                    rec.write({"a": 1})
+        """
+    assert _create_write(tmp_path, src) == [("write-in-loop", 5)]
+
+
+def test_inferred_receivers_are_medium(tmp_path: Path):
+    f = tmp_path / "m.py"
+    f.write_text(
+        dedent("""\
+        class A:
+            def f(self, vals_list):
+                for rec in self:
+                    rec.write({"a": 1})
+                recs = self.env["x"].search([])
+                for r in recs:
+                    r.write({"a": 1})
+                [self.env["x"].create(v) for v in vals_list]
+        """)
+    )
+    diags = check_create_write_in_loop(f, "m", "19.0")
+    assert [(d.rule, d.line, d.confidence) for d in diags] == [
+        ("create-in-loop", 8, "medium"),
+        ("write-in-loop", 4, "high"),
+        ("write-in-loop", 7, "medium"),
+    ]

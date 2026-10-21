@@ -16,6 +16,8 @@ policy below, and it is the contract intended for 1.0.
   *Deprecated* in the `CHANGELOG.md` for at least one minor release (and, where the
   surface can warn at run time, it warns on stderr), and only then removed. The one
   exception is a security fix.
+- **stderr is not a contract.** The `[WARN]` / `[ERROR]` lines (and any other text) on stderr may change
+  wording or appear and disappear between releases; script against exit codes and `--json`.
 - **Rule IDs are permanent.** A rule ID is never reused for a different check. If a rule
   must be renamed, the old ID keeps working (config, `disable=` comments, baselines) for
   at least one minor release.
@@ -124,7 +126,8 @@ the deprecation window above.
 
 Everything else may change in any release: modules other than `plugin_api`, the graph and
 parsers, the pipeline functions, the scan cache file format, finding messages and help
-text, the order of findings, and the wording of terminal output.
+text, the order of findings, and the wording of terminal output. The language server's
+scan reuse and its `ODOO_DOCTOR_LSP_REUSE` switch are not part of the contract either.
 
 ## Changing the public surface
 

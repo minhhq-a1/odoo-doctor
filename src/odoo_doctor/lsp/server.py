@@ -4,7 +4,8 @@
 Static analysis reads files from disk, so diagnostics refresh on startup, on save and on
 the ``odooDoctor.rescan`` command, not per keystroke. A scan covers a whole workspace
 folder, runs one at a time on a worker thread, and requests that arrive meanwhile are
-coalesced into a single rerun.
+coalesced into a single rerun. Saves wait a moment first so a burst of them is one scan, and
+each scan reuses what the previous one of the folder computed (see ``core/reuse.py``).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from pygls.uris import from_fs_path, to_fs_path
 from odoo_doctor import __version__
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable
 from odoo_doctor.lsp.actions import (
     DISABLE_RULE_COMMAND,
     code_actions_for,
@@ -29,7 +31,7 @@ from odoo_doctor.lsp.actions import (
     line_in_sync,
 )
 from odoo_doctor.lsp.convert import SOURCE, file_diagnostics, split_lines
-from odoo_doctor.lsp.engine import addons_found, scan_project
+from odoo_doctor.lsp.engine import addons_found, forget, scan_project
 from odoo_doctor.lsp.hover import hover_for
 from odoo_doctor.rules.registry import default_registry
 
@@ -44,6 +46,9 @@ def _absolute(path: str | Path) -> Path:
 
 
 class OdooDoctorServer(LanguageServer):
+    # A save waits this long for the next ones (save all, format on save) so they share a scan.
+    SAVE_DEBOUNCE_SECONDS = 0.3
+
     def __init__(self) -> None:
         super().__init__("odoo-doctor", __version__)
         # Folders as reported by the client (absolute, unresolved), and the scan roots
@@ -55,6 +60,7 @@ class OdooDoctorServer(LanguageServer):
         self._published: dict[Path, set[str]] = {}
         self._running: set[Path] = set()
         self._dirty: set[Path] = set()
+        self._saved: set[Path] = set()  # roots with a save waiting out the debounce
         # Roots already told that no addon was found, so a save does not repeat it.
         self._warned_empty: set[Path] = set()
         # One worker: scans share process-wide parse caches and must not overlap.
@@ -89,6 +95,7 @@ class OdooDoctorServer(LanguageServer):
         )
 
     def _clear(self, root: Path) -> None:
+        forget(root)
         self.findings.pop(root, None)
         for uri in self._published.pop(root, set()):
             self.text_document_publish_diagnostics(
@@ -130,6 +137,8 @@ class OdooDoctorServer(LanguageServer):
 
     async def request_scan(self, root: Path) -> None:
         """Scan *root* now, or after the scan that is already running for it."""
+        if root not in self.roots:  # closed since the request: stays closed
+            return
         self._dirty.add(root)
         if root in self._running:
             return
@@ -151,10 +160,24 @@ class OdooDoctorServer(LanguageServer):
                         )
                     )
                     continue  # a request that arrived meanwhile still gets its rerun
+                if root not in self.roots:  # closed during the scan
+                    forget(root)
+                    break
                 self._publish(root, result)
                 await self._report_empty(root, result)
         finally:
             self._running.discard(root)
+
+    async def request_scan_after_save(self, root: Path) -> None:
+        """Like :meth:`request_scan`, after a short wait that saves arriving meanwhile share."""
+        if root in self._saved:
+            return
+        self._saved.add(root)
+        try:
+            await asyncio.sleep(self.SAVE_DEBOUNCE_SECONDS)
+        finally:
+            self._saved.discard(root)
+        await self.request_scan(root)
 
     async def _report_empty(
         self, root: Path, result: dict[str, list[Diagnostic]]
@@ -219,7 +242,7 @@ def _workspace_folders(params: lsp.InitializeParams) -> list[Path]:
 
 def _read_disk(uri: str) -> str | None:
     path = to_fs_path(uri)
-    if path is None:
+    if path is None or not is_scannable(path):
         return None
     try:
         return Path(path).read_text(encoding="utf-8")
@@ -250,7 +273,7 @@ def create_server() -> OdooDoctorServer:
     async def did_save(params: lsp.DidSaveTextDocumentParams) -> None:
         root = server.root_of(params.text_document.uri)
         if root is not None:
-            await server.request_scan(root)
+            await server.request_scan_after_save(root)
 
     @server.feature(
         lsp.TEXT_DOCUMENT_CODE_ACTION,
@@ -299,6 +322,8 @@ def create_server() -> OdooDoctorServer:
 
     @server.command(RESCAN_COMMAND)
     async def rescan() -> None:
+        for root in server.roots:
+            forget(root)  # a clean scan, the escape hatch if a result ever looks stale
         await asyncio.gather(*(server.request_scan(root) for root in server.roots))
 
     @server.command(DISABLE_RULE_COMMAND)

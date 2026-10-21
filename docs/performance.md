@@ -28,9 +28,21 @@ Reading the numbers:
 - Scanning is single-threaded and scales roughly with the amount of Python, XML and CSV
   parsed: about 115 ms per module on this tree.
 - The scan cache is all-or-nothing: it is a fingerprint of every scanned file, the config,
-  the Odoo version, the ruleset and the tool version. Any change rescans everything, so the
+  the Odoo version, the ruleset, each third-party rule plugin (installed version and a hash of
+  its rule module), the `ruff` and `pylint` versions and the odoo-doctor version. Any change rescans everything, so the
   cache helps repeated runs on an unchanged tree (re-running CI, switching reports), not
-  incremental edits.
+  incremental edits. Known limits of the key: `odoo_source_path` enters it as a path string only, so
+  after a `git pull` in an Odoo clone run once without `--cache`; a plugin's identity is its distribution
+  version plus a hash of the rule's own module file, so a change in another file of the plugin package
+  is not seen; the `pylint` identity is `pylint --version` plus the pylint-odoo version read by the
+  interpreter behind the `pylint` script (`unknown` when that cannot be found, e.g. a Windows launcher,
+  and then upgrading pylint-odoo alone is not seen).
+- Use `--cache` only on repositories you trust (running it in CI on your own repository is fine). The
+  cache file lives in the scanned tree (`.odoo_doctor_cache/scan_cache.json`) and its key is computable
+  by anyone who can read the tree, so a cache file committed by a repository's author can forge a hit
+  and make a scan report whatever findings and scores it holds. Odoo Doctor reads it only if it is a
+  regular file inside the repository, under 16 MiB (a larger one is ignored with a warning and rewritten),
+  but it cannot tell a forged entry from a real one.
 - For a pull request, `--diff <ref>` scans only the changed files, and `--module` limits a
   scan to the modules you name.
 - Timings depend on the machine and are a guide, not a guarantee; there is no performance

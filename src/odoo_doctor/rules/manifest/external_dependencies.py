@@ -8,7 +8,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import parse_python
+from odoo_doctor.core.source import parse_python, scannable_files
 from odoo_doctor.rules._ast_helpers import is_test_file
 from odoo_doctor.rules.registry import rule
 
@@ -147,7 +147,7 @@ def check_missing_external_dependency(ctx: ModuleContext) -> list[Diagnostic]:
     first_site: dict[str, tuple[str, int]] = {}
     count: dict[str, int] = {}
 
-    for py_file in sorted(ctx.path.rglob("*.py")):
+    for py_file in sorted(scannable_files(ctx.path)):
         rel = py_file.relative_to(ctx.path)
         if is_test_file(py_file, ctx.name) or "migrations" in rel.parts:
             continue

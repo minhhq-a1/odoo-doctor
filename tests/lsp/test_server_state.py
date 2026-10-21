@@ -301,3 +301,60 @@ def test_addons_appearing_clears_the_warning_so_it_can_come_back(
     asyncio.run(server.request_scan(root))
 
     assert len(server.shown) == 2
+
+
+def test_a_burst_of_saves_is_one_scan(server, tmp_path: Path, monkeypatch):
+    server.set_roots([tmp_path])
+    server.SAVE_DEBOUNCE_SECONDS = 0.05
+    calls = []
+    monkeypatch.setattr(srv, "scan_project", lambda root: calls.append(root) or {})
+
+    async def go():
+        root = tmp_path.resolve()
+        await asyncio.gather(*(server.request_scan_after_save(root) for _ in range(5)))
+
+    asyncio.run(go())
+    assert len(calls) == 1
+
+
+def test_forget_does_not_wait_for_a_running_scan(tmp_path: Path):
+    from odoo_doctor.core.reuse import ScanReuse
+    from odoo_doctor.lsp import engine
+
+    root = tmp_path.resolve()
+    engine._reuse[root] = ScanReuse()
+    done = threading.Event()
+    with engine._scan_lock:  # a scan is running
+        t = threading.Thread(target=lambda: (engine.forget(root), done.set()))
+        t.start()
+        assert done.wait(5)
+    t.join()
+    assert root not in engine._reuse
+
+
+def test_a_closed_folder_stays_closed(server, tmp_path: Path, monkeypatch):
+    server.set_roots([tmp_path])
+    root = tmp_path.resolve()
+    calls = []
+    monkeypatch.setattr(srv, "scan_project", lambda r: calls.append(r) or {})
+    server.set_roots([])  # the folder was closed
+    asyncio.run(server.request_scan(root))
+    asyncio.run(server.request_scan_after_save(root))
+    assert calls == [] and server.published == []
+
+
+def test_a_folder_closed_during_its_scan_is_not_published(
+    server, tmp_path: Path, monkeypatch
+):
+    server.set_roots([tmp_path])
+    root = tmp_path.resolve()
+    f = tmp_path / "m.py"
+    f.write_text("x\n")
+
+    def scan(r):
+        server.set_roots([])  # closed while scanning
+        return {f.resolve().as_posix(): [_finding(f)]}
+
+    monkeypatch.setattr(srv, "scan_project", scan)
+    asyncio.run(server.request_scan(root))
+    assert server.published == []

@@ -6,15 +6,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from odoo_doctor.core.source import is_scannable, scannable_files
 from odoo_doctor.discovery.addons import discover_addons
 from odoo_doctor.discovery.odoo_version import detect_odoo_version
 from odoo_doctor.graph.resolver import SymbolResolver
+from odoo_doctor.graph.source_index import SourceIndex
 from odoo_doctor.parsers.manifest import ManifestData, parse_manifest
 from odoo_doctor.parsers.python_models import (
+    ControllerClass,
     ControllerInfo,
     ModelInfo,
-    parse_controllers,
+    parse_controller_classes,
     parse_models,
+    resolve_route_auth,
 )
 from odoo_doctor.parsers.security_csv import AccessRule, parse_access_csv
 from odoo_doctor.parsers.xml_records import (
@@ -76,6 +80,7 @@ def _add_model(models: dict[str, ModelInfo], m: ModelInfo) -> None:
     existing.fields.update(m.fields)
     existing.methods.update(m.methods)
     existing.inherit = list(dict.fromkeys(existing.inherit + m.inherit))
+    existing.inherit_unresolved |= m.inherit_unresolved
     for name, target in m.inherits.items():
         existing.inherits.setdefault(name, target)
     if m.defines and not existing.defines:
@@ -112,6 +117,7 @@ def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
         if other is base:
             continue
         merged.inherit.extend(i for i in other.inherit if i not in merged.inherit)
+        merged.inherit_unresolved |= other.inherit_unresolved
         for name, target in other.inherits.items():
             merged.inherits.setdefault(name, target)
         for name, info in other.fields.items():
@@ -121,20 +127,54 @@ def _merge_declarations(declarations: list[ModelInfo]) -> ModelInfo:
     return merged
 
 
+def _with_extension_parents(base: ModelInfo, extensions: list[ModelInfo]) -> ModelInfo:
+    """A copy of ``base`` that also lists the parents the extensions of other modules add.
+
+    ``_inherit = ['x.base', 'mail.thread']`` in a module that does not define ``x.base``
+    gives ``x.base`` the mixin's fields, and a parent that is not written out means the
+    model may have any field.
+    """
+    merged = replace(
+        base,
+        inherit=list(base.inherit),
+        inherits=dict(base.inherits),
+    )
+    for ext in extensions:
+        merged.inherit.extend(
+            i for i in ext.inherit if i != base.name and i not in merged.inherit
+        )
+        for name, target in ext.inherits.items():
+            merged.inherits.setdefault(name, target)
+        merged.inherit_unresolved |= ext.inherit_unresolved
+    return merged
+
+
 def build_project_graph(
     addon_paths: list[Path],
     odoo_version: str = "unknown",
     target_modules: list[str] | None = None,
     odoo_source_path: str | None = None,
     force_version: bool = False,
+    source_index: SourceIndex | None = None,
 ) -> ProjectGraph:
-    """Discover addons, parse all inputs, build shared resolver and per-module contexts."""
+    """Discover addons, parse all inputs, build shared resolver and per-module contexts.
+
+    *source_index* is the index of ``odoo_source_path`` when the caller already holds it.
+    """
     addons = discover_addons(addon_paths, target_modules=target_modules)
 
     # First pass: collect all models and XML IDs across all modules (for resolver)
     declarations: dict[str, list[ModelInfo]] = {}
     all_xml_ids: dict[str, XmlIdInfo] = {}
     module_data: dict[str, dict] = {}
+    # Every class of every module, so a route override finds the route it overrides.
+    controller_classes: list[ControllerClass] = []
+    # Classes with no `_name` that extend a model: their extra parents belong to that model
+    # even when another module defines it.
+    extensions: dict[str, list[ModelInfo]] = {}
+    # Fields and methods of classes that extend a model the parser cannot name
+    # (`_inherit = MIXINS`, no `_name`): they may belong to any model.
+    unattributed: set[str] = set()
     # Fields extended via _inherit on stub-known models (e.g. custom_note on sale.order)
     _inherit_extensions: dict[str, dict] = {}
     # Methods extended via _inherit on stub-known models (e.g. action_foo on sale.order)
@@ -156,13 +196,17 @@ def build_project_graph(
         # Parse Python files
         models: dict[str, ModelInfo] = {}
         controllers: list[ControllerInfo] = []
-        for py_file in addon.path.rglob("*.py"):
+        for py_file in scannable_files(addon.path):
             if py_file.name == "__manifest__.py":
                 continue
             for m in parse_models(py_file):
                 m.module = addon.name
+                if m.name is None and not m.inherit:
+                    unattributed.update(m.fields, m.methods)
                 _add_model(models, m)
-            controllers.extend(parse_controllers(py_file))
+            for cls in parse_controller_classes(py_file):
+                controller_classes.append(cls)
+                controllers.extend(cls.routes.values())
 
         # Parse XML files
         xml_ids: dict[str, XmlIdInfo] = {}
@@ -170,7 +214,7 @@ def build_project_graph(
         views: list[ViewInfo] = []
         for data_file in manifest.data:
             xml_path = addon.path / data_file
-            if xml_path.suffix == ".xml" and xml_path.exists():
+            if xml_path.suffix == ".xml" and is_scannable(xml_path, addon.path):
                 for rec in parse_xml_records(xml_path, module_name=addon.name):
                     xml_records.append(rec)
                     xml_ids.setdefault(rec.xml_id, rec)
@@ -179,7 +223,7 @@ def build_project_graph(
         # Parse security CSV
         access_rules: list[AccessRule] = []
         csv_path = addon.path / "security" / "ir.model.access.csv"
-        if csv_path.exists():
+        if is_scannable(csv_path, addon.path):
             access_rules = parse_access_csv(csv_path, module_name=addon.name)
 
         # Collect every declaration of a model that has a _name. Several modules may
@@ -188,6 +232,8 @@ def build_project_graph(
         for key, m in models.items():
             if m.name is not None:
                 declarations.setdefault(key, []).append(m)
+            elif m.inherit:
+                extensions.setdefault(key, []).append(m)
 
         # Track inherit-only extensions — we'll merge them after all modules are processed
         for key, m in models.items():
@@ -216,9 +262,14 @@ def build_project_graph(
             "access_rules": access_rules,
         }
 
+    resolve_route_auth(controller_classes)
+
     all_models = {
         name: _merge_declarations(decls) for name, decls in declarations.items()
     }
+    for key, exts in extensions.items():
+        if key in all_models:
+            all_models[key] = _with_extension_parents(all_models[key], exts)
 
     # Post-loop: record all fields added to stub-known models via _inherit in the repo.
     # We pass these as 'extended_fields' to the resolver so it can resolve them as FOUND
@@ -244,8 +295,10 @@ def build_project_graph(
         repo_xml_ids=all_xml_ids,
         stub_version=resolver_version,
         source_path=odoo_source_path,
+        source_index=source_index,
         extended_fields=extended_fields,
         extended_methods=extended_methods,
+        unattributed_members=unattributed,
         module_dependencies={
             name: list(data["manifest"].depends) for name, data in module_data.items()
         },

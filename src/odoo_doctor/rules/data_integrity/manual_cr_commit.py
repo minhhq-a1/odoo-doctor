@@ -53,10 +53,14 @@ def _creates_own_cursor(node: ast.expr | None) -> bool:
     return name in ("cursor", "Environment")
 
 
-def _own_names(tree: ast.AST) -> set[str]:
-    """Names bound to a cursor or environment the code opened itself."""
+def _own_names(scope: ast.AST) -> set[str]:
+    """Names bound to a cursor or environment *scope* opened itself, not its nested functions."""
     own: set[str] = set()
-    for node in ast.walk(tree):
+    todo = list(ast.iter_child_nodes(scope))
+    while todo:
+        node = todo.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
         if isinstance(node, ast.Assign) and _creates_own_cursor(node.value):
             own.update(t.id for t in node.targets if isinstance(t, ast.Name))
         elif isinstance(node, (ast.With, ast.AsyncWith)):
@@ -65,7 +69,15 @@ def _own_names(tree: ast.AST) -> set[str]:
                     item.optional_vars, ast.Name
                 ):
                     own.add(item.optional_vars.id)
+        todo.extend(ast.iter_child_nodes(node))
     return own
+
+
+def _parameter_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    args = func.args
+    names = [a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs)]
+    names += [a.arg for a in (args.vararg, args.kwarg) if a]
+    return set(names)
 
 
 # Methods Odoo itself calls in the middle of a write, a computation or a check. A commit
@@ -98,8 +110,9 @@ def _is_orm_hook(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 
 class _Finder(ast.NodeVisitor):
-    def __init__(self, own: set[str]) -> None:
-        self.own = own
+    def __init__(self, module_own: set[str]) -> None:
+        # (cursors opened, parameters) of the module body, then of each enclosing function.
+        self._own: list[tuple[set[str], set[str]]] = [(module_own, set())]
         self.found: list[tuple[ast.Call, str]] = []
         self._functions: list[str] = []
         self._hooks: list[bool] = []
@@ -108,7 +121,9 @@ class _Finder(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._functions.append(node.name)
         self._hooks.append(_is_orm_hook(node))
+        self._own.append((_own_names(node), _parameter_names(node)))
         self.generic_visit(node)
+        self._own.pop()
         self._hooks.pop()
         self._functions.pop()
 
@@ -131,10 +146,19 @@ class _Finder(ast.NodeVisitor):
             return
         if self._guarded or self._exempt_function():
             return
-        if chain[0] in self.own:
+        if self._is_own(chain[0]):
             return  # a cursor this code opened: committing it is its job
         in_hook = chain[0] in ("self", "cls") and any(self._hooks)
         self.found.append((node, "hook" if in_hook else "other"))
+
+    def _is_own(self, name: str) -> bool:
+        """The nearest scope that binds *name* opened it (a parameter shadows an outer one)."""
+        for own, params in reversed(self._own):
+            if name in own:
+                return True
+            if name in params:
+                return False
+        return False
 
     def _exempt_function(self) -> bool:
         return any(

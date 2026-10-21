@@ -199,3 +199,30 @@ def test_pylint_does_not_execute_repo_init_hook(tmp_path: Path, monkeypatch):
     diags = PylintOdooAdapter().run((repo / "m").resolve(), "17.0")
     assert not marker.exists()
     assert any(not d.rule.startswith("adapter-") for d in diags)
+
+
+def test_pylint_command_lists_files_when_the_tree_holds_a_fifo(
+    tmp_path: Path, monkeypatch
+):
+    """pylint opens every .py it finds, so a FIFO named .py must never reach it."""
+    import os
+
+    import pytest
+
+    import odoo_doctor.adapters.pylint_odoo.adapter as mod
+
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("no os.mkfifo")
+    repo, _ = _addon_with_hostile_pylintrc(tmp_path)
+    os.mkfifo(repo / "m" / "pipe.py")
+    seen: dict = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(mod.shutil, "which", lambda _n: "/usr/bin/pylint")
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    PylintOdooAdapter().run(repo / "m", "17.0")
+    targets = [a for a in seen["cmd"] if a.endswith(".py")]
+    assert targets and not any(a.endswith("pipe.py") for a in targets)

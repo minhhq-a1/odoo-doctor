@@ -7,6 +7,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from odoo_doctor.core.source import is_scannable
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -96,7 +98,7 @@ def _find_config_chain(directory: Path) -> list[Path]:
             break
         seen.add(key)
         candidate = current / "odoo-doctor.toml"
-        if candidate.is_file():
+        if is_scannable(candidate):
             chain.append(candidate)
         parent = current.parent
         if parent == current:

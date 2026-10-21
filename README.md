@@ -33,6 +33,10 @@ odoo-doctor scan . --html report.html
 
 # 7. Upgrade readiness: how far is each module from Odoo 19?
 odoo-doctor scan . --odoo-version 19.0 --upgrade-report
+
+# 8. Reuse the last scan when nothing changed (`--cache`; only on repositories you trust:
+#    a cache file committed to the repo can forge a hit)
+odoo-doctor scan . --cache
 ```
 
 **Upgrade readiness.** `--upgrade-report` (with `--odoo-version <target>`) groups the Upgrade
@@ -104,7 +108,7 @@ empty report, with a warning). See [docs/upgrade-report.md](docs/upgrade-report.
 | `kanban-legacy-templates` | P1 | Upgrade Safety |
 | `hardcoded-company-or-currency` | P2 | Correctness |
 
-Plus Ruff and Pylint-Odoo findings when those tools are installed.
+Plus Ruff and Pylint-Odoo findings when those tools are installed. Ruff reads the repository's own Ruff configuration (`ruff.toml`, `[tool.ruff]`), run with no cache and from a scratch directory; a hostile repo's Ruff config can therefore hide Ruff's own findings, never Odoo Doctor's native rules. Pylint-Odoo runs isolated: its configuration is ignored because Pylint runs `init-hook` code from it (filter its findings with `[ignore] rules` in `odoo-doctor.toml`). In terminal and PR-comment text, a `::` that came from the repo (a file or module name) is shown with an invisible zero-width space between the colons, so copy-pasting such a name keeps that character.
 
 The full, generated reference (55 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule

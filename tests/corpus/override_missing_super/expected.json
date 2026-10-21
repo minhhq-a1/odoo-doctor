@@ -38,5 +38,15 @@
     "override-missing-super",
     "real_missing_super/models/thing.py",
     "high"
+  ],
+  [
+    "override-missing-super",
+    "super_other_method/models/thing.py",
+    "high"
+  ],
+  [
+    "override-missing-super",
+    "super_other_method/models/thing.py",
+    "high"
   ]
 ]

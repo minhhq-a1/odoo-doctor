@@ -23,7 +23,7 @@ def _addon(root: Path, *, bad: bool) -> Path:
         "'installable': True, 'license': 'LGPL-3'}"
     )
     (mod / "x.py").write_text(
-        'def f(self, name):\n    self.env.cr.execute(f"SELECT {name}")\n'
+        'class C:\n    def f(self, name):\n        self.env.cr.execute(f"SELECT {name}")\n'
         if bad
         else "def f(self):\n    return 1\n"
     )

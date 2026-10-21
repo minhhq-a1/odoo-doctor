@@ -8,16 +8,22 @@ from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import parse_python
-from odoo_doctor.rules._ast_helpers import (
-    is_bounded_loop,
-    is_test_file,
-    per_iteration_nodes,
-    receiver_is_orm,
-)
+from odoo_doctor.rules._ast_helpers import is_test_file, orm_calls_in_loops
 from odoo_doctor.rules.registry import rule
 
+# Queries that Odoo's own addons run per group or per company inside loops.
+_AGGREGATES = {"search_read", "search_fetch", "read_group", "_read_group"}
+
 # browse() only wraps ids in a recordset; it does not hit the database.
-_ORM_METHODS = {"search", "search_count", "read"}
+_ORM_METHODS = {
+    "search",
+    "search_count",
+    "read",
+    "search_read",
+    "search_fetch",
+    "read_group",
+    "_read_group",
+}
 
 
 @rule(
@@ -40,36 +46,29 @@ def check_search_in_loop(
     if tree is None:
         return []
 
-    _walk_for_loops(tree, diags, file_path, module_name, odoo_version)
+    for node, loop, guessed in orm_calls_in_loops(tree, _ORM_METHODS):
+        if isinstance(loop, ast.While) and _is_paged(node):
+            continue
+        method = node.func.attr
+        diags.append(
+            Diagnostic(
+                module=module_name,
+                file_path=str(file_path),
+                line=node.lineno,
+                column=node.col_offset,
+                rule="search-in-loop",
+                category="Performance",
+                severity="error",
+                tier="P1",
+                source="native",
+                confidence="medium" if guessed or method in _AGGREGATES else "high",
+                title=f"ORM '{method}' called inside loop",
+                message=f"'{method}()' at line {node.lineno} is called inside a loop. Consider batching.",
+                help=f"Move the '{method}()' call outside the loop and batch the operation.",
+                odoo_version=odoo_version,
+            )
+        )
     return diags
-
-
-def _walk_for_loops(
-    node: ast.AST,
-    diags: list[Diagnostic],
-    file_path: Path,
-    module: str,
-    version: str,
-    orm_vars: set[str] | None = None,
-) -> None:
-    """Recursively find ORM calls inside for/while loops."""
-    orm_vars = set(orm_vars) if orm_vars else set()
-
-    if isinstance(node, ast.For):
-        from odoo_doctor.rules._ast_helpers import node_is_orm
-
-        if node_is_orm(node.iter, orm_vars):
-            if isinstance(node.target, ast.Name):
-                orm_vars.add(node.target.id)
-            elif isinstance(node.target, ast.Tuple):
-                for el in node.target.elts:
-                    if isinstance(el, ast.Name):
-                        orm_vars.add(el.id)
-
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, (ast.For, ast.While)):
-            _check_loop_body(child, diags, file_path, module, version, orm_vars)
-        _walk_for_loops(child, diags, file_path, module, version, orm_vars)
 
 
 def _is_paged(call: ast.Call) -> bool:
@@ -79,54 +78,3 @@ def _is_paged(call: ast.Call) -> bool:
         if kw.arg == "limit":
             return not (isinstance(kw.value, ast.Constant) and kw.value.value in (0, 1))
     return False
-
-
-def _check_loop_body(
-    loop: ast.For | ast.While,
-    diags: list[Diagnostic],
-    file_path: Path,
-    module: str,
-    version: str,
-    orm_vars: set[str],
-) -> None:
-    """Check if any ORM method call exists inside a loop body."""
-    if is_bounded_loop(loop):
-        return
-    local_orm_vars = set(orm_vars)
-    if isinstance(loop, ast.For):
-        from odoo_doctor.rules._ast_helpers import node_is_orm
-
-        if node_is_orm(loop.iter, local_orm_vars):
-            if isinstance(loop.target, ast.Name):
-                local_orm_vars.add(loop.target.id)
-            elif isinstance(loop.target, ast.Tuple):
-                for el in loop.target.elts:
-                    if isinstance(el, ast.Name):
-                        local_orm_vars.add(el.id)
-
-    for node in per_iteration_nodes(loop):
-        if not isinstance(node, ast.Call):
-            continue
-        if isinstance(node.func, ast.Attribute) and node.func.attr in _ORM_METHODS:
-            if not receiver_is_orm(node, local_orm_vars):
-                continue
-            if isinstance(loop, ast.While) and _is_paged(node):
-                continue
-            diags.append(
-                Diagnostic(
-                    module=module,
-                    file_path=str(file_path),
-                    line=node.lineno,
-                    column=node.col_offset,
-                    rule="search-in-loop",
-                    category="Performance",
-                    severity="error",
-                    tier="P1",
-                    source="native",
-                    confidence="high",
-                    title=f"ORM '{node.func.attr}' called inside loop",
-                    message=f"'{node.func.attr}()' at line {node.lineno} is called inside a loop. Consider batching.",
-                    help=f"Move the '{node.func.attr}()' call outside the loop and batch the operation.",
-                    odoo_version=version,
-                )
-            )

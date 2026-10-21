@@ -7,11 +7,13 @@ command, baseline mode, and (future) remote service without duplicating logic.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from odoo_doctor.core.cache import ScanCache
+    from odoo_doctor.core.reuse import ScanReuse
 
 import typer
 
@@ -19,16 +21,28 @@ from odoo_doctor.adapters.pylint_odoo.adapter import PylintOdooAdapter
 from odoo_doctor.adapters.ruff.adapter import RuffAdapter
 from odoo_doctor.core.config import OdooDoctorConfig
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.git import reset_git_cache
 from odoo_doctor.core.pipeline import (
     derive_capabilities,
     mark_score_eligibility,
     rule_is_enabled,
     run_pipeline_with_stats,
 )
+from odoo_doctor.core.reuse import Stamper
 from odoo_doctor.core.roi import rank_fixes
 from odoo_doctor.core.scoring import CATEGORIES, score_diagnostics
-from odoo_doctor.core.source import clear_source_cache, flush_skipped, reset_skipped
+from odoo_doctor.core.source import (
+    clear_source_cache,
+    flush_skipped,
+    is_scannable,
+    reset_skipped,
+    scannable_files,
+    skipped_count,
+)
+from odoo_doctor.core.text import safe_text
+from odoo_doctor.discovery.addons import discover_addons
 from odoo_doctor.graph.module_context import build_project_graph
+from odoo_doctor.graph.source_index import build_source_index, index_signature
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
     scan_python_suppressions,
@@ -60,8 +74,61 @@ def _in_scope_categories(
 def _config_repr(cfg: OdooDoctorConfig) -> str:
     """A stable string capturing config fields that affect results."""
     import dataclasses
+    import json
 
-    return repr(dataclasses.asdict(cfg)) if dataclasses.is_dataclass(cfg) else repr(cfg)
+    if not dataclasses.is_dataclass(cfg):
+        return repr(cfg)
+    # sorted keys and sets: repr() of a set follows the per-process hash seed
+    return json.dumps(
+        dataclasses.asdict(cfg),
+        sort_keys=True,
+        default=lambda o: sorted(o) if isinstance(o, (set, frozenset)) else repr(o),
+    )
+
+
+def _identity_inputs(
+    cfg: OdooDoctorConfig, version: str, force_version: bool
+) -> tuple[str, str, tuple[str, ...], tuple[str, ...]]:
+    """Everything but the files that decides what a scan reports: the resolved config, the
+    version, the active ruleset, plugin rules and linter versions (see ``project_fingerprint``)."""
+    from odoo_doctor.core.cache import adapter_identities, plugin_identities
+
+    ruleset = tuple(
+        f"{meta.name}@{meta.min_version}" for meta, _ in default_registry.get_rules()
+    )
+    extra = (
+        *plugin_identities(default_registry.get_rules()),
+        *adapter_identities(cfg.adapters),
+    )
+    return (
+        _config_repr(cfg),
+        f"{version}+forced" if force_version else version,
+        ruleset,
+        extra,
+    )
+
+
+def _lint_signature(
+    ctx, modules: dict, module_sigs: dict[str, str], config_sig: str = ""
+) -> str:
+    """What a linter run on one addon can see: its files and those of the addons it depends on
+    (transitively), since a linter may follow an import into a sibling addon."""
+    closure: dict[str, None] = {}
+    pending = [ctx.name]
+    while pending:
+        name = pending.pop()
+        if name in closure or name not in modules:
+            continue
+        closure[name] = None
+        pending.extend(modules[name].depends)
+    sigs = sorted((n, module_sigs.get(str(modules[n].path), "")) for n in closure)
+    return repr((sigs, config_sig))  # a linter also reads ruff.toml, .gitignore ...
+
+
+def _is_native(func: object) -> bool:
+    """A rule shipped with odoo-doctor: only these are known to read nothing but their input."""
+    mod = getattr(func, "__module__", None) or ""
+    return mod == "odoo_doctor" or mod.startswith("odoo_doctor.")
 
 
 def _is_fixable_rule(rule_name: str) -> bool:
@@ -116,8 +183,11 @@ def _score_per_module(
     findings were all suppressed). *stats* is the full {module: {rule: counts}} map."""
     eligible = mark_score_eligibility(diags)
     scores: dict[str, object] = {}
-    modules = {d.module for d in diags} | set(extra_modules)
-    for name in sorted(modules):
+    # *extra_modules* first (the scan's module order), then any other module with findings
+    # in name order: a set here would order the report by the process's hash seed, not as
+    # the live scan does.
+    modules = dict.fromkeys([*extra_modules, *sorted({d.module for d in diags})])
+    for name in modules:
         mod_diags = [d for d in diags if d.module == name]
         mod_version = (module_versions or {}).get(
             name, mod_diags[0].odoo_version if mod_diags else version
@@ -180,35 +250,44 @@ def collect_scores(
     config_root: Path | None = None,
     cache: ScanCache | None = None,
     force_version: bool = False,
+    reuse: ScanReuse | None = None,
 ) -> tuple[list[Diagnostic], dict[str, object]]:
+    """Scan *addon_paths* and return the findings and one score per module.
+
+    *reuse* (the language server's) carries results from the previous scan of the project
+    (see :mod:`odoo_doctor.core.reuse`); the result is the same as without it.
+    """
     from dataclasses import asdict
 
     from odoo_doctor.core.cache import project_fingerprint
 
     reset_skipped()  # skipped-file warnings are per scan
+    reset_git_cache()
+    if changed_files is not None:
+        reuse = None  # a --diff scan filters by file: nothing to carry over
     fingerprint: str | None = None
     # Third-party rules may read arbitrary inputs; without a dependency contract
     # their results cannot safely use the built-in project fingerprint.
     if cache is not None and changed_files is None and not cfg.enable_plugins:
         from odoo_doctor.adapters.cache import cache_dependencies
 
-        extra_files, adapter_identities = cache_dependencies(
+        extra_files, adapter_files_identities = cache_dependencies(
             addon_paths, config_root, cfg.adapters
         )
-        ruleset = tuple(
-            f"{meta.name}@{meta.min_version}"
-            for meta, _ in default_registry.get_rules()
+        config_repr, fp_version, ruleset, extra = _identity_inputs(
+            cfg, version, force_version
         )
         fingerprint = project_fingerprint(
             addon_paths=[
                 *addon_paths,
                 *([Path(cfg.odoo_source_path)] if cfg.odoo_source_path else []),
             ],
-            config_repr=_config_repr(cfg),
-            version=f"{version}+forced" if force_version else version,
+            config_repr=config_repr,
+            version=fp_version,
             ruleset=ruleset,
+            extra=extra,
             extra_files=extra_files,
-            extra_identities=adapter_identities,
+            extra_identities=adapter_files_identities,
             excluded_paths=[cache.cache_dir],
         )
         hit = cache.lookup(fingerprint)
@@ -221,11 +300,57 @@ def collect_scores(
                 cfg,
                 version,
                 stats=stats,
-                extra_modules={*stats, *lines},
+                extra_modules=[*lines, *stats],
                 lines=lines,
                 module_versions=cache.lookup_versions(fingerprint),
             )
             return diags, scores
+
+    stamper: Stamper | None = None
+    module_sigs: dict[str, str] = {}
+    project_key = ""
+    config_sig = ""
+    source_index = None
+    if reuse is not None:
+        addons = discover_addons(
+            addon_paths, target_modules=cfg.target_modules or None, warn=False
+        )
+        if not addons:  # nothing to scan: no linter, git or config lookups for it
+            return [], {}
+        reuse.begin(
+            hashlib.sha256(
+                repr(_identity_inputs(cfg, version, force_version)).encode()
+            ).hexdigest()
+        )
+        stamper = Stamper(reuse.racy)
+        for addon in addons:
+            module_sigs[str(addon.path)] = stamper.tree(addon.path)
+        index_sig = (
+            index_signature(cfg.odoo_source_path, stamper)
+            if cfg.odoo_source_path
+            else ""
+        )
+        # linter configuration, ignore files and executables (the same inputs as --cache's
+        # key): stamped like the addons' files, missing files included
+        from odoo_doctor.adapters.cache import cache_dependencies
+
+        dep_files, dep_identities = cache_dependencies(
+            addon_paths, config_root, cfg.adapters
+        )
+        config_sig = repr(
+            (sorted((str(p), stamper.file(p)) for p in dep_files), dep_identities)
+        )
+        project_key = repr((sorted(module_sigs.items()), index_sig, config_sig))
+        # plugin rules (context ones too) may read anything: they run on every scan
+        plugins = any(not _is_native(f) for _, f in default_registry.get_rules())
+        if not plugins and reuse.last is not None and reuse.last[0] == project_key:
+            reuse.racy = stamper.racy
+            return list(reuse.last[1]), dict(reuse.last[2])
+        if cfg.odoo_source_path:
+            if reuse.source_index is None or reuse.source_index[0] != index_sig:
+                index = build_source_index(cfg.odoo_source_path)
+                reuse.source_index = (index_sig, index)
+            source_index = reuse.source_index[1]
 
     graph = build_project_graph(
         addon_paths=addon_paths,
@@ -233,6 +358,7 @@ def collect_scores(
         target_modules=cfg.target_modules or None,
         odoo_source_path=cfg.odoo_source_path or None,
         force_version=force_version,
+        source_index=source_index,
     )
     if not graph.modules:
         return [], {}
@@ -258,7 +384,7 @@ def collect_scores(
                 all_diags.extend(produced)
             except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                 typer.echo(
-                    f"[WARN] rule {meta.name} crashed on {ctx.name}: {exc}",
+                    f"[WARN] rule {safe_text(meta.name)} crashed on {safe_text(ctx.name)}: {safe_text(exc)}",
                     err=True,
                 )
 
@@ -268,6 +394,7 @@ def collect_scores(
     # output order is the same as running the rules one after another.
     file_rules = list(default_registry.get_rules(needs_context=False))
     by_rule: list[list[Diagnostic]] = [[] for _ in file_rules]
+    kept_files: dict[tuple, tuple] = {}
     for ctx in graph.modules.values():
         derived_caps = derive_capabilities(ctx.odoo_version, cfg.capabilities)
         enabled = [
@@ -277,7 +404,8 @@ def collect_scores(
         ]
         if not enabled:
             continue
-        for py_file in ctx.path.rglob("*.py"):
+        enabled_names = tuple(file_rules[i][0].name for i in enabled)
+        for py_file in scannable_files(ctx.path):
             if py_file.name == "__manifest__.py":
                 continue
             if (
@@ -285,15 +413,39 @@ def collect_scores(
                 and str(py_file.resolve()) not in changed_files
             ):
                 continue
+            key = (str(py_file), ctx.name, ctx.odoo_version, enabled_names)
+            file_sig = None
+            if stamper is not None:
+                file_sig = stamper.file(py_file)
+                hit = reuse.files.get(key)
+                if hit is not None and hit[0] == file_sig:
+                    kept_files[key] = hit
+                    for i in enabled:
+                        by_rule[i].extend(hit[1].get(file_rules[i][0].name, ()))
+                    continue
+            mark = skipped_count()
+            clean = True
+            produced_by: dict[str, tuple[Diagnostic, ...]] = {}
             for i in enabled:
                 meta, func = file_rules[i]
+                produced: list[Diagnostic] = []
                 try:
-                    by_rule[i].extend(func(py_file, ctx.name, ctx.odoo_version))
+                    # extend keeps what a generator rule yielded before it crashed
+                    produced.extend(func(py_file, ctx.name, ctx.odoo_version))
                 except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
+                    clean = False
                     typer.echo(
-                        f"[WARN] rule {meta.name} crashed on {py_file.name}: {exc}",
+                        f"[WARN] rule {safe_text(meta.name)} crashed on {safe_text(py_file.name)}: {safe_text(exc)}",
                         err=True,
                     )
+                by_rule[i].extend(produced)
+                if _is_native(func):
+                    produced_by[meta.name] = tuple(produced)
+                else:
+                    clean = False  # a plugin may read anything: it runs on every scan
+            # a file that made the scan warn is run again, so the warning is repeated
+            if reuse is not None and clean and skipped_count() == mark:
+                kept_files[key] = (file_sig, produced_by)
     for bucket in by_rule:
         all_diags.extend(bucket)
     clear_source_cache()  # release the parsed trees of the last files
@@ -305,6 +457,7 @@ def collect_scores(
     if cfg.adapters.get("pylint_odoo", True):
         adapters.append(PylintOdooAdapter())
 
+    kept_adapters: dict[tuple, tuple[Diagnostic, ...]] = {}
     for adapter in adapters:
         if (
             not adapter.is_available()
@@ -312,13 +465,34 @@ def collect_scores(
         ):
             continue
         for ctx in graph.modules.values():
+            key = None
+            if reuse is not None:
+                key = (
+                    adapter.name,
+                    str(ctx.path),
+                    ctx.odoo_version,
+                    _lint_signature(ctx, graph.modules, module_sigs, config_sig),
+                )
+                hit = reuse.adapters.get(key)
+                if hit is not None:
+                    kept_adapters[key] = hit
+                    all_diags.extend(hit)
+                    continue
             try:
-                all_diags.extend(adapter.run(ctx.path, ctx.odoo_version))
+                produced = adapter.run(ctx.path, ctx.odoo_version)
             except Exception as exc:  # noqa: BLE001 - a crashing rule must not abort the scan
                 typer.echo(
-                    f"[WARN] {adapter.name} adapter crashed on {ctx.name}: {exc}",
+                    f"[WARN] {safe_text(adapter.name)} adapter crashed on {safe_text(ctx.name)}: {safe_text(exc)}",
                     err=True,
                 )
+                continue
+            all_diags.extend(produced)
+            # a missing tool, a timeout or a bad output is retried on the next scan
+            if key is not None and not any(
+                d.rule.startswith("adapter-") and d.rule.endswith("-warning")
+                for d in produced
+            ):
+                kept_adapters[key] = tuple(produced)
 
     # Filter context-based and adapter diagnostics by changed files if --diff
     if changed_files is not None:
@@ -341,7 +515,7 @@ def collect_scores(
     python_lines: dict[str, int] = {}
     for ctx in graph.modules.values():
         python_lines[ctx.name] = 0
-        for py_file in ctx.path.rglob("*.py"):
+        for py_file in scannable_files(ctx.path):
             suppressions |= scan_python_suppressions(py_file)
             try:
                 python_lines[ctx.name] += len(
@@ -351,7 +525,7 @@ def collect_scores(
                 pass
         for data_file in ctx.manifest.data:
             xml_path = ctx.path / data_file
-            if xml_path.suffix == ".xml" and xml_path.exists():
+            if xml_path.suffix == ".xml" and is_scannable(xml_path, ctx.path):
                 suppressions |= scan_xml_suppressions(xml_path)
 
     # Run pipeline
@@ -392,4 +566,11 @@ def collect_scores(
         )
 
     flush_skipped()  # after every stage that can skip a file
+    if reuse is not None and stamper is not None:
+        # racy files, so a rewrite that keeps size and mtime is noticed next time
+        reuse.racy = stamper.racy
+        # files and adapters seen by this scan only: deleted files and addons are dropped
+        reuse.files = kept_files
+        reuse.adapters = kept_adapters
+        reuse.last = (project_key, list(diags), dict(scores))
     return diags, scores

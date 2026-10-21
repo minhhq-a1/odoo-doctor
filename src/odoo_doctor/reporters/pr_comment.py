@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from typing import Any
 
@@ -8,6 +9,20 @@ from odoo_doctor.core.config import SurfaceConfig
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.scoring import ScoreResult, score_label
 from odoo_doctor.core.surfaces import filter_for_surface
+
+
+def _md(text: str) -> str:
+    """Repo-derived text on one line, without markdown or HTML structure of its own."""
+    one_line = " ".join(text.split())
+    # a zero-width space after `@` keeps a repo-chosen name from mentioning (notifying) anyone
+    return re.sub(r"([\\`|<>\[\]])", r"\\\1", one_line).replace("@", "@\u200b")
+
+
+def _code(text: str) -> str:
+    """A code span that a backtick or newline in ``text`` cannot end early."""
+    one_line = " ".join(text.split())
+    fence = "`" * (max((len(r) for r in re.findall("`+", one_line)), default=0) + 1)
+    return f"{fence} {one_line} {fence}" if "`" in one_line else f"`{one_line}`"
 
 
 def render_pr_comment_body(
@@ -42,7 +57,7 @@ def render_pr_comment_body(
         lines.append("| Module | Score |")
         lines.append("|---|---|")
         for mod, score in sorted(scores.items()):
-            lines.append(f"| {mod} | {score.overall:.1f} {score.label} |")
+            lines.append(f"| {_md(mod)} | {score.overall:.1f} {score.label} |")
         lines.append("")
 
     filtered = diagnostics
@@ -55,7 +70,7 @@ def render_pr_comment_body(
         for d in top:
             rule_ref = f"[{d.rule}]({d.url})" if d.url else d.rule
             lines.append(
-                f"- **{d.severity.upper()}** `{d.file_path}:{d.line}`: {d.title} ({rule_ref})"
+                f"- **{d.severity.upper()}** {_code(f'{d.file_path}:{d.line}')}: {_md(d.title)} ({rule_ref})"
             )
 
     return "\n".join(lines)

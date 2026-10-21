@@ -245,12 +245,15 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | File/Path | Purpose |
 |-----------|---------|
 | `src/odoo_doctor/core/scanner.py` | Scan orchestration (discovery → rules → pipeline) |
+| `src/odoo_doctor/core/git.py` | `run_git`: every git call goes through it (hardened config and environment); never `subprocess.run(["git", ...])` directly |
+| `src/odoo_doctor/core/text.py` | `safe_text`: every repo-derived string in a log/stderr/stdout line goes through it; never interpolate file or module names raw |
+| `src/odoo_doctor/core/reuse.py` | `ScanReuse`: the language server's per-folder reuse of the previous scan |
 | `src/odoo_doctor/core/pipeline.py` | 7-stage post-processing pipeline |
 | `src/odoo_doctor/core/scaffold.py` | Starter project for a third-party rule pack (`rules new`); generated rules import only `plugin_api` |
 | `src/odoo_doctor/core/upgrade.py` | Upgrade readiness report (`scan --upgrade-report`): groups Upgrade Safety findings by change, mechanical vs needs-review table, readiness score; JSON key `upgrade_report` only with the flag (see `docs/upgrade-report.md`) |
 | `src/odoo_doctor/core/suppression_stats.py` | Suppression analytics: per-rule counts of findings users switch off, noise verdict (`rules stats`) |
 | `src/odoo_doctor/reporters/html_report.py` | HTML report (`scan --html`), assets in `reporters/html/`; `docs/html-report.md` |
-| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover`/`engine` are pure, `server.py` is the pygls glue; docs in `docs/lsp.md` |
+| `src/odoo_doctor/lsp/` | Language server (experimental): `convert`/`actions`/`hover` are pure, `engine.py` keeps per-folder `core/reuse.py` state so a save redoes only what changed (equal to a scan from scratch as far as `tests/test_scan_reuse.py` backs it; file signature size + mtime + ctime + inode, no whole-result reuse when a plugin rule is registered, `odooDoctor.rescan` forgets first), `server.py` is the pygls glue; docs in `docs/lsp.md` |
 | `editors/vscode/` | VS Code extension (TypeScript, `npm ci && npm run compile`); its version must match the package |
 | `ci-templates/` | GitLab CI and Bitbucket Pipelines templates (same script in both); `tests/test_ci_templates.py` runs it in a temp git repo |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |

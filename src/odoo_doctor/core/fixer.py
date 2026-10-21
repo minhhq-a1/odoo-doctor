@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from odoo_doctor.core.diagnostics import Diagnostic
+from odoo_doctor.core.source import is_scannable, path_within
+from odoo_doctor.core.text import safe_text
 
 Fixer = Callable[[Diagnostic, str], "str | None"]
 
@@ -50,7 +52,7 @@ class FixResult:
         chunks: list[str] = []
         for path, new_text in sorted(self.changed_files.items()):
             old_text = original.get(path, "")
-            display = _display_path(path, root)
+            display = safe_text(_display_path(path, root))
             diff = difflib.unified_diff(
                 old_text.splitlines(keepends=True),
                 new_text.splitlines(keepends=True),
@@ -77,6 +79,7 @@ def compute_fixes(
     registry: FixerRegistry,
     root: Path | None = None,
     read_text: Callable[[str], str] | None = None,
+    allowed_roots: list[Path] | None = None,
 ) -> tuple[FixResult, dict[str, str]]:
     """Apply fixers for fixable, high-confidence diagnostics.
 
@@ -88,6 +91,9 @@ def compute_fixes(
     absolute). We therefore read/write via the path directly, but resolve it
     defensively against *root* so a future relative-path rule cannot silently
     write to the wrong place. *root* is also used only for diff display.
+
+    With *allowed_roots* (the scanned directories) a file that resolves outside all of
+    them (a symlink) is never read, fixed or written; it counts as skipped.
 
     Diagnostics are grouped by file and applied in order. Each fixer receives
     the running text for its file, enabling multiple fixes per file.
@@ -102,7 +108,10 @@ def compute_fixes(
     if read_text is None:
 
         def read_text(p):
-            return _resolve(p).read_text(encoding="utf-8")
+            target = _resolve(p)
+            if not is_scannable(target):
+                raise OSError(f"not a readable regular file: {target}")
+            return target.read_text(encoding="utf-8")
 
     # Group fixable, high-confidence diagnostics by file.
     by_file: dict[str, list[Diagnostic]] = {}
@@ -121,6 +130,11 @@ def compute_fixes(
     skipped = 0
 
     for path, diags in by_file.items():
+        if allowed_roots is not None and not any(
+            path_within(_resolve(path), r) for r in allowed_roots
+        ):
+            skipped += len(diags)
+            continue
         try:
             text = read_text(path)
         except OSError:
