@@ -29,6 +29,7 @@ from lxml import etree
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.source import chain_too_long, is_scannable, path_within
 from odoo_doctor.core.text import safe_text
+from odoo_doctor.rules.registry import default_registry
 
 Fixer = Callable[[Diagnostic, str], "str | None"]
 
@@ -120,6 +121,20 @@ def _display_path(path: str, root: Path | None) -> str:
 
 
 _XML_PARSER_ARGS = {"resolve_entities": False, "no_network": True}
+
+
+def is_fixable_finding(d: Diagnostic, *, include_migration: bool) -> bool:
+    """Would ``fix`` change this very finding? (a fixable rule, and a fixer that takes it)
+
+    ``include_migration`` says whether the caller counts the opt-in migration fixers
+    (``fix --upgrade-to``): reports do, the language server does not.
+    """
+    entry = default_registry.get(d.rule)
+    return bool(
+        entry
+        and entry[0].fixable
+        and default_fixers.can_fix(d, include_migration=include_migration)
+    )
 
 
 def validate_text(path: str, text: str) -> bool:

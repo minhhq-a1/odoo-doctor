@@ -191,3 +191,32 @@ def test_write_fixed_is_byte_exact_and_keeps_mode(tmp_path):
     assert path.read_bytes() == "﻿<a>\r\n</a>\r\n".encode()
     assert (path.stat().st_mode & 0o777) == 0o640
     assert [p.name for p in tmp_path.iterdir()] == ["a.xml"]
+
+
+def test_is_fixable_finding_is_decided_per_finding():
+    import odoo_doctor.cli.app  # noqa: F401  (registers the rules and the fixers)
+    from odoo_doctor.core.fixer import is_fixable_finding
+
+    def finding(rule, title="t", confidence="high"):
+        return _diag("a.xml", rule=rule, confidence=confidence).__class__(
+            **{
+                **_diag("a.xml", rule=rule, confidence=confidence).__dict__,
+                "title": title,
+            }
+        )
+
+    field = "'{}' no longer exists on {} (Odoo 19)"
+    rename = finding("removed-core-field-usage", field.format("groups_id", "res.users"))
+    meaning = finding(
+        "removed-core-field-usage", field.format("category_id", "res.groups")
+    )
+    assert is_fixable_finding(rename, include_migration=True)
+    assert not is_fixable_finding(meaning, include_migration=True)
+    assert not is_fixable_finding(rename, include_migration=False)  # opt-in only
+    assert not is_fixable_finding(
+        finding("view-tree-removed", confidence="medium"), include_migration=True
+    )
+    assert is_fixable_finding(
+        finding("manifest-missing-required-fields"), include_migration=False
+    )
+    assert not is_fixable_finding(finding("eval-usage"), include_migration=True)

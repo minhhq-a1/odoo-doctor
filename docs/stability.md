@@ -50,6 +50,12 @@ changes nothing else: JSON, SARIF, HTML, `--fail-on` and scores are the same wit
 SARIF, GitHub annotations and HTML ignore it (a note on stderr), exit codes and every other
 key are unchanged, and without the flag the output is byte-identical.
 
+`fix --upgrade-to <version>` (with `--fix` or `--fix-dry-run`) also applies the mechanical migration
+fixes for that Odoo version (at least 18.0), evaluating every module as that version. Without the
+flag no migration fixer runs, whatever version the manifests or the config declare. It cannot be
+combined with `--odoo-version`. The `fixable` flag of a finding in `--json` is true when `fix` can
+change that very finding (for the migration ones: with `--upgrade-to`).
+
 `odoo-doctor lsp` (the language server) is experimental and not covered by this contract
 until it is listed here; it exits 3 when the optional `lsp` extra is not installed.
 
@@ -61,7 +67,7 @@ other commands follow the same convention where it applies:
 | --- | --- | --- |
 | any | `0` | success |
 | any | `2` | usage error raised by the argument parser itself (unknown flag, missing argument) |
-| `fix` | `3` | neither or both of `--fix` and `--fix-dry-run` |
+| `fix` | `3` | neither or both of `--fix` and `--fix-dry-run`, `--upgrade-to` together with `--odoo-version`, or an `--upgrade-to` version that is not `NN.N` or is below 18.0 |
 | `rules docs` | `3` | `--format` is neither `markdown` nor `html` |
 | `rules docs --check` | `1` | the page on disk is out of date |
 | `rules` | `3` | unknown action, an unknown rule name for `explain`/`disable`/`enable`, or `explain`/`disable`/`enable`/`new` without a rule name |

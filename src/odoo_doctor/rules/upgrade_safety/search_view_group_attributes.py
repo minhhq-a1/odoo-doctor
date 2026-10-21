@@ -43,6 +43,7 @@ def _search_groups(arch):
     severity="error",
     default_confidence="high",
     needs_context=True,
+    fixable=True,
     min_version="19.0",
 )
 def check_search_view_group_attributes(ctx: ModuleContext) -> list[Diagnostic]:

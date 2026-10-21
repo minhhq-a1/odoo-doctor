@@ -40,11 +40,11 @@ odoo-doctor scan . --cache
 ```
 
 **Upgrade readiness.** `--upgrade-report` (with `--odoo-version <target>`) groups the Upgrade
-Safety findings by kind of change, counts them, labels each one mechanical (a pure rename, fixer
-planned) or needs review, and scores every module 0-100. With `--json` it adds the top-level key
+Safety findings by kind of change, counts them, labels each one mechanical (`fix --upgrade-to` repairs it) or needs review, and scores every module 0-100. With `--json` it adds the top-level key
 `upgrade_report`. With `--odoo-version X` every module is evaluated as targeting X regardless of its
 manifest version; without it, rules follow each module's manifest version (a `17.0.x` module shows an
-empty report, with a warning). See [docs/upgrade-report.md](docs/upgrade-report.md).
+empty report, with a warning). `odoo-doctor fix . --upgrade-to 19.0 --fix-dry-run` previews the mechanical
+repairs as a diff (drop `--fix-dry-run` and pass `--fix` to apply). See [docs/upgrade-report.md](docs/upgrade-report.md).
 
 ---
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from odoo_doctor.core.config import (
 )
 from odoo_doctor.core.config_edit import set_rule_ignored
 from odoo_doctor.core.diagnostics import CATEGORIES, Diagnostic
-from odoo_doctor.core.fixer import compute_fixes, default_fixers
+from odoo_doctor.core.fixer import compute_fixes, default_fixers, write_fixed
 from odoo_doctor.core.git import REFUSAL, refused, run_git
 from odoo_doctor.core.pipeline import derive_capabilities, rule_is_enabled
 from odoo_doctor.core.scanner import collect_scores as _collect_scores
@@ -93,6 +94,7 @@ import odoo_doctor.rules.upgrade_safety.kanban_legacy_templates
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers
+import odoo_doctor.rules.upgrade_safety.fixers
 # isort: on
 
 app = typer.Typer(
@@ -454,6 +456,44 @@ def scan(
             raise typer.Exit(code=2)
 
 
+_UPGRADE_TARGET = re.compile(r"\d+\.\d+")
+
+
+def _fix_upgrade_summary(
+    diags, scores, target, addons_paths, cfg, result, apply: bool
+) -> None:
+    """What is left after ``fix --upgrade-to``: the report, skipped fixes, manifest hint."""
+    from odoo_doctor.core.upgrade import build_upgrade_report, render_upgrade_report
+
+    for d in result.skipped_diags:
+        typer.echo(
+            f"[WARN] not fixed: {safe_text(d.rule)} at {safe_text(d.file_path)}:{d.line}",
+            err=True,
+        )
+    report = build_upgrade_report(diags, list(scores), target)
+    if not apply:
+        t = report["totals"]
+        typer.echo(
+            f"{t['mechanical']} finding(s) fixable with --fix; "
+            f"{t['needs_review']} would still need review."
+        )
+        return
+    typer.echo(f"\nWhat is left to do for Odoo {target}:")
+    typer.echo(render_upgrade_report(report))
+    behind = sorted(
+        m
+        for m, v in manifest_versions(addons_paths, cfg).items()
+        if m in scores and float(v) < float(target)
+    )
+    if behind:
+        shown = ", ".join(safe_text(m) for m in behind[:5])
+        more = f" and {len(behind) - 5} more" if len(behind) > 5 else ""
+        typer.echo(
+            f"\nThe manifest version of {shown}{more} still names an older Odoo; "
+            "odoo-doctor does not change it. Update version (and depends) yourself."
+        )
+
+
 @app.command("fix")
 def fix_cmd(
     path: str | None = typer.Argument(
@@ -461,6 +501,11 @@ def fix_cmd(
     ),
     odoo_version: str | None = typer.Option(
         None, "--odoo-version", help="Target Odoo version"
+    ),
+    upgrade_to: str | None = typer.Option(
+        None,
+        "--upgrade-to",
+        help="Also apply the mechanical migration fixes for this Odoo version (e.g. 19.0)",
     ),
     apply: bool = typer.Option(False, "--fix", help="Apply fixes in place"),
     dry_run: bool = typer.Option(
@@ -475,11 +520,29 @@ def fix_cmd(
             err=True,
         )
         raise typer.Exit(code=3)
+    if upgrade_to is not None:
+        from odoo_doctor.core.upgrade import has_migration_rules
+
+        if odoo_version:
+            problem = (
+                "--upgrade-to already sets the target; do not pass --odoo-version too."
+            )
+        elif not _UPGRADE_TARGET.fullmatch(upgrade_to):
+            problem = f"--upgrade-to expects a version like 19.0, got '{safe_text(upgrade_to)}'."
+        elif not has_migration_rules(upgrade_to):
+            problem = f"Odoo {upgrade_to} has no migration fixes (they start at 18.0)."
+        else:
+            problem = None
+        if problem:
+            typer.echo(f"[ERROR] {problem}", err=True)
+            raise typer.Exit(code=3)
 
     config_root = (Path(path) if path is not None else Path.cwd()).resolve()
     cfg = load_config(config_root)
     if odoo_version:
         cfg.odoo_version = odoo_version
+    if upgrade_to:
+        cfg.odoo_version = upgrade_to
     addons_paths = _resolve_addons_paths(path, config_root, cfg)
     version = cfg.odoo_version or "unknown"
 
@@ -488,11 +551,13 @@ def fix_cmd(
 
         load_rule_plugins(allow=cfg.plugin_allowlist)  # opt-in only
 
-    diags, _scores = _collect_scores(
+    # With --upgrade-to every module is evaluated as the target, whatever its manifest says.
+    diags, scores = _collect_scores(
         addon_paths=addons_paths,
         cfg=cfg,
         version=version,
         config_root=config_root,
+        force_version=bool(upgrade_to),
     )
 
     fixable_rules = {
@@ -504,11 +569,16 @@ def fix_cmd(
         default_fixers,
         root=config_root,
         allowed_roots=addons_paths,
+        include_migration=bool(upgrade_to),
     )
 
     if dry_run:
         diff = result.unified_diff(originals, root=config_root)
         typer.echo(diff if diff else "No fixes available.")
+        if upgrade_to:
+            _fix_upgrade_summary(
+                diags, scores, upgrade_to, addons_paths, cfg, result, False
+            )
         return
 
     # apply (file_path is absolute; resolve defensively against config_root)
@@ -516,11 +586,20 @@ def fix_cmd(
         target = Path(file_path)
         if not target.is_absolute():
             target = config_root / target
-        target.write_text(new_text, encoding="utf-8")
+        write_fixed(target, new_text)
     typer.echo(
         f"Applied {result.fixed_count} fix(es) across "
         f"{len(result.changed_files)} file(s); {result.skipped_count} skipped."
     )
+    if upgrade_to:
+        diags, scores = _collect_scores(
+            addon_paths=addons_paths,
+            cfg=cfg,
+            version=version,
+            config_root=config_root,
+            force_version=True,
+        )
+        _fix_upgrade_summary(diags, scores, upgrade_to, addons_paths, cfg, result, True)
 
 
 def _load_lsp_runner():

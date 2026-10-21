@@ -57,6 +57,7 @@ def is_plain_chatter_div(div: etree._Element, arch: etree._Element) -> bool:
     severity="warning",
     default_confidence="high",
     needs_context=True,
+    fixable=True,
     min_version="18.0",
 )
 def check_chatter_div_removed(ctx: ModuleContext) -> list[Diagnostic]:

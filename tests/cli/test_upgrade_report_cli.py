@@ -283,3 +283,15 @@ def test_cached_report_equals_live_report_with_a_forced_target(tmp_path: Path):
     assert cold["upgrade_report"]["totals"]["findings"] > 0
     # a plain cached scan must not reuse the forced entry
     assert _upgrade_findings(_plain(root, "--odoo-version", "19.0", "--cache")) == 0
+
+
+def test_json_fixable_follows_the_finding_not_the_rule():
+    report = _json()
+    flags = {}
+    for module in report["modules"].values():
+        for fp in module["fix_priorities"]:
+            flags.setdefault(fp["rule"], set()).add(fp["fixable"])
+    assert flags["view-tree-removed"] == {True}
+    assert flags["kanban-legacy-templates"] == {False}
+    # res.groups.users is a rename, res.groups.category_id is not
+    assert flags["removed-core-field-usage"] == {True, False}

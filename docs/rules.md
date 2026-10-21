@@ -39,17 +39,17 @@ Odoo Doctor ships 55 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [missing-ondelete](#missing-ondelete) | P1 | Data Integrity | warning | low |  |
 | [data-noupdate-risk](#data-noupdate-risk) | P2 | Data Integrity | warning | high |  |
 | [act-window-target-inline](#act-window-target-inline) | P1 | Upgrade Safety | error | high |  |
-| [chatter-div-removed](#chatter-div-removed) | P1 | Upgrade Safety | warning | high |  |
+| [chatter-div-removed](#chatter-div-removed) | P1 | Upgrade Safety | warning | high | Yes |
 | [cron-removed-fields](#cron-removed-fields) | P1 | Upgrade Safety | error | high |  |
 | [deprecated-api-usage](#deprecated-api-usage) | P1 | Upgrade Safety | warning | high |  |
 | [kanban-legacy-templates](#kanban-legacy-templates) | P1 | Upgrade Safety | error | high |  |
-| [removed-core-field-usage](#removed-core-field-usage) | P1 | Upgrade Safety | error | high |  |
+| [removed-core-field-usage](#removed-core-field-usage) | P1 | Upgrade Safety | error | high | Yes |
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
 | [removed-orm-api-usage](#removed-orm-api-usage) | P1 | Upgrade Safety | error | high |  |
-| [search-view-group-attributes](#search-view-group-attributes) | P1 | Upgrade Safety | error | high |  |
+| [search-view-group-attributes](#search-view-group-attributes) | P1 | Upgrade Safety | error | high | Yes |
 | [sql-constraints-unsupported](#sql-constraints-unsupported) | P1 | Upgrade Safety | error | high |  |
 | [view-attrs-states-removed](#view-attrs-states-removed) | P1 | Upgrade Safety | error | high |  |
-| [view-tree-removed](#view-tree-removed) | P1 | Upgrade Safety | error | high |  |
+| [view-tree-removed](#view-tree-removed) | P1 | Upgrade Safety | error | high | Yes |
 | [deprecated-orm-api-usage](#deprecated-orm-api-usage) | P2 | Upgrade Safety | warning | high |  |
 | [manifest-missing-dependency](#manifest-missing-dependency) | P1 | Module Hygiene | error | high |  |
 | [manifest-data-order-risk](#manifest-data-order-risk) | P2 | Module Hygiene | error | high | Yes |
@@ -868,7 +868,7 @@ Good:
 
 ### chatter-div-removed
 
-**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 18.0
+**Tier**: P1 (serious) · **Severity**: warning · **Confidence**: high · **Min Odoo version**: 18.0 · **Fixable**: yes
 
 **Detects**: A `<div class="oe_chatter">` in a view architecture (Odoo 18 and later).
 
@@ -876,7 +876,7 @@ Good:
 
 **Fix**: Replace the whole `<div class="oe_chatter">...</div>` block with `<chatter/>`.
 
-**Note**: Checked against the form compilers of Odoo 18.0 and 19.0; no Odoo 18/19 code reads `oe_chatter` any more.
+**Note**: Checked against the form compilers of Odoo 18.0 and 19.0; no Odoo 18/19 code reads `oe_chatter` any more. A div that only has the class, the standard chatter fields and a parent that is the view root or an `xpath` is high confidence and `fix --upgrade-to` replaces it by `<chatter/>`; any other div is medium confidence and needs a person.
 
 Bad:
 
@@ -970,7 +970,7 @@ Good:
 
 ### removed-core-field-usage
 
-**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0 · **Fixable**: yes
 
 **Detects**: Fields that core models no longer have, set by a data record or shown by a view: `groups_id` of `res.users`, `ir.ui.view`, `ir.ui.menu` and the actions (renamed `group_ids`, Odoo 19), `category_id` and `users` of `res.groups`, `mobile` of `res.partner` and `crm.lead`, `deprecated` of `account.account`, `user_id` of `ir.filters` (Odoo 19), and `detailed_type` of the product models (Odoo 18). In Python, the names `groups_id` and `detailed_type` as attribute, dict key, domain term or `selection_add` target.
 
@@ -978,7 +978,7 @@ Good:
 
 **Fix**: Use the replacement named in the finding, for example `group_ids`, `user_ids`, `privilege_id` (with a `res.groups.privilege` record), `phone`, `active`, or `type` plus `is_storable`.
 
-**Note**: The table lists only fields that the ORM source of that release no longer defines. In XML the model comes from the record, so the finding is high confidence. The Python names are unique to the removed fields, so a hit is medium confidence (no score effect); a model the module creates itself (`_name`), `'groups_id' in rec._fields` and `hasattr()` probes are skipped.
+**Note**: The table lists only fields that the ORM source of that release no longer defines. In XML the model comes from the record, so the finding is high confidence. The Python names are unique to the removed fields, so a hit is medium confidence (no score effect); a model the module creates itself (`_name`), `'groups_id' in rec._fields` and `hasattr()` probes are skipped. `fix --upgrade-to` renames only `groups_id` to `group_ids` and `res.groups.users` to `user_ids` (high confidence); the other entries change meaning and need a person.
 
 Bad:
 
@@ -1040,7 +1040,7 @@ def _compute_display_name(self):
 
 ### search-view-group-attributes
 
-**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 19.0
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 19.0 · **Fixable**: yes
 
 **Detects**: `string` or `expand` on a `<group>` inside a search view (Odoo 19).
 
@@ -1048,7 +1048,7 @@ def _compute_display_name(self):
 
 **Fix**: Use a bare `<group>` around the "Group By" filters.
 
-**Note**: An inherited view is checked only for a `<group>` that holds `<filter>` children, which only a search view has. `<group string>` in a form view is valid and not reported.
+**Note**: An inherited view is checked only for a `<group>` that holds `<filter>` children, which only a search view has. `<group string>` in a form view is valid and not reported. `fix --upgrade-to` removes both attributes.
 
 Bad:
 
@@ -1116,7 +1116,7 @@ Good:
 
 ### view-tree-removed
 
-**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0 · **Fixable**: yes
 
 **Detects**: The `tree` view type on Odoo 18 and later: a `<tree>` element in a view architecture (also nested in an x2many field), `<field name="type">tree`, a `tree` step in an XPath, `tree` in the `view_mode` of an action or an `ir.actions.act_window.view`, and Python action dicts with `'view_mode': 'tree,form'` or a `(False, 'tree')` pair in `'views'`.
 
@@ -1124,7 +1124,7 @@ Good:
 
 **Fix**: Rename: `<tree>` to `<list>`, `tree,form` to `list,form`, and the XPath step `tree` to `list`.
 
-**Note**: Reported once per view or action record. A Python dict that does not look like an action (no `res_model`, no `type`) is medium confidence. Only files the manifest loads are read, and QWeb templates are skipped.
+**Note**: Reported once per view or action record. A Python dict that does not look like an action (no `res_model`, no `type`) is medium confidence. Only files the manifest loads are read, and QWeb templates are skipped. `odoo-doctor fix --upgrade-to 19.0` renames every form of a high-confidence finding.
 
 Bad:
 

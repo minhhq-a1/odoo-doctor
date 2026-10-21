@@ -905,7 +905,8 @@ RULE_DOCS: dict[str, RuleDoc] = {
         lang="xml",
         notes="Reported once per view or action record. A Python dict that does not look "
         "like an action (no `res_model`, no `type`) is medium confidence. Only files the "
-        "manifest loads are read, and QWeb templates are skipped.",
+        "manifest loads are read, and QWeb templates are skipped. "
+        "`odoo-doctor fix --upgrade-to 19.0` renames every form of a high-confidence finding.",
     ),
     "removed-core-field-usage": RuleDoc(
         detects="Fields that core models no longer have, set by a data record or shown by "
@@ -933,7 +934,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "defines. In XML the model comes from the record, so the finding is high "
         "confidence. The Python names are unique to the removed fields, so a hit is "
         "medium confidence (no score effect); a model the module creates itself "
-        "(`_name`), `'groups_id' in rec._fields` and `hasattr()` probes are skipped.",
+        "(`_name`), `'groups_id' in rec._fields` and `hasattr()` probes are skipped. "
+        "`fix --upgrade-to` renames only `groups_id` to `group_ids` and `res.groups.users` to "
+        "`user_ids` (high confidence); the other entries change meaning and need a person.",
     ),
     "search-view-group-attributes": RuleDoc(
         detects="`string` or `expand` on a `<group>` inside a search view (Odoo 19).",
@@ -950,7 +953,7 @@ RULE_DOCS: dict[str, RuleDoc] = {
         lang="xml",
         notes="An inherited view is checked only for a `<group>` that holds `<filter>` "
         "children, which only a search view has. `<group string>` in a form view is "
-        "valid and not reported.",
+        "valid and not reported. `fix --upgrade-to` removes both attributes.",
     ),
     "act-window-target-inline": RuleDoc(
         detects="An `ir.actions.act_window` record or Python action dict with "
@@ -977,7 +980,10 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="<chatter/>",
         lang="xml",
         notes="Checked against the form compilers of Odoo 18.0 and 19.0; no Odoo 18/19 "
-        "code reads `oe_chatter` any more.",
+        "code reads `oe_chatter` any more. A div that only has the class, the standard chatter "
+        "fields and a parent that is the view root or an `xpath` is high confidence and "
+        "`fix --upgrade-to` replaces it by `<chatter/>`; any other div is medium confidence "
+        "and needs a person.",
     ),
     "kanban-legacy-templates": RuleDoc(
         detects='The `t-name="kanban-box"` and `t-name="kanban-menu"` templates of a '
