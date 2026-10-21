@@ -90,6 +90,7 @@ class RuffAdapter:
                         *map(str, targets),  # absolute: cwd is the scratch dir
                     ],
                     capture_output=True,
+                    stdin=subprocess.DEVNULL,
                     text=True,
                     timeout=60,
                     check=False,

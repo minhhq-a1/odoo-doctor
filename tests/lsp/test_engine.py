@@ -155,3 +155,39 @@ def test_a_second_scan_reuses_the_first_and_can_be_switched_off(
     assert scan_project(root) == first
     engine.forget(root)
     assert root.resolve() not in engine._reuse
+
+
+def test_a_folder_without_addons_runs_no_external_program(tmp_path: Path, monkeypatch):
+    """The empty-folder warning must not wait for git, ruff or pylint lookups (it timed
+    out on Windows, where each program start is slow)."""
+    import subprocess
+
+    from odoo_doctor.lsp import engine
+
+    (tmp_path / "odoo-doctor.toml").write_text("")  # adapters on, as by default
+    (tmp_path / "repo" / "mod").mkdir(parents=True)  # deeper than addons_paths
+    (tmp_path / "repo" / "mod" / "__manifest__.py").write_text('{"name": "mod"}')
+
+    def boom(*args, **kwargs):
+        raise AssertionError(f"started {args[:1]}")
+
+    monkeypatch.setattr(subprocess, "run", boom)
+    monkeypatch.setattr(subprocess, "Popen", boom)
+    engine._reuse.pop(tmp_path.resolve(), None)
+    assert scan_project(tmp_path) == {}
+
+
+def test_subprocesses_do_not_inherit_the_server_stdin(monkeypatch, tmp_path: Path):
+    import subprocess
+
+    from odoo_doctor.core import git
+
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    git._run(["status"], tmp_path, 5)
+    assert seen["stdin"] is subprocess.DEVNULL

@@ -75,6 +75,7 @@ def _run(
     return subprocess.run(
         ["git", *args],
         capture_output=True,
+        stdin=subprocess.DEVNULL,  # never share the stdin of an stdio server
         text=True,
         # git output holds repo-controlled bytes (config values, file names): never raise
         encoding="utf-8",

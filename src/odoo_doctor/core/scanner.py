@@ -312,15 +312,18 @@ def collect_scores(
     config_sig = ""
     source_index = None
     if reuse is not None:
+        addons = discover_addons(
+            addon_paths, target_modules=cfg.target_modules or None, warn=False
+        )
+        if not addons:  # nothing to scan: no linter, git or config lookups for it
+            return [], {}
         reuse.begin(
             hashlib.sha256(
                 repr(_identity_inputs(cfg, version, force_version)).encode()
             ).hexdigest()
         )
         stamper = Stamper(reuse.racy)
-        for addon in discover_addons(
-            addon_paths, target_modules=cfg.target_modules or None, warn=False
-        ):
+        for addon in addons:
             module_sigs[str(addon.path)] = stamper.tree(addon.path)
         index_sig = (
             index_signature(cfg.odoo_source_path, stamper)

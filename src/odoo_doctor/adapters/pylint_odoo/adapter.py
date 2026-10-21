@@ -79,6 +79,7 @@ class PylintOdooAdapter:
                         *map(str, targets),  # absolute: cwd is the scratch dir
                     ],
                     capture_output=True,
+                    stdin=subprocess.DEVNULL,
                     text=True,
                     timeout=120,
                     check=False,

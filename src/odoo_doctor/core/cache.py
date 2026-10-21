@@ -100,6 +100,7 @@ def _pylint_odoo_version(pylint_path: str, scratch: str) -> str:
                 "import importlib.metadata as m; print(m.version('pylint-odoo'))",
             ],
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=30,
             check=False,
@@ -123,6 +124,7 @@ def _linter_version(exe: str) -> str:
                 out = subprocess.run(
                     [path, "--version"],
                     capture_output=True,
+                    stdin=subprocess.DEVNULL,
                     text=True,
                     timeout=30,
                     check=False,
