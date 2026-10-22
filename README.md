@@ -220,7 +220,7 @@ The easiest way to integrate Odoo Doctor into GitHub Actions is using our offici
 
 ```yaml
 - name: Odoo Doctor Scan
-  uses: minhhq-a1/odoo-doctor@v0.11.2
+  uses: minhhq-a1/odoo-doctor@v0.12.0
   with:
     fail-on: warning
     min-score: 75

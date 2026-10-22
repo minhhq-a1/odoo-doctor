@@ -6,6 +6,10 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+---
+
+## [0.12.0] — 2026-10-22
+
 ### Fixed
 
 - `fix` no longer rewrites line endings: a file is read and kept byte for byte, so a CRLF file stays CRLF and a
@@ -48,6 +52,15 @@ All notable changes to Odoo Doctor are documented here.
 - `tests/corpus/migration_fix/` (with a hand-written `expected_after/`) and `tests/test_migration_fix_invariants.py`
   fence the contract: every mechanical finding is gone after `fix --upgrade-to`, a second run changes nothing,
   files without findings stay byte for byte, and each `MECHANICAL_RENAMES` entry round-trips.
+
+### Measured
+
+`fix --upgrade-to 19.0` on a copy of Odoo 17 core `addons` (scanned as 19.0): 1716 fixes in 656 files, none
+skipped and no finding left unfixed; the mechanical findings go from 1730 to 0, the 1101 that need a person are
+unchanged, and a second run changes nothing. Every changed `.xml` still parses and every changed `.py`
+compiles. Core 19 and a large private codebase still report 0 findings of the four rules, and no other rule
+changed. A full scan of core 19 takes about 85 s on the reference machine (a 0.11 build took 91 s on the same
+machine the same day).
 
 ---
 
