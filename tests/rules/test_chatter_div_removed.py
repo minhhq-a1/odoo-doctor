@@ -81,6 +81,20 @@ def test_div_with_other_attribute_content_or_parent_is_medium(tmp_path: Path):
     ) == ["medium"]
 
 
+def test_attributes_on_the_chatter_fields_make_it_medium(tmp_path: Path):
+    """<chatter/> cannot carry groups/options/widget/readonly of the fields, so they would be lost."""
+    for attrs in (
+        'groups="base.group_user"',
+        "options=\"{'post_refresh': 'always'}\"",
+        'widget="x"',
+        'readonly="1"',
+    ):
+        field = f'<field name="message_ids" {attrs}/>'
+        assert _confidence(
+            tmp_path, f'<form><div class="oe_chatter">{field}</div></form>'
+        ) == ["medium"], attrs
+
+
 def test_one_unsafe_div_makes_the_whole_finding_medium(tmp_path: Path):
     arch = (
         '<form><div class="oe_chatter"><field name="message_ids"/></div>'

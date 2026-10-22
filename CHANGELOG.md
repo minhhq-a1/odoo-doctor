@@ -32,10 +32,11 @@ All notable changes to Odoo Doctor are documented here.
   `removed-core-field-usage` finding that is not a pure rename is no longer fixable, and the fix priorities of
   Odoo 18+ modules rank mechanical findings by effort 1. The language server still offers no migration fix.
 - `chatter-div-removed` is `high` only when `<chatter/>` can replace the div without losing anything: the div has
-  only the class `oe_chatter`, holds only the standard chatter fields (or nothing) and sits directly under the root
+  only the class `oe_chatter`, holds only the standard chatter fields with no attribute but `name` (or nothing) and sits directly under the root
   of the view or in the body of an `xpath`. Any other div (an extra attribute, custom content, another parent) is
   now `medium`: not scored and not mechanical in the upgrade report. Title and baseline identity are unchanged.
-  On Odoo 17 core, 73 of its 75 divs stay `high`.
+  A standard field with `groups`, `options` (`post_refresh`), `widget` or `readonly` also makes it `medium`, because `<chatter/>`
+  cannot carry them. On Odoo 17 core about half of the 75 divs are in that case and stay for a person.
 
 ### Internal
 

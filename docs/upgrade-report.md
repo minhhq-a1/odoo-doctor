@@ -128,7 +128,7 @@ the migration fixer in every form the rule reports it at `high`: `view-tree-remo
 (also nested), XPath steps named `tree`, `<field name="type">tree</field>`, `view_mode` in XML (text and
 `eval=`) and in Python action dicts, and `(id, 'tree')` pairs. A form the fixer could not repair safely is
 reported at `medium` instead: `chatter-div-removed` is `high` only for a div that has just the class
-`oe_chatter`, holds only the standard chatter fields (or nothing) and sits under the root of the view or in an
+`oe_chatter`, holds only the standard chatter fields with no attribute but `name` (or nothing) and sits under the root of the view or in an
 `xpath` body; any other div needs a person. The coverage is checked by a test: after the fix the report shows no
 mechanical finding left.
 

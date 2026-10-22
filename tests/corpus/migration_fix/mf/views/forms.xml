@@ -45,4 +45,18 @@
             </xpath>
         </field>
     </record>
+    <!-- not mechanical: <chatter/> cannot carry the groups of the field -->
+    <record id="mf_form_groups" model="ir.ui.view">
+        <field name="name">mf.form.groups</field>
+        <field name="model">mf.thing</field>
+        <field name="priority">40</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet><field name="name"/></sheet>
+                <div class="oe_chatter">
+                    <field name="message_ids" groups="base.group_user"/>
+                </div>
+            </form>
+        </field>
+    </record>
 </odoo>

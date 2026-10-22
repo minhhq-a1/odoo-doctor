@@ -876,7 +876,7 @@ Good:
 
 **Fix**: Replace the whole `<div class="oe_chatter">...</div>` block with `<chatter/>`.
 
-**Note**: Checked against the form compilers of Odoo 18.0 and 19.0; no Odoo 18/19 code reads `oe_chatter` any more. A div that only has the class, the standard chatter fields and a parent that is the view root or an `xpath` is high confidence and `fix --upgrade-to` replaces it by `<chatter/>`; any other div is medium confidence and needs a person.
+**Note**: Checked against the form compilers of Odoo 18.0 and 19.0; no Odoo 18/19 code reads `oe_chatter` any more. A div that only has the class, the standard chatter fields without attributes (`groups`, `options`, `widget` would be lost) and a parent that is the view root or an `xpath` is high confidence and `fix --upgrade-to` replaces it by `<chatter/>`; any other div is medium confidence and needs a person.
 
 Bad:
 

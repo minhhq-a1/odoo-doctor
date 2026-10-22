@@ -122,6 +122,7 @@ def test_remaining_findings_are_the_ones_for_a_person(tmp_path: Path):
     _, rest = _report(root)
     assert rest == [
         ["chatter-div-removed", "mf/views/forms.xml", "medium"],
+        ["chatter-div-removed", "mf/views/forms.xml", "medium"],
         ["view-tree-removed", "mf/models/thing.py", "medium"],
     ]
 
