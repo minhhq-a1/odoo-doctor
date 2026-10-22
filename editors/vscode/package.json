@@ -2,7 +2,7 @@
   "name": "odoo-doctor",
   "displayName": "Odoo Doctor",
   "description": "Health findings for Odoo custom addons in your editor, with quick fixes (experimental).",
-  "version": "0.11.2",
+  "version": "0.12.0",
   "publisher": "MinhHong",
   "icon": "images/icon.png",
   "preview": true,
