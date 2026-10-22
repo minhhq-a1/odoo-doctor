@@ -28,7 +28,9 @@ CHATTER_FIELDS = frozenset({"message_follower_ids", "activity_ids", "message_ids
 def is_plain_chatter_div(div: etree._Element, arch: etree._Element) -> bool:
     """Can ``<chatter/>`` replace this div without losing anything or changing meaning?
 
-    Only the class, only the standard chatter fields inside (or nothing), and a place
+    Only the class, only the standard chatter fields inside (or nothing) and those with no
+    attribute but ``name`` (``groups``, ``options``, ``widget``, ``readonly`` would be
+    dropped silently), and a place
     where Odoo 18 and 19 themselves put ``<chatter/>``: directly under the root of the
     arch, or in the body of an ``xpath`` of an inheriting view. Anything else is for a
     person to look at.
@@ -42,6 +44,7 @@ def is_plain_chatter_div(div: etree._Element, arch: etree._Element) -> bool:
         and not (div.text or "").strip()
         and all(
             c.tag == "field"
+            and dict(c.attrib).keys() == {"name"}
             and c.get("name") in CHATTER_FIELDS
             and len(c) == 0
             and not (c.tail or "").strip()

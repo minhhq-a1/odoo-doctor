@@ -25,7 +25,7 @@ DIV = (
     '    <div class="oe_chatter">\n'
     '        <field name="message_follower_ids"/>\n'
     '        <field name="activity_ids"/>\n'
-    '        <field name="message_ids" options="{\'x\': 1}"/>\n'
+    '        <field name="message_ids"/>\n'
     "    </div>"
 )
 
@@ -52,6 +52,15 @@ def test_empty_self_closing_div_becomes_chatter(tmp_path: Path):
     diags, texts, result = _fix(tmp_path, xml)
     assert len(diags) == 1 and result.skipped_count == 0
     assert texts["v.xml"] == xml.replace('<div class="oe_chatter"/>', "<chatter/>")
+
+
+def test_attributes_on_the_fields_are_not_dropped(tmp_path: Path):
+    xml = view(
+        '<form><div class="oe_chatter"><field name="message_ids" groups="base.group_user"/></div></form>'
+    )
+    diags, texts, result = _fix(tmp_path, xml)
+    assert [d.confidence for d in diags] == ["medium"]
+    assert texts["v.xml"] == xml and result.changed_files == {}
 
 
 def test_custom_content_is_not_fixed(tmp_path: Path):

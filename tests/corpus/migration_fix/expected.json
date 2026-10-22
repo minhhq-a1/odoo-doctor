@@ -15,6 +15,11 @@
     "medium"
   ],
   [
+    "chatter-div-removed",
+    "mf/views/forms.xml",
+    "medium"
+  ],
+  [
     "removed-core-field-usage",
     "mf/security/groups.xml",
     "high"
