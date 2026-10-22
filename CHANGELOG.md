@@ -6,6 +6,12 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Internal
+
+- Releases are automatic: merging a version bump to `main` runs `release.yml`, which tags it and starts
+  `publish.yml`. That workflow now also creates the GitHub Release (notes from this file, `.vsix` attached)
+  and publishes the VS Code extension when the `VSCE_PAT` secret is set.
+
 ---
 
 ## [0.12.0] — 2026-10-22

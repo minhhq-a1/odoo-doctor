@@ -1,0 +1,51 @@
+name: Release
+
+# Merging a version bump to main is the go-ahead to release: this workflow tags it and starts
+# publish.yml (tests, PyPI, GitHub Release, Marketplace). It does nothing when the version in
+# pyproject.toml already has a tag, so any other pyproject.toml change is a no-op. Run it by hand
+# (Actions > Release > Run workflow, branch main) to release a version bumped earlier.
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two merges in a row must not race to tag the same version.
+concurrency:
+  group: release
+
+jobs:
+  tag:
+    name: Tag the new version and start publishing
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push the tag
+      actions: write   # start publish.yml: a Release made with GITHUB_TOKEN does not trigger it
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Tag the version in pyproject.toml, unless it is already tagged
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists, nothing to release"
+            exit 0
+          fi
+          # Fail before tagging: a tag cannot be taken back once publish.yml has seen it.
+          python scripts/check_release_version.py "$tag"
+          python scripts/changelog_notes.py "$version" >/dev/null
+          git tag "$tag"
+          git push origin "refs/tags/$tag"
+          gh workflow run publish.yml --ref "$tag"
+          echo "Tagged $tag and started publish.yml" >> "$GITHUB_STEP_SUMMARY"

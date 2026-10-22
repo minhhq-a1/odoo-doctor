@@ -81,3 +81,31 @@ def test_publish_keeps_trusted_publishing_on_the_publish_job_only():
     )
     uses = [s.get("uses", "") for s in publish["steps"]]
     assert "pypa/gh-action-pypi-publish@release/v1" in uses
+
+
+def _workflow(name: str) -> dict:
+    data = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+    data["on"] = data.pop(True, data.get("on"))  # YAML reads a bare `on` as True
+    return data
+
+
+def test_release_starts_only_from_a_version_bump_on_main():
+    triggers = _workflow("release.yml")["on"]
+    assert triggers["push"] == {"branches": ["main"], "paths": ["pyproject.toml"]}
+    job = _workflow("release.yml")["jobs"]["tag"]
+    assert job["if"] == "github.ref == 'refs/heads/main'"
+    commands = _commands(job)
+    # nothing is tagged before the version and the notes are known to be good
+    assert commands.index("check_release_version.py") < commands.index("git tag")
+    assert commands.index("changelog_notes.py") < commands.index("git tag")
+    # a Release made with GITHUB_TOKEN triggers nothing, so publish.yml is dispatched
+    assert "gh workflow run publish.yml --ref" in commands
+
+
+def test_publish_builds_the_vsix_and_publishes_it_after_pypi():
+    jobs = _publish_jobs()
+    assert {"pypi-publish", "vsix"} <= set(jobs["github-release"]["needs"])
+    assert {"pypi-publish", "vsix"} <= set(jobs["marketplace-publish"]["needs"])
+    assert jobs["github-release"]["permissions"] == {"contents": "write"}
+    # the token is a secret, never an argument
+    assert "--pat" not in _commands(jobs["marketplace-publish"])

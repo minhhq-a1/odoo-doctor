@@ -125,3 +125,80 @@ jobs:
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  vsix:
+    name: Build the VS Code extension
+    needs: check-version
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - run: npm ci
+
+      # tests/test_vscode_extension.py keeps package.json equal to the package version
+      - run: npx vsce package --out "odoo-doctor-${GITHUB_REF_NAME#v}.vsix"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: editors/vscode/*.vsix
+          if-no-files-found: error
+
+  github-release:
+    name: GitHub Release with notes and .vsix
+    needs: [pypi-publish, vsix]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+
+      # A Release published by hand already exists (that is what triggered this run): only add the .vsix.
+      - name: Create the Release if missing and attach the .vsix
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            python3 scripts/changelog_notes.py "${GITHUB_REF_NAME#v}" > notes.md
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+          fi
+          gh release upload "$GITHUB_REF_NAME" ./*.vsix --clobber
+
+  marketplace-publish:
+    name: Publish the extension to the VS Code Marketplace
+    needs: [pypi-publish, vsix]
+    runs-on: ubuntu-latest
+    env:
+      # Repository secret holding the Marketplace token (publisher MinhHong, scope Marketplace > Manage).
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+
+      - name: Publish the .vsix
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::warning::VSCE_PAT is not set: upload the .vsix from the GitHub Release at https://marketplace.visualstudio.com/manage/publishers/MinhHong"
+            exit 0
+          fi
+          npx --yes @vscode/vsce@3 publish --packagePath ./*.vsix
