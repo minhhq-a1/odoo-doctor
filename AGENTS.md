@@ -193,10 +193,7 @@ chore(release): bump version to 0.3.0
 
 1. Bump the version string in `pyproject.toml`, `src/odoo_doctor/__init__.py`, `README.md`, `CLAUDE.md`, and `AGENTS.md`, plus `editors/vscode/package.json` and `package-lock.json` (`tests/test_version.py` and `tests/test_vscode_extension.py` check consistency).
 2. Update the `CHANGELOG.md` with release notes.
-3. Commit and merge to `main`.
-4. Create and push a new Git tag (e.g., `git tag vX.Y.Z && git push origin vX.Y.Z`).
-5. Create a GitHub Release. The `.github/workflows/publish.yml` action runs the tests, checks that the tag equals the package version, smoke-tests the wheel, and only then builds and publishes the wheel to PyPI via Trusted Publishing.
-6. Publish the VS Code extension (`MinhHong.odoo-doctor`, same version) from `main`: `cd editors/vscode && npm ci && npx vsce publish` with the publisher's token, or upload the `.vsix` from `npm run package` at https://marketplace.visualstudio.com/manage/publishers/MinhHong. This step is manual.
+3. Commit and merge to `main`. The merge is the release: `.github/workflows/release.yml` sees the new version in `pyproject.toml`, checks it, pushes the tag `vX.Y.Z` and starts `.github/workflows/publish.yml`, which runs the tests, checks that the tag equals the package version, smoke-tests the wheel, publishes to PyPI via Trusted Publishing, creates the GitHub Release (notes from `CHANGELOG.md`, `.vsix` attached) and publishes the VS Code extension (`MinhHong.odoo-doctor`) with the `VSCE_PAT` repository secret. Do not tag or create the Release by hand. Without `VSCE_PAT` upload the `.vsix` from the Release at https://marketplace.visualstudio.com/manage/publishers/MinhHong. See `.claude/skills/release/SKILL.md` for re-running a release.
 
 ---
 
