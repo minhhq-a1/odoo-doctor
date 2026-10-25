@@ -143,18 +143,20 @@ def _tree_edits_view(fragment: str, root: etree._Element) -> list[Edit] | None:
         if not edit:
             return None
         edits.append(edit)
-    for el in tree_mode_fields(arch):
+    # one edit per tag: a field can carry both mode and context
+    for el in {*tree_mode_fields(arch), *tree_view_ref_elements(arch)}:
         tag = _tag_of(fragment, root, el)
-        edit = tag and _set_attr(fragment, tag, "mode", _rename_tree_mode)
-        if not edit:
+        if tag is None:
             return None
-        edits.append(edit)
-    for el in tree_view_ref_elements(arch):
-        tag = _tag_of(fragment, root, el)
-        edit = tag and _set_attr(fragment, tag, "context", _rename_tree_view_ref)
-        if not edit:
-            return None
-        edits.append(edit)
+        text = fragment[tag.start : tag.end]
+        for attr, rename in (
+            ("mode", _rename_tree_mode),
+            ("context", _rename_tree_view_ref),
+        ):
+            raw = xt.get_attr(text, attr)
+            if raw is not None:
+                text = xt.set_attr_value(text, attr, rename(raw))
+        edits.append((tag.start, tag.end, text))
     type_field = _field(root, "type")
     if type_field is not None and (type_field.text or "").strip() == "tree":
         edits += _replace_field_text(

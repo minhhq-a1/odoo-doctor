@@ -71,6 +71,11 @@
   ],
   [
     "view-tree-removed",
+    "mf/views/forms.xml",
+    "high"
+  ],
+  [
+    "view-tree-removed",
     "mf/views/trees.xml",
     "high"
   ],

@@ -59,4 +59,15 @@
             </form>
         </field>
     </record>
+    <record id="mf_form_mode" model="ir.ui.view">
+        <field name="name">mf.form.mode</field>
+        <field name="model">mf.thing</field>
+        <field name="priority">40</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="name" mode="tree,kanban" context="{'tree_view_ref': 'mf.view_line_tree'}"/>
+                <field name="name" mode="list" context="{'list_view_ref': 'mf.view_line_tree'}"/>
+            </form>
+        </field>
+    </record>
 </odoo>

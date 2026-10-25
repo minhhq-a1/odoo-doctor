@@ -125,7 +125,7 @@ applies only `high` findings (see [stability.md](stability.md) and `core/fixer.p
 
 **Mechanical means `fix --upgrade-to` fixes it.** Every `high` finding of a mechanical rule is repaired by
 the migration fixer in every form the rule reports it at `high`: `view-tree-removed` covers `<tree>` elements
-(also nested), XPath steps named `tree`, `<field name="type">tree</field>`, `view_mode` in XML (text and
+(also nested), XPath steps named `tree`, `<field name="type">tree</field>`, x2many `mode="tree"`, `tree_view_ref` in a view `context`, `view_mode` in XML (text and
 `eval=`) and in Python action dicts, and `(id, 'tree')` pairs. A form the fixer could not repair safely is
 reported at `medium` instead: `chatter-div-removed` is `high` only for a div that has just the class
 `oe_chatter`, holds only the standard chatter fields with no attribute but `name` (or nothing) and sits under the root of the view or in an
