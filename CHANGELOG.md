@@ -6,6 +6,27 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `csrf-disabled-authenticated-route` read a route that writes no `auth` as `auth='user'`, although Odoo merges
+  the routing of an overridden handler into the override: `@http.route(methods=['POST'], csrf=False)` over a
+  public webhook was a false `high`. The rule now takes the auth that `public-controller-sudo-risk` already
+  resolves (parents across files and modules), and reports nothing when the parent route is not in the scanned
+  code. Title and baseline identity are unchanged; findings can only disappear. New golden corpus case
+  `csrf_inheritance`. Known limit: a bare override of a route that itself has `csrf=False` is still not followed.
+- The sticky PR comment (`--format github`) could silently never be posted. `gh pr view` ran without a PR
+  number, which fails on the merge ref that Actions checks out, and the update used the GraphQL node id of the
+  comment where the REST API wants the numeric one. In a pull request run the PR comes from
+  `GITHUB_EVENT_PATH` / `GITHUB_REF` and `GITHUB_REPOSITORY`, comments are listed (all pages) and updated by
+  the REST id, `gh` runs outside the scanned repository, and a failure is a `[WARN]` line on stderr instead of
+  nothing. Run by hand, outside Actions, the behaviour is as before.
+- Files the tool reads or writes as text (stubs, `init` config, scaffolded rules) now name `utf-8`; on Windows
+  the locale code page was used.
+
+### Changed
+
+- The VS Code extension bundle is minified (952 KB to about 450 KB).
+
 ### Internal
 
 - Releases are automatic: merging a version bump to `main` runs `release.yml`, which tags it and starts

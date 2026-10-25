@@ -392,7 +392,7 @@ def main(argv: list[str] | None = None) -> None:
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    out.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     model_count = len(data["models"])
     xml_count = len(data.get("xml_ids", {}))

@@ -170,7 +170,7 @@ access_x,x,model_x,base.group_user,1,1,1,1
 
 **Fix**: Remove `csrf=False` and send the token with the request (`request.csrf_token()`). A trusted third party that calls the route should use `auth='public'` and a verified signature or secret instead of the session.
 
-**Note**: Webhooks (`auth='public'` / `'none'`), JSON routes and GET-only routes are not reported: they carry no session identity of their own, or Odoo never checks the token for them.
+**Note**: Webhooks (`auth='public'` / `'none'`), JSON routes and GET-only routes are not reported: they carry no session identity of their own, or Odoo never checks the token for them. A route that writes no `auth` takes the one of the route it overrides; when that route is not in the scanned code, nothing is reported. Known limit: a bare override of a route that has `csrf=False` is not followed.
 
 Bad:
 

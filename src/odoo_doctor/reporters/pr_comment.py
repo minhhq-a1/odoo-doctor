@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
+import sys
+import tempfile
 from typing import Any
 
 from odoo_doctor.core.config import SurfaceConfig
 from odoo_doctor.core.diagnostics import Diagnostic
 from odoo_doctor.core.scoring import ScoreResult, score_label
 from odoo_doctor.core.surfaces import filter_for_surface
+from odoo_doctor.core.text import safe_text
 
 
 def _md(text: str) -> str:
@@ -86,46 +90,91 @@ def choose_comment_action(
     return "create", None
 
 
-def post_pr_comment(body: str, marker: str = "<!-- odoo-doctor -->") -> None:
-    """Post or update the PR comment using the gh CLI."""
+def pr_target() -> tuple[str, str] | None:
+    """``(owner/repo, number)`` of the pull request this CI run belongs to, None outside one.
+
+    ``gh pr view`` without a number looks the branch up through git, which fails on the
+    detached merge ref that Actions checks out; the run's own environment names the PR.
+    """
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        return None
+    number = ""
     try:
-        # Fetch existing comments for the current PR
+        with open(os.environ.get("GITHUB_EVENT_PATH", ""), encoding="utf-8") as fh:
+            number = str((json.load(fh).get("pull_request") or {}).get("number", ""))
+    except (OSError, ValueError, AttributeError):
+        pass
+    if not number:  # refs/pull/<n>/merge
+        match = re.fullmatch(
+            r"refs/pull/(\d+)/(?:merge|head)", os.environ.get("GITHUB_REF", "")
+        )
+        number = match.group(1) if match else ""
+    return (repo, number) if number.isdigit() else None
+
+
+def _comments(stdout: str) -> list[dict[str, Any]]:
+    """The JSON objects in ``stdout``, one after the other (``gh api --jq`` prints one per comment)."""
+    decoder = json.JSONDecoder()
+    found: list[dict[str, Any]] = []
+    pos = 0
+    while pos < len(stdout):
+        if stdout[pos].isspace():
+            pos += 1
+            continue
+        obj, pos = decoder.raw_decode(stdout, pos)
+        if isinstance(obj, dict):
+            found.append(obj)
+    return found
+
+
+def _why(stderr: str) -> str:
+    lines = (stderr or "").strip().splitlines()
+    return lines[-1][:200] if lines else "gh failed"
+
+
+def post_pr_comment(body: str, marker: str = "<!-- odoo-doctor -->") -> None:
+    """Post or update the PR comment using the gh CLI; say on stderr when that fails."""
+    target = pr_target()
+    if (
+        target is None
+    ):  # run by hand from a clone: gh finds the PR of the checked-out branch
+        repo, number, cwd = "{owner}/{repo}", None, None
+        list_cmd = ["gh", "pr", "view", "--json", "comments"]
+        create_cmd = ["gh", "pr", "comment", "-b", body]
+    else:
+        repo, number = target
+        cwd = (
+            tempfile.gettempdir()
+        )  # not the scanned repo: its git config does not apply
+        list_cmd = [
+            "gh", "api", "--paginate", f"repos/{repo}/issues/{number}/comments",
+            "--jq", ".[] | {id: .id, body: .body}",
+        ]  # fmt: skip
+        create_cmd = ["gh", "pr", "comment", number, "--repo", repo, "-b", body]
+    try:
         result = subprocess.run(
-            ["gh", "pr", "view", "--json", "comments"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
+            list_cmd, capture_output=True, text=True, timeout=30, check=False, cwd=cwd
         )
         if result.returncode != 0:
-            return
-
-        data = json.loads(result.stdout)
-        comments = data.get("comments", [])
+            raise OSError(_why(result.stderr))
+        comments = (
+            json.loads(result.stdout).get("comments", [])
+            if number is None
+            else _comments(result.stdout)
+        )
         action, comment_id = choose_comment_action(comments, marker)
-
-        if action == "update" and comment_id:
-            # We use gh api to patch the specific comment because gh pr comment edit is sometimes flaky
-            subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    "-X",
-                    "PATCH",
-                    f"repos/{{owner}}/{{repo}}/issues/comments/{comment_id}",
-                    "-f",
-                    f"body={body}",
-                ],
-                capture_output=True,
-                timeout=10,
-                check=False,
-            )
+        if action == "update" and comment_id and number is not None:
+            cmd = [
+                "gh", "api", "-X", "PATCH",
+                f"repos/{repo}/issues/comments/{comment_id}", "-f", f"body={body}",
+            ]  # fmt: skip
         else:
-            subprocess.run(
-                ["gh", "pr", "comment", "-b", body],
-                capture_output=True,
-                timeout=10,
-                check=False,
-            )
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        pass
+            cmd = create_cmd
+        done = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=30, check=False, cwd=cwd
+        )
+        if done.returncode != 0:
+            raise OSError(_why(done.stderr))
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        print(f"[WARN] PR comment not posted: {safe_text(str(exc))}", file=sys.stderr)

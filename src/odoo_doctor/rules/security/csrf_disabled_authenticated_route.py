@@ -5,11 +5,16 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from odoo_doctor.core.diagnostics import Diagnostic
-from odoo_doctor.core.source import parse_python
+from odoo_doctor.core.source import parse_python, scannable_files
+from odoo_doctor.parsers.python_models import parse_controllers
 from odoo_doctor.rules._ast_helpers import is_migration_file, is_test_file
 from odoo_doctor.rules.registry import rule
+
+if TYPE_CHECKING:
+    from odoo_doctor.graph.module_context import ModuleContext
 
 # Odoo only checks the token for these (http.py: SAFE_HTTP_METHODS / CSRF_FREE_METHODS).
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
@@ -47,18 +52,39 @@ def _methods(node: ast.expr | None) -> set[str] | None:
     tier="P1",
     severity="warning",
     default_confidence="high",
-    needs_context=False,
+    needs_context=True,
     min_version="14.0",
 )
+def check_csrf_in_module(ctx: ModuleContext) -> list[Diagnostic]:
+    """Every file of the module, each route's auth resolved through the project graph."""
+    route_auth: dict[str, dict[int, str]] = {}
+    for ctrl in ctx.controllers:
+        route_auth.setdefault(ctrl.file_path, {})[ctrl.line] = ctrl.auth
+    diags: list[Diagnostic] = []
+    for path in scannable_files(ctx.path):
+        if path.name != "__manifest__.py":
+            diags.extend(
+                check_csrf_disabled_authenticated_route(
+                    path, ctx.name, ctx.odoo_version, route_auth.get(str(path), {})
+                )
+            )
+    return diags
+
+
 def check_csrf_disabled_authenticated_route(
-    file_path: Path, module_name: str, odoo_version: str
+    file_path: Path,
+    module_name: str,
+    odoo_version: str,
+    route_auth: dict[int, str] | None = None,
 ) -> list[Diagnostic]:
     """Flag state-changing ``type='http'`` routes that authenticate by session but skip CSRF.
 
     A browser sends the session cookie on a cross-site request, so such a route can be
     triggered by any web page the logged-in user visits. ``auth='public'`` / ``'none'``
     webhooks, which carry no session identity of their own, and JSON routes (which the
-    CSRF check never covers) are not reported.
+    CSRF check never covers) are not reported. A route that writes no ``auth`` takes the one
+    of the route it overrides (``route_auth``, by line); an auth that cannot be resolved is
+    not reported.
     """
     if is_test_file(file_path, module_name) or is_migration_file(
         file_path, module_name
@@ -67,6 +93,8 @@ def check_csrf_disabled_authenticated_route(
     tree = parse_python(file_path)
     if tree is None:
         return []
+    if route_auth is None:  # one file on its own: parents are looked up in that file
+        route_auth = {c.line: c.auth for c in parse_controllers(file_path)}
 
     diags: list[Diagnostic] = []
     for func in ast.walk(tree):
@@ -80,7 +108,11 @@ def check_csrf_disabled_authenticated_route(
             if not (isinstance(csrf, ast.Constant) and csrf.value is False):
                 continue
             auth = _keyword(call, "auth")
-            auth_value = "user" if auth is None else _literal_str(auth)
+            auth_value = (
+                route_auth.get(func.lineno, "user")
+                if auth is None
+                else _literal_str(auth)
+            )
             route_type = _keyword(call, "type")
             type_value = "http" if route_type is None else _literal_str(route_type)
             if auth_value != "user" or type_value != "http":
