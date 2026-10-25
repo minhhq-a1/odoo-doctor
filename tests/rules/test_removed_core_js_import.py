@@ -152,7 +152,6 @@ def test_scan_end_to_end_suppression_and_cache(tmp_path: Path, indexes):
     assert run() == ["removed-core-js-import"]
     assert run() == ["removed-core-js-import"]  # cache hit, same result
     js.write_text(
-        "// odoo-doctor: disable=removed-core-js-import\n"
-        'import "@web/legacy/old";\n'
+        '// odoo-doctor: disable=removed-core-js-import\nimport "@web/legacy/old";\n'
     )
     assert run() == []  # the edit is seen (cache) and the comment suppresses it
