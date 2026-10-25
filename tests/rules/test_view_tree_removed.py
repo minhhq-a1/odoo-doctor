@@ -135,3 +135,21 @@ def test_qweb_templates_and_unloaded_files_are_skipped(tmp_path: Path):
 def test_python_in_tests_and_migrations_is_skipped(tmp_path: Path):
     py = "def go(self):\n    return {'res_model': 'x', 'view_mode': 'tree'}\n"
     assert _diags(tmp_path, {"tests/t.py": py, "migrations/18.0.1/p.py": py}) == []
+
+
+def test_x2many_mode_tree_and_tree_view_ref_flagged(tmp_path: Path):
+    arch = (
+        '<form><field name="a" mode="tree"/>'
+        "<field name=\"b\" context=\"{'tree_view_ref': 'm.v'}\"/></form>"
+    )
+    diags = _diags(tmp_path, {"v.xml": view(arch)})
+    assert len(diags) == 1 and diags[0].confidence == "high"
+    assert "mode tree" in diags[0].message and "tree_view_ref" in diags[0].message
+
+
+def test_list_mode_and_list_view_ref_clean(tmp_path: Path):
+    arch = (
+        '<form><field name="a" mode="list"/>'
+        "<field name=\"b\" context=\"{'list_view_ref': 'm.v'}\"/></form>"
+    )
+    assert _diags(tmp_path, {"v.xml": view(arch)}) == []

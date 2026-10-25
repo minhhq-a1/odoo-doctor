@@ -1118,11 +1118,11 @@ Good:
 
 **Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0 · **Fixable**: yes
 
-**Detects**: The `tree` view type on Odoo 18 and later: a `<tree>` element in a view architecture (also nested in an x2many field), `<field name="type">tree`, a `tree` step in an XPath, `tree` in the `view_mode` of an action or an `ir.actions.act_window.view`, and Python action dicts with `'view_mode': 'tree,form'` or a `(False, 'tree')` pair in `'views'`.
+**Detects**: The `tree` view type on Odoo 18 and later: a `<tree>` element in a view architecture (also nested in an x2many field), `<field name="type">tree`, a `tree` step in an XPath, `tree` in the `view_mode` of an action or an `ir.actions.act_window.view`, and Python action dicts with `'view_mode': 'tree,form'` or a `(False, 'tree')` pair in `'views'`, an x2many `<field mode="tree">` and a `tree_view_ref` key in the `context` of a view element (Odoo 18 reads `list_view_ref`).
 
 **Why**: Odoo 18 renamed the tree view type to `list` and kept no alias, so the view is rejected on install or update and the action cannot open.
 
-**Fix**: Rename: `<tree>` to `<list>`, `tree,form` to `list,form`, and the XPath step `tree` to `list`.
+**Fix**: Rename: `<tree>` to `<list>`, `tree,form` to `list,form`, and the XPath step `tree` to `list`, `mode="tree"` to `mode="list"` and `tree_view_ref` to `list_view_ref`.
 
 **Note**: Reported once per view or action record. A Python dict that does not look like an action (no `res_model`, no `type`) is medium confidence. Only files the manifest loads are read, and QWeb templates are skipped. `odoo-doctor fix --upgrade-to 19.0` renames every form of a high-confidence finding.
 

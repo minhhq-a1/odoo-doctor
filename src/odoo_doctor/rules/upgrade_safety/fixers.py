@@ -36,6 +36,8 @@ from odoo_doctor.rules.upgrade_safety.view_tree_removed import (
     _looks_like_action,
     _py_action_dicts,
     _xpath_names_tree,
+    tree_mode_fields,
+    tree_view_ref_elements,
 )
 
 Edit = tuple[int, int, str]  # [start, end) of the text, replacement
@@ -100,6 +102,10 @@ def _rename_tree_mode(value: str) -> str:
     return _MODE_TOKEN.sub(r"\1\2list\3", value)
 
 
+def _rename_tree_view_ref(value: str) -> str:
+    return re.sub(r"(?<!\w)tree_view_ref(?!\w)", "list_view_ref", value)
+
+
 def _rename_xpath_steps(expr: str) -> str:
     """``tree`` steps become ``list``; text inside ``[…]`` predicates is left alone."""
     parts = re.split(f"({_PREDICATES.pattern})", expr)
@@ -134,6 +140,18 @@ def _tree_edits_view(fragment: str, root: etree._Element) -> list[Edit] | None:
             continue
         tag = _tag_of(fragment, root, el)
         edit = tag and _set_attr(fragment, tag, "expr", _rename_xpath_steps)
+        if not edit:
+            return None
+        edits.append(edit)
+    for el in tree_mode_fields(arch):
+        tag = _tag_of(fragment, root, el)
+        edit = tag and _set_attr(fragment, tag, "mode", _rename_tree_mode)
+        if not edit:
+            return None
+        edits.append(edit)
+    for el in tree_view_ref_elements(arch):
+        tag = _tag_of(fragment, root, el)
+        edit = tag and _set_attr(fragment, tag, "context", _rename_tree_view_ref)
         if not edit:
             return None
         edits.append(edit)
@@ -182,6 +200,8 @@ def _still_has_tree(root: etree._Element, model: str) -> bool:
             and (
                 next(arch.iter("tree"), None) is not None
                 or any(_xpath_names_tree(x.get("expr", "")) for x in arch.iter("xpath"))
+                or tree_mode_fields(arch)
+                or tree_view_ref_elements(arch)
             )
             or type_field is not None
             and (type_field.text or "").strip() == "tree"

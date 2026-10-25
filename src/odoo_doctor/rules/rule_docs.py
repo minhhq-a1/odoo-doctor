@@ -885,11 +885,14 @@ RULE_DOCS: dict[str, RuleDoc] = {
         'architecture (also nested in an x2many field), `<field name="type">tree`, a '
         "`tree` step in an XPath, `tree` in the `view_mode` of an action or an "
         "`ir.actions.act_window.view`, and Python action dicts with `'view_mode': "
-        "'tree,form'` or a `(False, 'tree')` pair in `'views'`.",
+        "'tree,form'` or a `(False, 'tree')` pair in `'views'`, an x2many "
+        '`<field mode="tree">` and a `tree_view_ref` key in the `context` of a view '
+        "element (Odoo 18 reads `list_view_ref`).",
         why="Odoo 18 renamed the tree view type to `list` and kept no alias, so the view "
         "is rejected on install or update and the action cannot open.",
         fix="Rename: `<tree>` to `<list>`, `tree,form` to `list,form`, and the XPath "
-        "step `tree` to `list`.",
+        'step `tree` to `list`, `mode="tree"` to `mode="list"` and `tree_view_ref` to '
+        "`list_view_ref`.",
         bad='<record id="view_x_tree" model="ir.ui.view">\n'
         '    <field name="model">x.model</field>\n'
         '    <field name="arch" type="xml">\n'
