@@ -111,3 +111,20 @@ def test_stale_line_returns_none():
         confidence="high", title="t", message="m", help="h", odoo_version="19.0",
     )  # fmt: skip
     assert fix_view_tree_removed(diag, view("<list/>")) is None
+
+
+def test_x2many_mode_and_tree_view_ref_renamed(tmp_path: Path):
+    arch = (
+        '<form><field name="a" mode="tree,kanban"/>'
+        "<field name=\"b\" context=\"{'tree_view_ref': 'm.v', 'x': 1}\"/>"
+        '<button name="o" context="{&quot;tree_view_ref&quot;: &quot;m.w&quot;}"/>'
+        "<field name=\"c\" context=\"{'list_view_ref': 'm.v'}\"/></form>"
+    )
+    diags, texts, result = _fix(tmp_path, {"v.xml": view(arch)})
+    assert len(diags) == 1 and result.skipped_count == 0
+    out = texts["v.xml"]
+    assert 'mode="list,kanban"' in out
+    assert "{'list_view_ref': 'm.v', 'x': 1}" in out
+    assert "{&quot;list_view_ref&quot;: &quot;m.w&quot;}" in out
+    assert "tree" not in out.split('type="xml">')[1]
+    _assert_idempotent(tmp_path, texts)

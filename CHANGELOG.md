@@ -14,6 +14,27 @@ All notable changes to Odoo Doctor are documented here.
 
 ---
 
+## [0.12.1] — 2026-10-25
+
+### Added
+
+- `view-tree-removed` also flags, and `fix --upgrade-to` repairs, an x2many `<field mode="tree">` (becomes
+  `mode="list"`, other modes in the list are kept) and a `tree_view_ref` key in the `context` of a view element
+  (becomes `list_view_ref`). Both are `high`: Odoo 19 core uses neither (it has 16 `mode="list"` and 40
+  `list_view_ref`). Title and baseline identity are unchanged, so a view that already had a finding keeps it;
+  a view that only had these forms is a new finding. A `tree_view_ref` in the `context` of an action record or
+  Python dict is not covered yet.
+
+### Not in this release
+
+- Mapping the attributes of the chatter fields (`options`, `groups`, `widget`) to `<chatter/>` attributes: needs a
+  survey of Odoo 17 core first (the measured divs carry `post_refresh` and `open_attachments` that do not map
+  one to one). Those divs stay `medium`.
+- Language-server quick-fix for migration fixers: needs a workspace setting for the target version, a new
+  public surface of the extension.
+
+---
+
 ## [0.12.0] — 2026-10-22
 
 ### Fixed

@@ -24,6 +24,8 @@ from odoo_doctor.rules._module_files import (
 from odoo_doctor.rules.registry import rule
 
 if TYPE_CHECKING:
+    from lxml import etree
+
     from odoo_doctor.graph.module_context import ModuleContext
 
 _TREE_MODE = re.compile(r"(?:^|,)\s*tree\s*(?:,|$)")
@@ -31,8 +33,25 @@ _EVAL_VIEW_MODE = re.compile(r"""['"]view_mode['"]\s*:\s*['"]([^'"]*)['"]""")
 _PREDICATES = re.compile(r"\[[^\]]*\]")
 
 
+_TREE_VIEW_REF = re.compile(r"""(?<=['"])tree_view_ref(?=['"])""")
+
+
 def _has_tree_mode(value: str) -> bool:
     return bool(_TREE_MODE.search(value))
+
+
+def tree_mode_fields(arch: etree._Element) -> list[etree._Element]:
+    """x2many ``<field mode="tree">`` (Odoo 18 reads ``mode="list"``)."""
+    return [
+        e
+        for e in elements(arch)
+        if e.tag == "field" and _has_tree_mode(e.get("mode", ""))
+    ]
+
+
+def tree_view_ref_elements(arch: etree._Element) -> list[etree._Element]:
+    """Elements whose ``context`` sets ``tree_view_ref`` (renamed ``list_view_ref``)."""
+    return [e for e in elements(arch) if _TREE_VIEW_REF.search(e.get("context", ""))]
 
 
 def _xpath_names_tree(expr: str) -> bool:
@@ -79,7 +98,8 @@ def check_view_tree_removed(ctx: ModuleContext) -> list[Diagnostic]:
 
     The architecture ``<tree>``, the ``tree`` view mode of an action and the ``tree`` step
     of an XPath no longer match anything: Odoo 18 and later have no ``tree`` view type, so
-    the view is rejected or the action cannot open.
+    the view is rejected or the action cannot open. An x2many ``mode="tree"`` and a
+    ``tree_view_ref`` context key (now ``list_view_ref``) are renamed the same way.
     """
     diags: list[Diagnostic] = []
 
@@ -99,7 +119,9 @@ def check_view_tree_removed(ctx: ModuleContext) -> list[Diagnostic]:
                 help=(
                     "Rename the view type: <tree> becomes <list>, view_mode 'tree,form' "
                     "becomes 'list,form', and an XPath step tree becomes list. A nested "
-                    "tree inside an x2many field becomes <list> as well."
+                    'tree inside an x2many field becomes <list> as well, mode="tree" on '
+                    'an x2many field becomes mode="list" and tree_view_ref becomes '
+                    "list_view_ref."
                 ),
             )
         )
@@ -116,7 +138,9 @@ def check_view_tree_removed(ctx: ModuleContext) -> list[Diagnostic]:
                 if e.tag == "xpath" and _xpath_names_tree(e.get("expr", ""))
             ]
             is_tree_type = field_text(record, "type") == "tree"
-            found = trees + xpaths
+            modes = tree_mode_fields(arch)
+            refs = tree_view_ref_elements(arch)
+            found = trees + xpaths + modes + refs
             if not found and not is_tree_type:
                 continue
             what = []
@@ -124,6 +148,10 @@ def check_view_tree_removed(ctx: ModuleContext) -> list[Diagnostic]:
                 what.append(f"{len(trees)} <tree> element(s)")
             if xpaths:
                 what.append(f"{len(xpaths)} XPath step(s) named tree")
+            if modes:
+                what.append(f"{len(modes)} x2many field(s) with mode tree")
+            if refs:
+                what.append(f"{len(refs)} tree_view_ref context key(s)")
             if is_tree_type:
                 what.append("type tree")
             rec_id = record.get("id", "<anonymous>")
