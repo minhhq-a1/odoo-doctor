@@ -853,7 +853,9 @@ RULE_DOCS: dict[str, RuleDoc] = {
         good="@http.route('/my/save', type='http', auth='user', methods=['POST'])",
         notes="Webhooks (`auth='public'` / `'none'`), JSON routes and GET-only routes are "
         "not reported: they carry no session identity of their own, or Odoo never checks "
-        "the token for them.",
+        "the token for them. A route that writes no `auth` takes the one of the route it "
+        "overrides; when that route is not in the scanned code, nothing is reported. "
+        "Known limit: a bare override of a route that has `csrf=False` is not followed.",
     ),
     "manual-cr-commit": RuleDoc(
         detects="`cr.commit()` on the transaction Odoo opened for the request: "

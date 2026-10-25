@@ -779,7 +779,8 @@ def init(
         typer.echo(f"Config already exists at {config_path}")
         return
 
-    config_path.write_text("""\
+    config_path.write_text(
+        """\
 [odoo-doctor]
 # odoo_version = "17.0"
 # addons_paths = ["."]
@@ -801,7 +802,9 @@ modules = []
 [category_weights]
 # Security = 1.0
 # Performance = 1.5
-""")
+""",
+        encoding="utf-8",
+    )
     typer.echo(f"Created {config_path}")
 
 

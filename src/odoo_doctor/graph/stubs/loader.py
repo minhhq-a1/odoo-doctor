@@ -26,7 +26,7 @@ def load_stubs(odoo_version: str) -> StubData | None:
     for candidate in [odoo_version, odoo_version.split(".")[0] + ".0"]:
         stub_file = _STUBS_DIR / f"{candidate}.json"
         if stub_file.exists():
-            raw = json.loads(stub_file.read_text())
+            raw = json.loads(stub_file.read_text(encoding="utf-8"))
             return StubData(
                 version=raw["version"],
                 models=raw.get("models", {}),

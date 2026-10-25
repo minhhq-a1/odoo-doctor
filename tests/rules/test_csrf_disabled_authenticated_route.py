@@ -85,3 +85,46 @@ def test_tests_are_skipped(tmp_path: Path):
         )
         == []
     )
+
+
+def _file(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "mod" / "controllers" / "main.py"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("from odoo import http\n\n\n" + body)
+    return path
+
+
+def test_bare_override_takes_the_auth_of_the_route_it_overrides(tmp_path: Path):
+    path = _file(
+        tmp_path,
+        "class Base(http.Controller):\n"
+        "    @http.route('/h', auth='public', methods=['POST'])\n"
+        "    def h(self):\n        pass\n\n\n"
+        "class Over(Base):\n"
+        "    @http.route(methods=['POST'], csrf=False)\n"
+        "    def h(self):\n        pass\n",
+    )
+    assert check_csrf_disabled_authenticated_route(path, "mod", "17.0") == []
+
+
+def test_override_of_an_unscanned_parent_is_not_flagged(tmp_path: Path):
+    path = _file(
+        tmp_path,
+        "class Over(OtherController):\n"
+        "    @http.route(methods=['POST'], csrf=False)\n"
+        "    def h(self):\n        pass\n",
+    )
+    assert check_csrf_disabled_authenticated_route(path, "mod", "17.0") == []
+
+
+def test_override_of_a_user_route_is_flagged(tmp_path: Path):
+    path = _file(
+        tmp_path,
+        "class Base(http.Controller):\n"
+        "    @http.route('/h', auth='user')\n"
+        "    def h(self):\n        pass\n\n\n"
+        "class Over(Base):\n"
+        "    @http.route(methods=['POST'], csrf=False)\n"
+        "    def h(self):\n        pass\n",
+    )
+    assert len(check_csrf_disabled_authenticated_route(path, "mod", "17.0")) == 1

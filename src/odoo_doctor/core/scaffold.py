@@ -133,7 +133,7 @@ from odoo_doctor_rules_@@MOD@@.rules import check_@@MOD@@
 
 def _run(tmp_path: Path, source: str):
     path = tmp_path / "models.py"
-    path.write_text(source)
+    path.write_text(source, encoding="utf-8")
     return check_@@MOD@@(path, "demo", "17.0")
 
 

@@ -1,0 +1,17 @@
+[
+  [
+    "csrf-disabled-authenticated-route",
+    "ci/controllers/base.py",
+    "high"
+  ],
+  [
+    "csrf-disabled-authenticated-route",
+    "ci/controllers/child.py",
+    "high"
+  ],
+  [
+    "csrf-disabled-authenticated-route",
+    "ci/controllers/child.py",
+    "high"
+  ]
+]
