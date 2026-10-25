@@ -46,9 +46,11 @@ from odoo_doctor.graph.module_context import build_project_graph
 from odoo_doctor.graph.source_index import build_source_index, index_signature
 from odoo_doctor.rules.registry import default_registry
 from odoo_doctor.rules.suppression import (
+    scan_js_suppressions,
     scan_python_suppressions,
     scan_xml_suppressions,
 )
+from odoo_doctor.rules.upgrade_safety._js_imports import module_js_files
 
 
 def _path_is_relative_to(path: Path, base: Path) -> bool:
@@ -514,6 +516,8 @@ def collect_scores(
             xml_path = ctx.path / data_file
             if xml_path.suffix == ".xml" and is_scannable(xml_path, ctx.path):
                 suppressions |= scan_xml_suppressions(xml_path)
+        for js_file in module_js_files(ctx):
+            suppressions |= scan_js_suppressions(js_file)
 
     # Run pipeline
     active_rules = default_registry.active_rules_map()

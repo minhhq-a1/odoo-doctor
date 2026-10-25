@@ -2,7 +2,7 @@
 
 # Built-in Rules
 
-Odoo Doctor ships 55 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
+Odoo Doctor ships 57 native rules. Each rule has a **tier** (P0 critical, P1 serious, P2 moderate, P3 advisory), a **category** and a **confidence**; only high-confidence findings affect the score.
 
 | Rule | Tier | Category | Severity | Confidence | Fixable |
 |------|------|----------|----------|------------|---------|
@@ -44,6 +44,8 @@ Odoo Doctor ships 55 native rules. Each rule has a **tier** (P0 critical, P1 ser
 | [deprecated-api-usage](#deprecated-api-usage) | P1 | Upgrade Safety | warning | high |  |
 | [kanban-legacy-templates](#kanban-legacy-templates) | P1 | Upgrade Safety | error | high |  |
 | [removed-core-field-usage](#removed-core-field-usage) | P1 | Upgrade Safety | error | high | Yes |
+| [removed-core-js-import](#removed-core-js-import) | P1 | Upgrade Safety | error | high |  |
+| [removed-core-xml-id](#removed-core-xml-id) | P1 | Upgrade Safety | error | high |  |
 | [removed-model-still-referenced](#removed-model-still-referenced) | P1 | Upgrade Safety | error | medium |  |
 | [removed-orm-api-usage](#removed-orm-api-usage) | P1 | Upgrade Safety | error | high |  |
 | [search-view-group-attributes](#search-view-group-attributes) | P1 | Upgrade Safety | error | high | Yes |
@@ -996,6 +998,54 @@ Good:
     <field name="name">X</field>
     <field name="user_ids" eval="[(4, ref('base.user_admin'))]"/>
 </record>
+```
+
+### removed-core-js-import
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0
+
+**Detects**: An `import` of `@module/path` that names a JS file of Odoo core (a module outside the scan) which an older Odoo release had and the target release no longer has. Static imports, `export ... from` and `import("...")` with a literal are read in `static/src` and `static/tests`.
+
+**Why**: The bundle cannot load the missing module, so the web client or the component that imports it fails at runtime.
+
+**Fix**: Import the file's replacement from the new Odoo (the finding lists files with the same name in the target release), or copy the code into your module.
+
+**Note**: Compares the packaged core index of the target version with the older ones (`docs/core-index.md`). It never reports a file that no index has seen (it may belong to enterprise, OCA or be a typo), nor one declared by a scanned addon. High confidence: the core module still exists in the target; medium: the whole module is gone (it may have moved to enterprise) or the import is dynamic.
+
+Bad:
+
+```js
+import { thing } from "@web/some/removed_file";
+```
+
+Good:
+
+```js
+import { thing } from "@web/some/replacement";
+```
+
+### removed-core-xml-id
+
+**Tier**: P1 (serious) · **Severity**: error · **Confidence**: high · **Min Odoo version**: 18.0
+
+**Detects**: A reference (`ref=`, `eval="ref(...)"`, `inherit_id`, `self.env.ref(...)`) to an XML id of Odoo core (a module outside the scan) which an older Odoo release declared and the target release no longer declares.
+
+**Why**: Loading or updating the module raises `External ID not found`, so it cannot be installed or upgraded.
+
+**Fix**: Use the id that replaced it in the new Odoo, or declare the record in your module.
+
+**Note**: Compares the packaged core index of the target version with the older ones (`docs/core-index.md`). Ids that no index has seen, ids created at runtime (`model_*`, `field_*`, `module_*`) and ids a scanned addon declares are skipped. `env.ref(..., raise_if_not_found=False)` is skipped and a call inside `try` is medium confidence.
+
+Bad:
+
+```xml
+<field name="inherit_id" ref="web.removed_in_19"/>
+```
+
+Good:
+
+```xml
+<field name="inherit_id" ref="web.its_replacement"/>
 ```
 
 ### removed-model-still-referenced

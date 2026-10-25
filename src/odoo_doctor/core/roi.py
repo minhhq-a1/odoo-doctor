@@ -84,6 +84,8 @@ EFFORT_BY_RULE: dict[str, int] = {
     "act-window-target-inline": 1,
     "chatter-div-removed": 1,
     "kanban-legacy-templates": 3,
+    "removed-core-js-import": 2,
+    "removed-core-xml-id": 2,
     # 3: restructuring
     "public-controller-sudo-risk": 3,
     "search-in-loop": 3,

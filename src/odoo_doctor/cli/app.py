@@ -91,6 +91,8 @@ import odoo_doctor.rules.upgrade_safety.search_view_group_attributes
 import odoo_doctor.rules.upgrade_safety.act_window_target_inline
 import odoo_doctor.rules.upgrade_safety.chatter_div_removed
 import odoo_doctor.rules.upgrade_safety.kanban_legacy_templates
+import odoo_doctor.rules.upgrade_safety.removed_core_js_import
+import odoo_doctor.rules.upgrade_safety.removed_core_xml_id
 
 # Import fixer modules to trigger fixer registration.
 import odoo_doctor.rules.manifest.fixers
