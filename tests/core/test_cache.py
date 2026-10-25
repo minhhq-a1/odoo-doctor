@@ -147,3 +147,15 @@ def test_version_1_cache_file_misses_cleanly(tmp_path: Path):
     cache = ScanCache(cache_dir)
     cache.load()
     assert cache.lookup("fp123") is None
+
+
+def test_fingerprint_changes_when_a_js_file_changes(tmp_path: Path):
+    # rules read static/src/*.js (removed-core-js-import): an edit must not hit a stale cache
+    root = tmp_path / "addons"
+    js = root / "mod" / "static" / "src" / "a.js"
+    js.parent.mkdir(parents=True)
+    js.write_text('import { x } from "@web/old";\n')
+    fp1 = project_fingerprint([root], config_repr="c", version="17.0", ruleset=("r",))
+    js.write_text('import { x } from "@web/new";\n')
+    fp2 = project_fingerprint([root], config_repr="c", version="17.0", ruleset=("r",))
+    assert fp1 != fp2
