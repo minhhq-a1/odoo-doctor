@@ -941,6 +941,41 @@ RULE_DOCS: dict[str, RuleDoc] = {
         "`fix --upgrade-to` renames only `groups_id` to `group_ids` and `res.groups.users` to "
         "`user_ids` (high confidence); the other entries change meaning and need a person.",
     ),
+    "removed-core-js-import": RuleDoc(
+        detects="An `import` of `@module/path` that names a JS file of Odoo core (a module "
+        "outside the scan) which an older Odoo release had and the target release no "
+        'longer has. Static imports, `export ... from` and `import("...")` with a literal '
+        "are read in `static/src` and `static/tests`.",
+        why="The bundle cannot load the missing module, so the web client or the "
+        "component that imports it fails at runtime.",
+        fix="Import the file's replacement from the new Odoo (the finding lists files "
+        "with the same name in the target release), or copy the code into your module.",
+        bad='import { thing } from "@web/some/removed_file";',
+        good='import { thing } from "@web/some/replacement";',
+        lang="js",
+        notes="Compares the packaged core index of the target version with the older ones "
+        "(`docs/core-index.md`). It never reports a file that no index has seen (it may "
+        "belong to enterprise, OCA or be a typo), nor one declared by a scanned addon. "
+        "High confidence: the core module still exists in the target; medium: the whole "
+        "module is gone (it may have moved to enterprise) or the import is dynamic.",
+    ),
+    "removed-core-xml-id": RuleDoc(
+        detects='A reference (`ref=`, `eval="ref(...)"`, `inherit_id`, `self.env.ref(...)`) '
+        "to an XML id of Odoo core (a module outside the scan) which an older Odoo release "
+        "declared and the target release no longer declares.",
+        why="Loading or updating the module raises `External ID not found`, so it cannot "
+        "be installed or upgraded.",
+        fix="Use the id that replaced it in the new Odoo, or declare the record in your "
+        "module.",
+        bad='<field name="inherit_id" ref="web.removed_in_19"/>',
+        good='<field name="inherit_id" ref="web.its_replacement"/>',
+        lang="xml",
+        notes="Compares the packaged core index of the target version with the older ones "
+        "(`docs/core-index.md`). Ids that no index has seen, ids created at runtime "
+        "(`model_*`, `field_*`, `module_*`) and ids a scanned addon declares are skipped. "
+        "`env.ref(..., raise_if_not_found=False)` is skipped and a call inside `try` is "
+        "medium confidence.",
+    ),
     "search-view-group-attributes": RuleDoc(
         detects="`string` or `expand` on a `<group>` inside a search view (Odoo 19).",
         why="The Odoo 19 search view schema no longer allows those attributes on "

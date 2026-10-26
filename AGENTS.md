@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 55 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
+**Odoo Doctor** is a unified static analysis and health-scoring tool for custom Odoo addons. It detects security vulnerabilities, broken views, duplicate XML IDs, missing dependencies, and performance issues across 57 native rules, integrated with external linters (Ruff, Pylint-Odoo) to produce a single 0–100 health score per addon.
 
 ---
 
@@ -22,7 +22,7 @@ odoo-doctor/
 │   │   ├── upgrade_safety/  # 13 rules (deprecated API, deprecated/removed ORM API, removed model/field, sql-constraints, cron fields, view attrs/states/tree/search-group/kanban/chatter, act-window target)
 │   │   └── frontend/        # 1 rule (asset bundle missing)
 │   ├── parsers/              # Python AST, XML record, manifest, CSV parsing
-│   ├── graph/                # Symbol resolution engine + version stubs (17.0, 18.0, 19.0)
+│   ├── graph/                # Symbol resolution engine, version stubs and the packaged core index (17.0, 18.0, 19.0)
 │   ├── discovery/            # Addon discovery & Odoo version detection
 │   ├── adapters/             # External linter integration (Ruff, Pylint-Odoo)
 │   ├── reporters/            # Output formatting (terminal, JSON, GitHub, SARIF, PR comment, badge, HTML report)
@@ -256,7 +256,7 @@ x = self.env.cr.execute(f"SELECT ...")  # odoo-doctor: disable=raw-sql-string-in
 | `ci-templates/` | GitLab CI and Bitbucket Pipelines templates (same script in both); `tests/test_ci_templates.py` runs it in a temp git repo |
 | `src/odoo_doctor/core/config.py` | Config loading & validation |
 | `src/odoo_doctor/core/diagnostics.py` | Diagnostic dataclass, categories, tier impacts |
-| `src/odoo_doctor/rules/` | Rule implementations (55 rules in 8 category dirs) |
+| `src/odoo_doctor/rules/` | Rule implementations (57 rules in 8 category dirs) |
 | `src/odoo_doctor/graph/resolver.py` | Symbol resolution engine |
 | `src/odoo_doctor/cli/app.py` | CLI entry point |
 | `tests/` | Test suite; `tests/corpus/` + `tests/test_golden_corpus.py` is the golden corpus (`UPDATE_GOLDEN=1` refreshes it after an intentional rule change) |

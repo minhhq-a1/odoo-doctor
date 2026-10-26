@@ -102,3 +102,23 @@ def scan_xml_suppressions(file_path: Path) -> Suppressions:
             suppressions.add((str(file_path), suppress_line, rule_name))
 
     return suppressions
+
+
+def scan_js_suppressions(file_path: Path) -> Suppressions:
+    """Scan a JS file for ``// odoo-doctor: disable=<rule>`` comments (next line) and
+    ``disable-file=`` (whole file). Any line holding the marker counts, comment or not."""
+    suppressions: Suppressions = set()
+    data = read_bytes(file_path)
+    if data is None or b"odoo-doctor:" not in data:
+        return suppressions
+    for number, line in enumerate(data.decode("utf-8", "replace").splitlines(), 1):
+        file_match = _SUPPRESS_FILE_RE.search(line)
+        if file_match:
+            for rule_name in (r.strip() for r in file_match.group(1).split(",")):
+                suppressions.add((str(file_path), 0, rule_name))
+            continue
+        match = _SUPPRESS_RE.search(line)
+        if match:
+            for rule_name in (r.strip() for r in match.group(1).split(",")):
+                suppressions.add((str(file_path), number + 1, rule_name))
+    return suppressions

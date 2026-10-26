@@ -161,6 +161,7 @@ class SymbolResolver:
         self._by_underscore: dict[str, list[str]] | None = None
         # module -> declared depends, for modules whose manifest we have seen
         # (scanned addons, plus the Odoo source checkout when configured).
+        self._scanned_modules = frozenset(module_dependencies or ())
         self._module_dependencies: dict[str, list[str]] = dict(
             self._source_index.module_depends
         )
@@ -455,6 +456,10 @@ class SymbolResolver:
         """Lower-cased top-level names a scanned addon declares as python
         external_dependencies, or None when its manifest was not scanned."""
         return self._module_external_python.get(module)
+
+    def is_scanned_module(self, module: str) -> bool:
+        """True if the module is one of the scanned addons (``odoo_source_path`` not counted)."""
+        return module in self._scanned_modules
 
     def is_known_module(self, module: str) -> bool:
         """True if the module's manifest was scanned (repo or odoo_source_path)."""

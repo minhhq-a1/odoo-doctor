@@ -6,6 +6,21 @@ All notable changes to Odoo Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Packaged core index (`docs/core-index.md`): the static files and XML ids of Odoo community 17.0,
+  18.0 and 19.0, with a deterministic builder (`python -m odoo_doctor.graph.core_index.build`).
+- Rules `removed-core-js-import` and `removed-core-xml-id` (Upgrade Safety, P1, Odoo 18+): a
+  reference to a core JS file or XML id that an older release had and the target release lacks.
+  They are silent for anything no packaged version has seen. The index data itself is generated
+  on a machine with the Odoo sources, so until it is committed they report nothing.
+- `// odoo-doctor: disable=<rule>` and `disable-file=` comments work in JS files.
+
+### Fixed
+
+- `--cache` ignored `.js` files, so editing one could serve a stale result. `.js` now counts in the
+  fingerprint (cache format 6: the first run after upgrading is a cold scan).
+
 ### Internal
 
 - Releases are automatic: merging a version bump to `main` runs `release.yml`, which tags it and starts

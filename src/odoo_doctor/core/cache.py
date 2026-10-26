@@ -41,12 +41,12 @@ from odoo_doctor.core.source import (
 # v2 adds suppression_stats, v3 adds python_lines, v4 retains each module's effective Odoo
 # version, v5 puts plugin and linter identities in the key (and is the first version
 # written by a build that has both the v4 per-module versions and these identities, so a
-# v4 file from either lineage is rebuilt).
-CACHE_VERSION = 5
+# v4 file from either lineage is rebuilt). v6 hashes .js files, which rules now read.
+CACHE_VERSION = 6
 
 _CACHE_FILE = "scan_cache.json"
 
-_SCANNED_SUFFIXES = {".py", ".pyi", ".xml", ".csv", ".toml", ".ipynb"}
+_SCANNED_SUFFIXES = {".py", ".pyi", ".xml", ".csv", ".toml", ".ipynb", ".js"}
 # Not scan inputs, and rewritten by tooling between scans (a running Odoo, pytest,
 # Finder, an editor): hashing them would turn every such write into a cache miss.
 _SKIP_DIRS = SKIP_DIRS  # the directories the scan walkers skip too

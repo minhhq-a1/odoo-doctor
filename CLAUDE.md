@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Odoo Doctor** is a static analysis and health-scoring CLI for custom Odoo addons. It runs 55 native rules (8 categories: Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend), optionally merges Ruff / Pylint-Odoo findings, and produces a 0–100 score per addon. It never imports Odoo — everything is AST/XML/CSV parsing plus packaged model stubs.
+**Odoo Doctor** is a static analysis and health-scoring CLI for custom Odoo addons. It runs 57 native rules (8 categories: Security, Correctness, Performance, Module Hygiene, Maintainability, Data Integrity, Upgrade Safety, Frontend), optionally merges Ruff / Pylint-Odoo findings, and produces a 0–100 score per addon. It never imports Odoo — everything is AST/XML/CSV parsing plus packaged model stubs.
 
 `AGENTS.md` is a parallel contributor guide that duplicates much of this file; keep the two in sync when changing shared facts (version, rule counts, structure).
 
@@ -53,6 +53,7 @@ Key concepts that span files:
 - **CI failure policy** lives in `core/surfaces.py` (`[surfaces.ci_failure]`, default P0/P1 high-confidence) and is applied to `--fail-on`; the same module filters PR-comment surfaces.
 - **Plugins**: third-party rules load via `entry_points` (`rules/plugins.py`, only when `[plugins] enabled = true`, with `allow` list/version check/rollback). `src/odoo_doctor/plugin_api.py` is the *only* stable import surface for plugins — don't break it.
 - **Symbol resolution** (`graph/resolver.py`) answers "does this model/field/XML ID exist, and where" using parsed addons, optional `odoo_source_path` (`graph/source_index.py`) and packaged stubs in `graph/stubs/data/{17.0,18.0,19.0}.json` (loader tries exact version, then major).
+- **Core index** (`graph/core_index/`, `docs/core-index.md`): packaged per-version (17/18/19) lists of core `static/` files and XML ids, built by hand with `python -m odoo_doctor.graph.core_index.build`, loaded lazily (`get_core_index`, `older_indexes`), capped at 3 MB by a test. `removed-core-js-import` / `removed-core-xml-id` (`rules/upgrade_safety/_core_refs.py::classify`) report only "an older index had it, the target lacks it"; never "not found". `odoo_source_path` is not an input (one tree = one version). JS files are read by `rules/upgrade_safety/_js_imports.py` (no JS parser) and `.js` is part of the `--cache` fingerprint.
 - **Rule docs** are generated: `rules/rule_docs.py` (`RULE_DOCS`) is the single source for `docs/rules.md`, HTML, `rules explain` and SARIF `helpUri`.
 - **Taint analysis** (`rules/_taint.py`): `TaintVisitor` tracks SAFE/UNKNOWN/UNSAFE states per variable (lists, branches, module constants) for the Security rules; subclass it and implement `check_call` (see `eval_usage.py`, `raw_sql_interpolation.py`).
 - **Fix ROI** (`core/roi.py`): `rank_fixes` orders a module's score-eligible findings by marginal score gain per effort and fills `ScoreResult.fix_priorities` (via `scanner._score_module`, used by both the live and cached paths). Add an `EFFORT_BY_RULE` entry (1-3) for every new native rule — a test fails otherwise.

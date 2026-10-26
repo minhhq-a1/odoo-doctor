@@ -110,7 +110,7 @@ repairs as a diff (drop `--fix-dry-run` and pass `--fix` to apply). See [docs/up
 
 Plus Ruff and Pylint-Odoo findings when those tools are installed. Both run isolated from the scanned repository: Ruff runs with `--isolated` (its default rule set) and ignores the repository's `ruff.toml` / `[tool.ruff]`, so a hostile repo cannot hide findings with it. Pylint's configuration is ignored too, because Pylint runs `init-hook` code from it. Filter their findings with `[ignore] rules` in `odoo-doctor.toml`. In terminal and PR-comment text, a `::` that came from the repo (a file or module name) is shown with an invisible zero-width space between the colons, so copy-pasting such a name keeps that character.
 
-The full, generated reference (55 rules, with before/after examples) is in
+The full, generated reference (57 rules, with before/after examples) is in
 [`docs/rules.md`](docs/rules.md); every finding links to its entry. Disable a rule
 with `odoo-doctor rules disable <rule-name>`; write your own with the stable
 [plugin API](docs/custom-rules.md). What you can rely on across upgrades (CLI flags, exit

@@ -60,6 +60,10 @@ _GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     ("Deprecated APIs", ("deprecated-api-usage", "deprecated-orm-api-usage")),
     ("Cron removed fields", ("cron-removed-fields",)),
+    (
+        "Removed core files and XML ids",
+        ("removed-core-js-import", "removed-core-xml-id"),
+    ),
     ("SQL constraints ignored", ("sql-constraints-unsupported",)),
 )
 RULE_GROUPS: dict[str, str] = {r: g for g, rules in _GROUPS for r in rules}
